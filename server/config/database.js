@@ -28,27 +28,8 @@ const connectDB = async () => {
   }
 };
 
-// Test database connection
-const testDbConnection = async () => {
-  try {
-    if (!process.env.MONGO_URI) {
-      console.error('Error: MONGO_URI is not defined in environment variables');
-      return false;
-    }
-    
-    await mongoose.connect(process.env.MONGO_URI, {
-      useNewUrlParser: true,
-      useUnifiedTopology: true
-    });
-    console.log('MongoDB connection successful');
-    return true;
-  } catch (error) {
-    console.error('MongoDB connection error:', error);
-    return false;
-  }
-};
+
 
 module.exports = {
   connectDB,
-  testDbConnection
 };

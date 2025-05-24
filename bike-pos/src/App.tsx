@@ -1,7 +1,10 @@
+import Box from '@mui/material/Box';
+import CircularProgress from '@mui/material/CircularProgress';
 import CssBaseline from '@mui/material/CssBaseline';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+import React from 'react';
 import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import Layout from './components/Layout';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -15,12 +18,16 @@ import Sales from './pages/Sales';
 import Suppliers from './pages/Suppliers';
 
 // Define protected route component
-const ProtectedRoute = ({ children, role }: { children: JSX.Element, role?: string }) => {
+const ProtectedRoute = ({ children, role }: { children: React.ReactElement, role?: string }) => {
   const { user, loading } = useAuth();
   
-  // If auth is still loading, show nothing
+  // If auth is still loading, show a loading indicator instead of redirecting
   if (loading) {
-    return null;
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>
+        <CircularProgress />
+      </Box>
+    );
   }
   
   // If no user logged in, redirect to login

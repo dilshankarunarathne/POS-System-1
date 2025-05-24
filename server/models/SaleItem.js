@@ -1,29 +1,34 @@
-const { DataTypes } = require('sequelize');
-const { sequelize } = require('../index');
+const mongoose = require('mongoose');
 
-const SaleItem = sequelize.define('SaleItem', {
-  id: {
-    type: DataTypes.INTEGER,
-    primaryKey: true,
-    autoIncrement: true,
+const SaleItemSchema = new mongoose.Schema({
+  product: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Product',
+    required: true
   },
   quantity: {
-    type: DataTypes.INTEGER,
-    allowNull: false,
-    defaultValue: 1,
+    type: Number,
+    required: true,
+    min: 1
   },
-  unitPrice: {
-    type: DataTypes.DECIMAL(10, 2),
-    allowNull: false,
+  price: {
+    type: Number,
+    required: true
   },
   discount: {
-    type: DataTypes.DECIMAL(10, 2),
-    defaultValue: 0,
+    type: Number,
+    default: 0
   },
   subtotal: {
-    type: DataTypes.DECIMAL(10, 2),
-    allowNull: false,
-  },
+    type: Number,
+    required: true
+  }
 });
 
-module.exports = SaleItem; 
+// Calculate subtotal before saving
+SaleItemSchema.pre('save', function(next) {
+  this.subtotal = (this.price * this.quantity) - this.discount;
+  next();
+});
+
+module.exports = mongoose.model('SaleItem', SaleItemSchema);

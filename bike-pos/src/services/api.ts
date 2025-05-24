@@ -1,18 +1,26 @@
 import axios from 'axios';
 
-// Create axios instance
+// Create axios instance with default config
 const api = axios.create({
   baseURL: 'http://localhost:5000/api',
+  headers: {
+    'Content-Type': 'application/json'
+  }
 });
 
-// Add token to requests if it exists
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
+// Add token to requests
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
   }
-  return config;
-});
+);
 
 // Handle response errors
 api.interceptors.response.use(
@@ -28,6 +36,46 @@ api.interceptors.response.use(
   }
 );
 
+// Product interface
+interface Product {
+  id?: number;
+  name: string;
+  description?: string;
+  price: number;
+  cost: number;
+  barcode?: string;
+  sku?: string;
+  categoryId?: number;
+  supplierId?: number;
+  quantity: number;
+  minStock?: number;
+  image?: string | File;
+}
+
+// Supplier interface
+interface Supplier {
+  id?: number;
+  name: string;
+  contactPerson?: string;
+  email?: string;
+  phone?: string;
+  address?: string;
+  notes?: string;
+}
+
+// Sale interface
+interface Sale {
+  id?: number;
+  customerId?: number;
+  items: Array<{productId: number; quantity: number; price: number}>;
+  subtotal: number;
+  tax?: number;
+  discount?: number;
+  total: number;
+  paymentMethod: string;
+  notes?: string;
+}
+
 // Auth API
 export const authApi = {
   login: (credentials: { username: string; password: string }) => 
@@ -42,68 +90,47 @@ export const authApi = {
 
 // Products API
 export const productsApi = {
-  getAll: (params?: { 
-    page?: number;
-    limit?: number;
-    search?: string;
-    categoryId?: number;
-    supplierId?: number;
-    lowStock?: boolean;
-  }) => api.get('/products', { params }),
-  
-  getById: (id: number) => 
-    api.get(`/products/${id}`),
-  
-  getByBarcode: (barcode: string) => 
-    api.get(`/products/barcode/${barcode}`),
-  
-  create: (productData: any) => 
-    api.post('/products', productData),
-  
-  update: (id: number, productData: any) => 
-    api.put(`/products/${id}`, productData),
-  
-  delete: (id: number) => 
-    api.delete(`/products/${id}`),
-  
-  updateStock: (id: number, stockData: { quantity: number; type: 'add' | 'subtract' }) =>
-    api.patch(`/products/${id}/stock`, stockData),
+  getAll: (params = {}) => api.get('/products', { params }),
+  getById: (id: string | number) => api.get(`/products/${id}`),
+  getByBarcode: (barcode: string) => api.get(`/products/barcode/${barcode}`),
+  create: (data: FormData) => {
+    // Use multipart/form-data for file uploads
+    return api.post('/products', data, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  },
+  update: (id: string | number, data: FormData) => {
+    // Use multipart/form-data for file uploads
+    return api.put(`/products/${id}`, data, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    });
+  },
+  delete: (id: string | number) => api.delete(`/products/${id}`),
+  updateStock: (id: string | number, quantity: number) => api.patch(`/products/${id}/stock`, { quantity }),
+  getLatest: (limit = 10) => api.get('/products/latest', { params: { limit } }),
+  refresh: () => api.get('/products/refresh')
 };
 
 // Categories API
 export const categoriesApi = {
-  getAll: () => 
-    api.get('/categories'),
-  
-  getById: (id: number) => 
-    api.get(`/categories/${id}`),
-  
-  create: (categoryData: { name: string; description?: string }) => 
-    api.post('/categories', categoryData),
-  
-  update: (id: number, categoryData: { name?: string; description?: string; active?: boolean }) => 
-    api.put(`/categories/${id}`, categoryData),
-  
-  delete: (id: number) => 
-    api.delete(`/categories/${id}`),
+  getAll: () => api.get('/categories'),
+  getById: (id: string | number) => api.get(`/categories/${id}`),
+  create: (data: any) => api.post('/categories', data),
+  update: (id: string | number, data: any) => api.put(`/categories/${id}`, data),
+  delete: (id: string | number) => api.delete(`/categories/${id}`)
 };
 
 // Suppliers API
 export const suppliersApi = {
-  getAll: (params?: { page?: number; limit?: number; search?: string }) => 
-    api.get('/suppliers', { params }),
-  
-  getById: (id: number) => 
-    api.get(`/suppliers/${id}`),
-  
-  create: (supplierData: any) => 
-    api.post('/suppliers', supplierData),
-  
-  update: (id: number, supplierData: any) => 
-    api.put(`/suppliers/${id}`, supplierData),
-  
-  delete: (id: number) => 
-    api.delete(`/suppliers/${id}`),
+  getAll: () => api.get('/suppliers'),
+  getById: (id: string | number) => api.get(`/suppliers/${id}`),
+  create: (data: any) => api.post('/suppliers', data),
+  update: (id: string | number, data: any) => api.put(`/suppliers/${id}`, data),
+  delete: (id: string | number) => api.delete(`/suppliers/${id}`)
 };
 
 // Sales API
@@ -120,7 +147,7 @@ export const salesApi = {
   getById: (id: number) => 
     api.get(`/sales/${id}`),
   
-  create: (saleData: any) => 
+  create: (saleData: Sale) => 
     api.post('/sales', saleData),
   
   updateStatus: (id: number, statusData: { status: string; reason?: string }) =>
@@ -148,14 +175,10 @@ export const reportsApi = {
 
 // Print API
 export const printApi = {
-  generateReceipt: (saleId: number) => 
-    api.get(`/print/receipt/${saleId}`),
-  
-  generateProductLabel: (productId: number, quantity?: number) =>
-    api.get(`/print/product-label/${productId}`, { params: { quantity } }),
-  
-  generateBarcodes: (productIds: number[]) =>
-    api.post('/print/barcodes', { productIds }),
+  generateBarcodes: (productIds: number[], quantity = 1) => 
+    api.post('/print/barcodes', { productIds, quantity }),
+  printReceipt: (orderId: string | number) => 
+    api.post(`/print/receipt/${orderId}`)
 };
 
-export default api; 
+export default api;

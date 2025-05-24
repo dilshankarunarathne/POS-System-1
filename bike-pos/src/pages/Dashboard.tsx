@@ -1,40 +1,40 @@
 import {
-    ArrowForward as ArrowForwardIcon,
-    CalendarToday as CalendarIcon,
-    Inventory as ProductsIcon,
-    ShoppingCart,
-    TrendingUp as TrendingUpIcon,
-    Warning as WarningIcon,
+  ArrowForward as ArrowForwardIcon,
+  CalendarToday as CalendarIcon,
+  Inventory as ProductsIcon,
+  ShoppingCart,
+  TrendingUp as TrendingUpIcon,
+  Warning as WarningIcon,
 } from '@mui/icons-material';
+
 import {
-    Alert,
-    Avatar,
-    Box,
-    Button,
-    Card,
-    CardActions,
-    CardContent,
-    CircularProgress,
-    Divider,
-    Grid,
-    List,
-    ListItem,
-    ListItemAvatar,
-    ListItemText,
-    Paper,
-    Typography
+  Alert,
+  Avatar,
+  Box,
+  Button,
+  Card,
+  CardActions,
+  CardContent,
+  CircularProgress,
+  Divider,
+  List,
+  ListItem,
+  ListItemAvatar,
+  ListItemText,
+  Paper,
+  Typography
 } from '@mui/material';
 import {
-    ArcElement,
-    BarElement,
-    CategoryScale,
-    Chart as ChartJS,
-    Legend,
-    LinearScale,
-    LineElement,
-    PointElement,
-    Title,
-    Tooltip
+  ArcElement,
+  BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  Legend,
+  LinearScale,
+  LineElement,
+  PointElement,
+  Title,
+  Tooltip
 } from 'chart.js';
 import React, { useEffect, useState } from 'react';
 import { Bar, Line } from 'react-chartjs-2';
@@ -84,7 +84,12 @@ const Dashboard: React.FC = () => {
           groupBy: 'day',
         });
         
-        setSalesData(salesResponse.data);
+        // Ensure we have proper data structure, set defaults if needed
+        const salesResponseData = salesResponse.data || {};
+        setSalesData({
+          summary: Array.isArray(salesResponseData.summary) ? salesResponseData.summary : [],
+          totals: salesResponseData.totals || {}
+        });
         
         // Fetch low stock products
         const lowStockResponse = await productsApi.getAll({
@@ -92,7 +97,8 @@ const Dashboard: React.FC = () => {
           limit: 5,
         });
         
-        setLowStockProducts(lowStockResponse.data.products);
+        setLowStockProducts(Array.isArray(lowStockResponse.data?.products) ? 
+          lowStockResponse.data.products : []);
         
         // Fetch top selling products
         const topProductsResponse = await reportsApi.getProductSalesReport({
@@ -101,10 +107,20 @@ const Dashboard: React.FC = () => {
           limit: 5,
         });
         
-        setTopProducts(topProductsResponse.data);
+        // Explicitly ensure topProducts is an array
+        const topProductsData = topProductsResponse.data;
+        setTopProducts(Array.isArray(topProductsData) ? topProductsData : []);
+        
+        // Log data for debugging
+        console.log('Top products data:', topProductsData, 'Type:', typeof topProductsData);
+        
       } catch (err) {
         console.error('Failed to fetch dashboard data:', err);
         setError('Failed to load dashboard data. Please try again later.');
+        // Set empty default values to prevent map errors
+        setSalesData({ summary: [], totals: {} });
+        setLowStockProducts([]);
+        setTopProducts([]);
       } finally {
         setLoading(false);
       }
@@ -113,16 +129,18 @@ const Dashboard: React.FC = () => {
     fetchDashboardData();
   }, []);
   
-  // Prepare data for sales chart
+  // Prepare data for sales chart - add safety checks
   const salesChartData = {
-    labels: salesData.summary.map((item: any) => {
-      const date = new Date(item.date);
-      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-    }),
+    labels: Array.isArray(salesData.summary) ? 
+      salesData.summary.map((item: any) => {
+        const date = new Date(item.date);
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      }) : [],
     datasets: [
       {
         label: 'Sales',
-        data: salesData.summary.map((item: any) => item.total),
+        data: Array.isArray(salesData.summary) ? 
+          salesData.summary.map((item: any) => item.total) : [],
         borderColor: 'rgba(75, 192, 192, 1)',
         backgroundColor: 'rgba(75, 192, 192, 0.2)',
         tension: 0.4,
@@ -130,13 +148,15 @@ const Dashboard: React.FC = () => {
     ],
   };
   
-  // Prepare data for product category chart
+  // Prepare data for product category chart - add strict array checks
   const categoryChartData = {
-    labels: topProducts.map(product => product.name),
+    labels: Array.isArray(topProducts) ? 
+      topProducts.map(product => product.name) : [],
     datasets: [
       {
         label: 'Units Sold',
-        data: topProducts.map(product => product.quantitySold),
+        data: Array.isArray(topProducts) ? 
+          topProducts.map(product => product.quantitySold) : [],
         backgroundColor: [
           'rgba(255, 99, 132, 0.6)',
           'rgba(54, 162, 235, 0.6)',
@@ -180,8 +200,9 @@ const Dashboard: React.FC = () => {
       ) : (
         <>
           {/* Quick Stats */}
-          <Grid container spacing={3} sx={{ mb: 4 }}>
-            <Grid xs={12} sm={6} md={3} item>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 4 }}>
+            {/* Stat Card 1 */}
+            <Box sx={{ flex: '1 1 250px', minWidth: '250px' }}>
               <Paper
                 elevation={2}
                 sx={{
@@ -190,6 +211,7 @@ const Dashboard: React.FC = () => {
                   flexDirection: 'column',
                   bgcolor: 'primary.light',
                   color: 'white',
+                  height: '100%',
                 }}
               >
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -209,9 +231,10 @@ const Dashboard: React.FC = () => {
                   Last 7 days
                 </Typography>
               </Paper>
-            </Grid>
+            </Box>
             
-            <Grid xs={12} sm={6} md={3} item>
+            {/* Stat Card 2 */}
+            <Box sx={{ flex: '1 1 250px', minWidth: '250px' }}>
               <Paper
                 elevation={2}
                 sx={{
@@ -220,6 +243,7 @@ const Dashboard: React.FC = () => {
                   flexDirection: 'column',
                   bgcolor: 'success.light',
                   color: 'white',
+                  height: '100%',
                 }}
               >
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -239,9 +263,10 @@ const Dashboard: React.FC = () => {
                   Last 7 days
                 </Typography>
               </Paper>
-            </Grid>
+            </Box>
             
-            <Grid xs={12} sm={6} md={3} item>
+            {/* Stat Card 3 */}
+            <Box sx={{ flex: '1 1 250px', minWidth: '250px' }}>
               <Paper
                 elevation={2}
                 sx={{
@@ -250,6 +275,7 @@ const Dashboard: React.FC = () => {
                   flexDirection: 'column',
                   bgcolor: 'warning.light',
                   color: 'white',
+                  height: '100%',
                 }}
               >
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -269,9 +295,10 @@ const Dashboard: React.FC = () => {
                   Items below reorder level
                 </Typography>
               </Paper>
-            </Grid>
+            </Box>
             
-            <Grid xs={12} sm={6} md={3} item>
+            {/* Stat Card 4 */}
+            <Box sx={{ flex: '1 1 250px', minWidth: '250px' }}>
               <Paper
                 elevation={2}
                 sx={{
@@ -280,6 +307,7 @@ const Dashboard: React.FC = () => {
                   flexDirection: 'column',
                   bgcolor: 'secondary.light',
                   color: 'white',
+                  height: '100%',
                 }}
               >
                 <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
@@ -303,12 +331,13 @@ const Dashboard: React.FC = () => {
                   Compared to previous day
                 </Typography>
               </Paper>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
           
           {/* Charts */}
-          <Grid container spacing={3}>
-            <Grid xs={12} md={8} item>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 3 }}>
+            {/* Sales Trend Chart */}
+            <Box sx={{ flex: '3 1 500px' }}>
               <Paper sx={{ p: 3, height: '100%' }}>
                 <Typography variant="h6" gutterBottom>
                   Sales Trend
@@ -324,7 +353,7 @@ const Dashboard: React.FC = () => {
                         maintainAspectRatio: false,
                         plugins: {
                           legend: {
-                            position: 'top',
+                            position: 'top' as const,
                           },
                           title: {
                             display: false,
@@ -346,16 +375,17 @@ const Dashboard: React.FC = () => {
                   </Box>
                 )}
               </Paper>
-            </Grid>
+            </Box>
             
-            <Grid xs={12} md={4} item>
+            {/* Top Selling Products Chart */}
+            <Box sx={{ flex: '1 1 300px' }}>
               <Paper sx={{ p: 3, height: '100%' }}>
                 <Typography variant="h6" gutterBottom>
                   Top Selling Products
                 </Typography>
                 <Divider sx={{ mb: 2 }} />
                 
-                {topProducts.length > 0 ? (
+                {topProducts && Array.isArray(topProducts) && topProducts.length > 0 ? (
                   <Box sx={{ height: 300 }}>
                     <Bar
                       data={categoryChartData}
@@ -383,9 +413,13 @@ const Dashboard: React.FC = () => {
                   </Box>
                 )}
               </Paper>
-            </Grid>
-            
-            <Grid xs={12} md={6} item>
+            </Box>
+          </Box>
+          
+          {/* Lower Cards */}
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+            {/* Low Stock Items Card */}
+            <Box sx={{ flex: '1 1 400px' }}>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
@@ -434,9 +468,10 @@ const Dashboard: React.FC = () => {
                   </Button>
                 </CardActions>
               </Card>
-            </Grid>
+            </Box>
             
-            <Grid xs={12} md={6} item>
+            {/* Recent Sales Card */}
+            <Box sx={{ flex: '1 1 400px' }}>
               <Card>
                 <CardContent>
                   <Typography variant="h6" gutterBottom>
@@ -467,12 +502,12 @@ const Dashboard: React.FC = () => {
                   </Button>
                 </CardActions>
               </Card>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         </>
       )}
     </Box>
   );
 };
 
-export default Dashboard; 
+export default Dashboard;

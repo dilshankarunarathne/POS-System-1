@@ -13,7 +13,6 @@ import {
     CircularProgress,
     Divider,
     FormControl,
-    Grid,
     InputLabel,
     MenuItem,
     Paper,
@@ -349,27 +348,27 @@ const Reports: React.FC = () => {
         {/* Date Range Selector */}
         <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
           <LocalizationProvider dateAdapter={AdapterDateFns}>
-            <Grid container spacing={2} alignItems="center">
-              <Grid item xs={12} md={3}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+              <Box sx={{ width: { xs: '100%', md: '23%' } }}>
                 <DatePicker
                   label="Start Date"
                   value={startDate}
                   onChange={setStartDate}
                   slotProps={{ textField: { fullWidth: true, size: 'small' } }}
                 />
-              </Grid>
+              </Box>
               
-              <Grid item xs={12} md={3}>
+              <Box sx={{ width: { xs: '100%', md: '23%' } }}>
                 <DatePicker
                   label="End Date"
                   value={endDate}
                   onChange={setEndDate}
                   slotProps={{ textField: { fullWidth: true, size: 'small' } }}
                 />
-              </Grid>
+              </Box>
               
               {activeTab === 0 && (
-                <Grid item xs={12} md={3}>
+                <Box sx={{ width: { xs: '100%', md: '23%' } }}>
                   <FormControl fullWidth size="small">
                     <InputLabel id="group-by-label">Group By</InputLabel>
                     <Select
@@ -384,12 +383,12 @@ const Reports: React.FC = () => {
                       <MenuItem value="month">Month</MenuItem>
                     </Select>
                   </FormControl>
-                </Grid>
+                </Box>
               )}
               
               {activeTab === 1 && (
                 <>
-                  <Grid item xs={12} md={3}>
+                  <Box sx={{ width: { xs: '100%', md: '23%' } }}>
                     <FormControl fullWidth size="small">
                       <InputLabel id="category-filter-label">Category</InputLabel>
                       <Select
@@ -407,9 +406,9 @@ const Reports: React.FC = () => {
                         ))}
                       </Select>
                     </FormControl>
-                  </Grid>
+                  </Box>
                   
-                  <Grid item xs={12} md={3}>
+                  <Box sx={{ width: { xs: '100%', md: '23%' } }}>
                     <TextField
                       fullWidth
                       label="Top Products Limit"
@@ -419,13 +418,13 @@ const Reports: React.FC = () => {
                       onChange={(e) => setTopProductsLimit(Math.max(1, parseInt(e.target.value) || 10))}
                       InputProps={{ inputProps: { min: 1, max: 100 } }}
                     />
-                  </Grid>
+                  </Box>
                 </>
               )}
               
               {activeTab === 2 && (
                 <>
-                  <Grid item xs={12} md={3}>
+                  <Box sx={{ width: { xs: '100%', md: '23%' } }}>
                     <FormControl fullWidth size="small">
                       <InputLabel id="category-filter-label">Category</InputLabel>
                       <Select
@@ -443,9 +442,9 @@ const Reports: React.FC = () => {
                         ))}
                       </Select>
                     </FormControl>
-                  </Grid>
+                  </Box>
                   
-                  <Grid item xs={12} md={3}>
+                  <Box sx={{ width: { xs: '100%', md: '23%' } }}>
                     <Button
                       fullWidth
                       variant={showLowStock ? "contained" : "outlined"}
@@ -454,10 +453,10 @@ const Reports: React.FC = () => {
                     >
                       {showLowStock ? "All Stock" : "Low Stock Only"}
                     </Button>
-                  </Grid>
+                  </Box>
                 </>
               )}
-            </Grid>
+            </Box>
           </LocalizationProvider>
         </Box>
       </Paper>
@@ -470,8 +469,8 @@ const Reports: React.FC = () => {
         <>
           {/* Sales Summary Tab */}
           <TabPanel value={activeTab} index={0}>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={8}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+              <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 66.66%' } }}>
                 <Paper sx={{ p: 3 }}>
                   <Typography variant="h6" gutterBottom>
                     Sales Trend
@@ -513,9 +512,9 @@ const Reports: React.FC = () => {
                     </Box>
                   )}
                 </Paper>
-              </Grid>
+              </Box>
               
-              <Grid item xs={12} md={4}>
+              <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 33.33%' } }}>
                 <Paper sx={{ p: 3 }}>
                   <Typography variant="h6" gutterBottom>
                     Summary
@@ -607,14 +606,14 @@ const Reports: React.FC = () => {
                     </Table>
                   </TableContainer>
                 </Paper>
-              </Grid>
-            </Grid>
+              </Box>
+            </Box>
           </TabPanel>
           
           {/* Product Sales Tab */}
           <TabPanel value={activeTab} index={1}>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+              <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 66.66%' } }}>
                 <Paper sx={{ p: 3 }}>
                   <Typography variant="h6" gutterBottom>
                     Top {topProductsLimit} Products by Sales
@@ -659,9 +658,9 @@ const Reports: React.FC = () => {
                     </Box>
                   )}
                 </Paper>
-              </Grid>
+              </Box>
               
-              <Grid item xs={12} md={6}>
+              <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 33.33%' } }}>
                 <Paper sx={{ p: 3 }}>
                   <Typography variant="h6" gutterBottom>
                     Product Sales Details
@@ -703,14 +702,14 @@ const Reports: React.FC = () => {
                     </Table>
                   </TableContainer>
                 </Paper>
-              </Grid>
-            </Grid>
+              </Box>
+            </Box>
           </TabPanel>
           
           {/* Inventory Status Tab */}
           <TabPanel value={activeTab} index={2}>
-            <Grid container spacing={3}>
-              <Grid item xs={12} md={4}>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
+              <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 50%' } }}>
                 <Paper sx={{ p: 3 }}>
                   <Typography variant="h6" gutterBottom>
                     Inventory Summary
@@ -781,9 +780,9 @@ const Reports: React.FC = () => {
                     </Box>
                   )}
                 </Paper>
-              </Grid>
+              </Box>
               
-              <Grid item xs={12} md={8}>
+              <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 50%' } }}>
                 <Paper sx={{ p: 3 }}>
                   <Typography variant="h6" gutterBottom>
                     Inventory Details
@@ -834,8 +833,8 @@ const Reports: React.FC = () => {
                     </Table>
                   </TableContainer>
                 </Paper>
-              </Grid>
-            </Grid>
+              </Box>
+            </Box>
           </TabPanel>
         </>
       )}

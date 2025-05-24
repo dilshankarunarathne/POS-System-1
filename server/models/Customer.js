@@ -1,13 +1,9 @@
 const mongoose = require('mongoose');
 
-const SupplierSchema = new mongoose.Schema({
+const CustomerSchema = new mongoose.Schema({
   name: {
     type: String,
     required: true,
-    trim: true
-  },
-  contactPerson: {
-    type: String,
     trim: true
   },
   email: {
@@ -20,8 +16,10 @@ const SupplierSchema = new mongoose.Schema({
     trim: true
   },
   address: {
-    type: String,
-    trim: true
+    street: String,
+    city: String,
+    state: String,
+    zipCode: String
   },
   createdAt: {
     type: Date,
@@ -29,4 +27,4 @@ const SupplierSchema = new mongoose.Schema({
   }
 });
 
-module.exports = mongoose.model('Supplier', SupplierSchema);
+module.exports = mongoose.model('Customer', CustomerSchema);

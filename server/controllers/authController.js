@@ -4,43 +4,45 @@ const User = require('../models/User');
 // Generate JWT token
 const generateToken = (user) => {
   return jwt.sign(
-    { id: user.id, username: user.username, role: user.role },
+    { id: user._id, username: user.username, role: user.role },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN }
+    { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
   );
 };
 
 // Register a new user
 exports.register = async (req, res) => {
   try {
-    const { username, email, password, role } = req.body;
+    const { name, username, email, password, role } = req.body;
 
     // Check if user already exists
-    const existingUser = await User.findOne({ 
-      where: { 
-        [User.sequelize.Op.or]: [{ username }, { email }] 
-      } 
+    const existingUser = await User.findOne({
+      $or: [{ username }, { email }]
     });
 
     if (existingUser) {
-      return res.status(400).json({ 
-        message: 'User already exists with that username or email' 
+      return res.status(400).json({
+        message: 'User already exists with that username or email'
       });
     }
 
     // Create new user
-    const user = await User.create({
+    const user = new User({
+      name,
       username,
       email,
       password,
       role: role || 'cashier', // Default role is cashier
     });
 
+    await user.save();
+
     // Generate token
     const token = generateToken(user);
 
     // Return user data without password
-    const { password: pass, ...userData } = user.toJSON();
+    const userData = user.toObject();
+    delete userData.password;
 
     res.status(201).json({
       user: userData,
@@ -58,7 +60,7 @@ exports.login = async (req, res) => {
     const { username, password } = req.body;
 
     // Find user by username
-    const user = await User.findOne({ where: { username } });
+    const user = await User.findOne({ username });
 
     if (!user || !user.active) {
       return res.status(401).json({ message: 'Invalid credentials or inactive account' });
@@ -75,7 +77,8 @@ exports.login = async (req, res) => {
     const token = generateToken(user);
 
     // Return user data without password
-    const { password: pass, ...userData } = user.toJSON();
+    const userData = user.toObject();
+    delete userData.password;
 
     res.json({
       user: userData,
@@ -91,11 +94,22 @@ exports.login = async (req, res) => {
 exports.getCurrentUser = async (req, res) => {
   try {
     // User is already available from auth middleware
-    const { password, ...user } = req.user.toJSON();
+    const user = await User.findById(req.user._id);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
     
-    res.json({ user });
+    const userData = user.toObject();
+    delete userData.password;
+    
+    res.json({ 
+      user: {
+        ...userData,
+        id: userData._id // Ensure id is available for frontend
+      }
+    });
   } catch (error) {
     console.error('Get current user error:', error);
     res.status(500).json({ message: 'Server error' });
   }
-}; 
+};

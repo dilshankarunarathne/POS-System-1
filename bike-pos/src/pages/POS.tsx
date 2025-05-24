@@ -1,37 +1,36 @@
 import {
-    Add as AddIcon,
-    CreditCard as CardIcon,
-    Payments as CashIcon,
-    Clear as ClearIcon,
-    Delete as DeleteIcon,
-    Print as PrintIcon,
-    ReceiptLong as ReceiptIcon,
-    Remove as RemoveIcon,
-    Search as SearchIcon,
+  Add as AddIcon,
+  CreditCard as CardIcon,
+  Payments as CashIcon,
+  Clear as ClearIcon,
+  Delete as DeleteIcon,
+  Print as PrintIcon,
+  ReceiptLong as ReceiptIcon,
+  Remove as RemoveIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import {
-    Alert,
-    Box,
-    Button,
-    Card,
-    CardContent,
-    CircularProgress,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    Divider,
-    Grid,
-    IconButton,
-    InputAdornment,
-    List,
-    ListItem,
-    ListItemSecondaryAction,
-    ListItemText,
-    Paper,
-    Snackbar,
-    TextField,
-    Typography
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  IconButton,
+  InputAdornment,
+  List,
+  ListItem,
+  ListItemSecondaryAction,
+  ListItemText,
+  Paper,
+  Snackbar,
+  TextField,
+  Typography
 } from '@mui/material';
 import React, { useEffect, useRef, useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
@@ -61,6 +60,21 @@ interface CartItem {
 
 // Payment method type
 type PaymentMethod = 'cash' | 'credit_card' | 'debit_card' | 'mobile_payment' | 'other';
+
+interface Sale {
+  items: {
+    productId: number;
+    quantity: number;
+    price: number;
+  }[];
+  subtotal: number;
+  discount: number;
+  tax: number;
+  total: number;
+  paymentMethod: PaymentMethod;
+  customerName?: string;
+  customerPhone?: string;
+}
 
 const POS: React.FC = () => {
   const { user } = useAuth();
@@ -94,11 +108,16 @@ const POS: React.FC = () => {
       try {
         setLoadingProducts(true);
         const response = await productsApi.getAll();
-        setProducts(response.data.products);
-        setFilteredProducts(response.data.products);
+        // Ensure we always have an array, even if response.data.products is undefined
+        const productsData = response.data?.products || [];
+        setProducts(productsData);
+        setFilteredProducts(productsData);
       } catch (err) {
         console.error('Error fetching products:', err);
         setError('Failed to load products. Please try again.');
+        // Set empty arrays to prevent undefined errors
+        setProducts([]);
+        setFilteredProducts([]);
       } finally {
         setLoadingProducts(false);
       }
@@ -256,49 +275,36 @@ const POS: React.FC = () => {
   };
   
   // Open checkout dialog
-  const handleCheckout = () => {
-    if (cartItems.length === 0) {
-      setError('Cart is empty. Please add items before checkout.');
-      return;
-    }
-    
-    setCheckoutDialogOpen(true);
-  };
-  
-  // Process sale
-  const processSale = async () => {
+  const handleCheckout = async () => {
     if (cartItems.length === 0) {
       setError('Cart is empty. Please add items before checkout.');
       return;
     }
     
     try {
-      setProcessingSale(true);
-      setError(null);
-      
-      // Prepare sale data
-      const saleData = {
+      const saleData: Sale = {
         items: cartItems.map(item => ({
           productId: item.product.id,
           quantity: item.quantity,
-          unitPrice: item.product.price,
-          discount: item.discount,
-          subtotal: item.subtotal,
+          price: item.product.price
         })),
         subtotal: cartSubtotal,
         discount: cartDiscount,
         tax: cartTax,
         total: cartTotal,
         paymentMethod,
-        customerName: customerName || undefined,
-        customerPhone: customerPhone || undefined,
+        customerName,
+        customerPhone
       };
+      
+      setProcessingSale(true);
+      setError(null);
       
       // Create sale
       const response = await salesApi.create(saleData);
       
-      // Generate receipt
-      const receiptResponse = await printApi.generateReceipt(response.data.id);
+      // Generate receipt using the correct method
+      const receiptResponse = await printApi.printReceipt(response.data.id);
       
       // Show success message
       setSuccessMessage('Sale completed successfully!');
@@ -330,21 +336,34 @@ const POS: React.FC = () => {
   
   // Render product grid
   const renderProductGrid = () => {
+    // Ensure we have a valid array to work with
+    const productsToRender = filteredProducts || [];
+    
     return (
-      <Grid container spacing={2}>
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
         {loadingProducts ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%', mt: 4 }}>
             <CircularProgress />
           </Box>
-        ) : filteredProducts.length === 0 ? (
+        ) : productsToRender.length === 0 ? (
           <Box sx={{ width: '100%', textAlign: 'center', mt: 4 }}>
             <Typography variant="body1" color="text.secondary">
               No products found. Try a different search.
             </Typography>
           </Box>
         ) : (
-          filteredProducts.map(product => (
-            <Grid item xs={6} sm={4} md={3} lg={2} key={product.id}>
+          productsToRender.map(product => (
+            <Box 
+              key={product.id}
+              sx={{ 
+                width: {
+                  xs: 'calc(50% - 8px)',
+                  sm: 'calc(33.33% - 10.67px)',
+                  md: 'calc(25% - 12px)',
+                  lg: 'calc(16.66% - 13.33px)'
+                }
+              }}
+            >
               <Card
                 sx={{
                   height: '100%',
@@ -428,10 +447,10 @@ const POS: React.FC = () => {
                   </Box>
                 </CardContent>
               </Card>
-            </Grid>
+            </Box>
           ))
         )}
-      </Grid>
+      </Box>
     );
   };
   
@@ -514,9 +533,9 @@ const POS: React.FC = () => {
         Point of Sale
       </Typography>
       
-      <Grid container spacing={3}>
+      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
         {/* Left Side - Products */}
-        <Grid item xs={12} md={8}>
+        <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 66.66%' } }}>
           <Paper sx={{ p: 2, mb: 3 }}>
             <Box sx={{ display: 'flex', mb: 2 }}>
               {/* Barcode Scanner Input */}
@@ -582,10 +601,10 @@ const POS: React.FC = () => {
               {renderProductGrid()}
             </Box>
           </Paper>
-        </Grid>
+        </Box>
         
         {/* Right Side - Cart */}
-        <Grid item xs={12} md={4}>
+        <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 33.33%' } }}>
           <Paper sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
             <Typography variant="h6" gutterBottom>
               Cart
@@ -650,8 +669,8 @@ const POS: React.FC = () => {
               </Button>
             </Box>
           </Paper>
-        </Grid>
-      </Grid>
+        </Box>
+      </Box>
       
       {/* Checkout Dialog */}
       <Dialog
@@ -769,7 +788,7 @@ const POS: React.FC = () => {
           </Button>
           
           <Button
-            onClick={processSale}
+            onClick={handleCheckout}
             variant="contained"
             color="primary"
             disabled={processingSale}
@@ -852,4 +871,4 @@ const POS: React.FC = () => {
   );
 };
 
-export default POS; 
+export default POS;

@@ -1,0 +1,26 @@
+[
+  {
+    "name": "Admin User",
+    "username": "admin",
+    "email": "admin@bikepos.com",
+    "password": "$2a$10$xLxAYZ8cGpDobZKZ7rQIzOD4tX0rX.Owp8vXzp.g0y7jq5YiH7wCi",
+    "role": "admin",
+    "active": true
+  },
+  {
+    "name": "Manager User",
+    "username": "manager",
+    "email": "manager@bikepos.com",
+    "password": "$2a$10$xLxAYZ8cGpDobZKZ7rQIzOD4tX0rX.Owp8vXzp.g0y7jq5YiH7wCi",
+    "role": "manager",
+    "active": true
+  },
+  {
+    "name": "Cashier User",
+    "username": "cashier",
+    "email": "cashier@bikepos.com",
+    "password": "$2a$10$xLxAYZ8cGpDobZKZ7rQIzOD4tX0rX.Owp8vXzp.g0y7jq5YiH7wCi",
+    "role": "cashier",
+    "active": true
+  }
+] 

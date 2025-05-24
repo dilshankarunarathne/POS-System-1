@@ -1,37 +1,20 @@
-const User = require('./User');
-const Product = require('./Product');
+// Export all mongoose models for easier imports
 const Category = require('./Category');
-const Supplier = require('./Supplier');
+const Customer = require('./Customer');
+const Product = require('./Product');
 const Sale = require('./Sale');
 const SaleItem = require('./SaleItem');
+const Supplier = require('./Supplier');
+const User = require('./User');
 
-// Define relationships
-
-// Product and Category relationship
-Product.belongsTo(Category, { foreignKey: 'categoryId', onDelete: 'SET NULL' });
-Category.hasMany(Product, { foreignKey: 'categoryId' });
-
-// Product and Supplier relationship
-Product.belongsTo(Supplier, { foreignKey: 'supplierId', onDelete: 'SET NULL' });
-Supplier.hasMany(Product, { foreignKey: 'supplierId' });
-
-// Sale and User relationship
-Sale.belongsTo(User, { foreignKey: 'userId', as: 'cashier' });
-User.hasMany(Sale, { foreignKey: 'userId' });
-
-// Sale and SaleItem relationship
-Sale.hasMany(SaleItem, { foreignKey: 'saleId', onDelete: 'CASCADE' });
-SaleItem.belongsTo(Sale, { foreignKey: 'saleId' });
-
-// SaleItem and Product relationship
-SaleItem.belongsTo(Product, { foreignKey: 'productId' });
-Product.hasMany(SaleItem, { foreignKey: 'productId' });
+// No relationships needed for MongoDB as they're handled by refs in schema
 
 module.exports = {
-  User,
-  Product,
   Category,
-  Supplier,
+  Customer,
+  Product,
   Sale,
-  SaleItem
-}; 
+  SaleItem,
+  Supplier,
+  User
+};

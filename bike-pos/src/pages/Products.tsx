@@ -1,43 +1,41 @@
 import {
-    Add as AddIcon,
-    Delete as DeleteIcon,
-    Edit as EditIcon,
-    FilterList as FilterListIcon,
-    Print as PrintIcon,
-    Search as SearchIcon,
+  Add as AddIcon,
+  Delete as DeleteIcon,
+  Edit as EditIcon,
+  FilterList as FilterListIcon,
+  Print as PrintIcon,
+  Search as SearchIcon,
 } from '@mui/icons-material';
 import {
-    Alert,
-    Box,
-    Button,
-    Card,
-    CardMedia,
-    Chip,
-    CircularProgress,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    FormControl,
-    Grid,
-    IconButton,
-    InputAdornment,
-    InputLabel,
-    MenuItem,
-    Paper,
-    Select,
-    Snackbar,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TablePagination,
-    TableRow,
-    TextField,
-    Toolbar,
-    Tooltip,
-    Typography,
+  Alert,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  FormControl,
+  IconButton,
+  InputAdornment,
+  InputLabel,
+  MenuItem,
+  Paper,
+  Select,
+  SelectChangeEvent,
+  Snackbar,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TablePagination,
+  TableRow,
+  TextField,
+  Toolbar,
+  Tooltip,
+  Typography
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { categoriesApi, printApi, productsApi, suppliersApi } from '../services/api';
@@ -47,7 +45,7 @@ const Products: React.FC = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   
@@ -70,6 +68,24 @@ const Products: React.FC = () => {
   const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
   const [printQuantity, setPrintQuantity] = useState(1);
   
+  // Form state
+  const [formData, setFormData] = useState({
+    name: '',
+    description: '',
+    barcode: '',
+    price: '',
+    costPrice: '',
+    stockQuantity: '',
+    reorderLevel: '',
+    categoryId: '',
+    supplierId: '',
+    // Add direct text input fields for category and supplier
+    categoryName: '',
+    supplierName: '',
+    image: null as File | null,
+    imageUrl: '',
+  });
+  
   // Fetch products on component mount and when filters change
   useEffect(() => {
     fetchProducts();
@@ -84,16 +100,56 @@ const Products: React.FC = () => {
           suppliersApi.getAll(),
         ]);
         
-        setCategories(categoriesResponse.data);
-        setSuppliers(suppliersResponse.data);
+        setCategories(categoriesResponse.data || []);
+        setSuppliers(suppliersResponse.data || []);
       } catch (err) {
         console.error('Error fetching categories and suppliers:', err);
         setError('Failed to load categories and suppliers');
+        setCategories([]);
+        setSuppliers([]);
       }
     };
     
     fetchData();
   }, []);
+  
+  // Reset form data when selected product changes
+  useEffect(() => {
+    if (selectedProduct) {
+      setFormData({
+        name: selectedProduct.name || '',
+        description: selectedProduct.description || '',
+        barcode: selectedProduct.barcode || '',
+        price: selectedProduct.price?.toString() || '',
+        costPrice: selectedProduct.costPrice?.toString() || '',
+        stockQuantity: selectedProduct.stockQuantity?.toString() || '',
+        reorderLevel: selectedProduct.reorderLevel?.toString() || '',
+        categoryId: selectedProduct.categoryId?.toString() || selectedProduct.category?.id?.toString() || '',
+        supplierId: selectedProduct.supplierId?.toString() || selectedProduct.supplier?.id?.toString() || '',
+        // Set category and supplier name fields from product data
+        categoryName: selectedProduct.category?.name || '',
+        supplierName: selectedProduct.supplier?.name || '',
+        image: null,
+        imageUrl: selectedProduct.image ? `http://localhost:5000${selectedProduct.image}` : '',
+      });
+    } else {
+      setFormData({
+        name: '',
+        description: '',
+        barcode: '',
+        price: '',
+        costPrice: '',
+        stockQuantity: '0',
+        reorderLevel: '0',
+        categoryId: '',
+        supplierId: '',
+        categoryName: '',
+        supplierName: '',
+        image: null,
+        imageUrl: '',
+      });
+    }
+  }, [selectedProduct]);
   
   // Fetch products with filters and pagination
   const fetchProducts = async () => {
@@ -104,17 +160,20 @@ const Products: React.FC = () => {
         page: page + 1,
         limit: rowsPerPage,
         search: searchQuery,
-        category: categoryFilter,
-        supplier: supplierFilter,
+        category: categoryFilter || undefined,
+        supplier: supplierFilter || undefined,
         lowStock: showLowStock,
       });
       
-      setProducts(response.data.products);
-      setTotalProducts(response.data.totalProducts);
+      // Ensure products is always an array even if the response is undefined
+      setProducts(response.data?.products || []);
+      setTotalProducts(response.data?.pagination?.total || 0);
       
     } catch (err) {
       console.error('Error fetching products:', err);
       setError('Failed to load products');
+      setProducts([]);
+      setTotalProducts(0);
     } finally {
       setLoading(false);
     }
@@ -195,10 +254,8 @@ const Products: React.FC = () => {
   // Print product labels
   const handlePrintLabels = async () => {
     try {
-      const response = await printApi.generateLabels({
-        productIds: selectedProductIds,
-        quantity: printQuantity,
-      });
+      // Generate barcodes for all selected products
+      const response = await printApi.generateBarcodes(selectedProductIds);
       
       // Open the PDF in a new tab
       window.open(`http://localhost:5000${response.data.downloadUrl}`, '_blank');
@@ -210,6 +267,101 @@ const Products: React.FC = () => {
     } catch (err) {
       console.error('Error generating labels:', err);
       setError('Failed to generate labels');
+    }
+  };
+  
+  // Handle form input changes
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+  
+  // Handle select field changes (FIXED)
+  const handleSelectChange = (event: SelectChangeEvent<string>) => {
+    const { name, value } = event.target;
+    setFormData(prev => ({ ...prev, [name as string]: value }));
+  };
+  
+  // Handle filter select changes (FIXED)
+  const handleFilterSelectChange = (event: SelectChangeEvent<string>, filterType: 'category' | 'supplier') => {
+    const value = event.target.value;
+    if (filterType === 'category') {
+      setCategoryFilter(value);
+    } else {
+      setSupplierFilter(value);
+    }
+  };
+  
+  // Handle image upload
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setFormData(prev => ({
+        ...prev,
+        image: file,
+        imageUrl: URL.createObjectURL(file),
+      }));
+    }
+  };
+  
+  // Submit form
+  const handleSubmitForm = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      const formDataToSend = new FormData();
+      
+      // Add all text fields
+      formDataToSend.append('name', formData.name);
+      formDataToSend.append('description', formData.description);
+      
+      // Only add barcode if provided (otherwise backend will auto-generate)
+      if (formData.barcode) {
+        formDataToSend.append('barcode', formData.barcode);
+      }
+      
+      formDataToSend.append('price', formData.price);
+      
+      if (formData.costPrice) {
+        formDataToSend.append('costPrice', formData.costPrice);
+      }
+      
+      formDataToSend.append('stockQuantity', formData.stockQuantity);
+      
+      if (formData.reorderLevel) {
+        formDataToSend.append('reorderLevel', formData.reorderLevel);
+      }
+      
+      // Replace category and supplier ID with name
+      if (formData.categoryName) {
+        formDataToSend.append('categoryName', formData.categoryName);
+      }
+      
+      if (formData.supplierName) {
+        formDataToSend.append('supplierName', formData.supplierName);
+      }
+      
+      // Add image if available
+      if (formData.image) {
+        formDataToSend.append('image', formData.image);
+      }
+      
+      if (selectedProduct) {
+        // Update existing product
+        await productsApi.update(selectedProduct.id, formDataToSend);
+        setSuccessMessage('Product updated successfully');
+      } else {
+        // Create new product
+        await productsApi.create(formDataToSend);
+        setSuccessMessage('Product created successfully');
+      }
+      
+      // Close form and refresh product list
+      handleCloseProductForm();
+      fetchProducts();
+    } catch (err) {
+      console.error('Error submitting product:', err);
+      setError('Failed to save product');
     }
   };
   
@@ -263,8 +415,8 @@ const Products: React.FC = () => {
           </Tooltip>
         </Toolbar>
         
-        <Grid container spacing={2} alignItems="center">
-          <Grid item xs={12} sm={4}>
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+          <Box sx={{ width: { xs: '100%', sm: '33.33%' } }}>
             <TextField
               fullWidth
               label="Search Products"
@@ -280,9 +432,9 @@ const Products: React.FC = () => {
                 ),
               }}
             />
-          </Grid>
+          </Box>
           
-          <Grid item xs={12} sm={3}>
+          <Box sx={{ width: { xs: '100%', sm: '25%' } }}>
             <FormControl fullWidth size="small">
               <InputLabel id="category-filter-label">Category</InputLabel>
               <Select
@@ -290,19 +442,19 @@ const Products: React.FC = () => {
                 id="category-filter"
                 value={categoryFilter}
                 label="Category"
-                onChange={(e) => setCategoryFilter(e.target.value)}
+                onChange={(e) => handleFilterSelectChange(e, 'category')}
               >
                 <MenuItem value="">All Categories</MenuItem>
                 {categories.map((category) => (
-                  <MenuItem key={category.id} value={category.id}>
+                  <MenuItem key={category.id} value={category.id?.toString() || ''}>
                     {category.name}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-          </Grid>
+          </Box>
           
-          <Grid item xs={12} sm={3}>
+          <Box sx={{ width: { xs: '100%', sm: '25%' } }}>
             <FormControl fullWidth size="small">
               <InputLabel id="supplier-filter-label">Supplier</InputLabel>
               <Select
@@ -310,19 +462,19 @@ const Products: React.FC = () => {
                 id="supplier-filter"
                 value={supplierFilter}
                 label="Supplier"
-                onChange={(e) => setSupplierFilter(e.target.value)}
+                onChange={(e) => handleFilterSelectChange(e, 'supplier')}
               >
                 <MenuItem value="">All Suppliers</MenuItem>
                 {suppliers.map((supplier) => (
-                  <MenuItem key={supplier.id} value={supplier.id}>
+                  <MenuItem key={supplier.id} value={supplier.id?.toString() || ''}>
                     {supplier.name}
                   </MenuItem>
                 ))}
               </Select>
             </FormControl>
-          </Grid>
+          </Box>
           
-          <Grid item xs={12} sm={2}>
+          <Box sx={{ width: { xs: '100%', sm: '16.66%' } }}>
             <Button
               fullWidth
               variant={showLowStock ? "contained" : "outlined"}
@@ -331,8 +483,8 @@ const Products: React.FC = () => {
             >
               {showLowStock ? "All Stock" : "Low Stock"}
             </Button>
-          </Grid>
-        </Grid>
+          </Box>
+        </Box>
       </Paper>
       
       {/* Products Table */}
@@ -342,7 +494,6 @@ const Products: React.FC = () => {
             <TableHead>
               <TableRow>
                 <TableCell padding="checkbox"></TableCell>
-                <TableCell>Image</TableCell>
                 <TableCell>Name</TableCell>
                 <TableCell>Barcode</TableCell>
                 <TableCell>Category</TableCell>
@@ -355,19 +506,20 @@ const Products: React.FC = () => {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
                     <CircularProgress />
                   </TableCell>
                 </TableRow>
               ) : products.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={8} align="center" sx={{ py: 3 }}>
+                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
                     No products found
                   </TableCell>
                 </TableRow>
               ) : (
                 products.map((product) => {
-                  const isLowStock = product.stockQuantity <= product.reorderLevel;
+                  // Add null checks for all properties that might be undefined
+                  const isLowStock = (product.stockQuantity || 0) <= (product.reorderLevel || 0);
                   const isSelected = selectedProductIds.includes(product.id);
                   
                   return (
@@ -387,31 +539,14 @@ const Products: React.FC = () => {
                         />
                       </TableCell>
                       
-                      <TableCell>
-                        {product.image ? (
-                          <Card sx={{ width: 60, height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <CardMedia
-                              component="img"
-                              sx={{ height: 50, objectFit: 'contain' }}
-                              image={`http://localhost:5000${product.image}`}
-                              alt={product.name}
-                            />
-                          </Card>
-                        ) : (
-                          <Box sx={{ width: 60, height: 60, bgcolor: 'grey.200', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                            <Typography variant="caption" color="text.secondary">No Image</Typography>
-                          </Box>
-                        )}
-                      </TableCell>
-                      
                       <TableCell>{product.name}</TableCell>
                       <TableCell>{product.barcode}</TableCell>
-                      <TableCell>{product.Category ? product.Category.name : 'Uncategorized'}</TableCell>
-                      <TableCell>Rs. {product.price.toFixed(2)}</TableCell>
+                      <TableCell>{product.category ? product.category.name : 'Uncategorized'}</TableCell>
+                      <TableCell>Rs. {(product.price || 0).toFixed(2)}</TableCell>
                       
                       <TableCell>
                         <Chip
-                          label={`${product.stockQuantity} units`}
+                          label={`${product.stockQuantity || 0} units`}
                           color={isLowStock ? 'error' : 'success'}
                           variant={isLowStock ? 'outlined' : 'filled'}
                           size="small"
@@ -509,6 +644,142 @@ const Products: React.FC = () => {
         </DialogActions>
       </Dialog>
       
+      {/* Product Form Dialog */}
+      <Dialog 
+        open={productFormOpen} 
+        onClose={handleCloseProductForm}
+        fullWidth
+        maxWidth="md"
+      >
+        <form onSubmit={handleSubmitForm}>
+          <DialogTitle>
+            {selectedProduct ? 'Edit Product' : 'Add New Product'}
+          </DialogTitle>
+          <DialogContent>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, mt: 2 }}>
+              <Box sx={{ flex: 1 }}>
+                <TextField
+                  fullWidth
+                  label="Product Name"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  required
+                  margin="normal"
+                />
+                
+                <TextField
+                  fullWidth
+                  label="Description"
+                  name="description"
+                  value={formData.description}
+                  onChange={handleInputChange}
+                  multiline
+                  rows={3}
+                  margin="normal"
+                />
+                
+                <TextField
+                  fullWidth
+                  label="Barcode"
+                  name="barcode"
+                  value={formData.barcode}
+                  onChange={handleInputChange}
+                  margin="normal"
+                  helperText="Leave empty to auto-generate a unique barcode"
+                />
+                
+                <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
+                  <TextField
+                    fullWidth
+                    label="Category"
+                    name="categoryName"
+                    value={formData.categoryName}
+                    onChange={handleInputChange}
+                    margin="normal"
+                  />
+                  
+                  <TextField
+                    fullWidth
+                    label="Supplier"
+                    name="supplierName"
+                    value={formData.supplierName}
+                    onChange={handleInputChange}
+                    margin="normal"
+                  />
+                </Box>
+              </Box>
+              
+              <Box sx={{ flex: 1 }}>
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Price"
+                    name="price"
+                    value={formData.price}
+                    onChange={handleInputChange}
+                    required
+                    margin="normal"
+                    inputProps={{ min: 0, step: 0.01 }}
+                    InputProps={{
+                      startAdornment: <InputAdornment position="start">Rs.</InputAdornment>,
+                    }}
+                  />
+                  
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Cost Price"
+                    name="costPrice"
+                    value={formData.costPrice}
+                    onChange={handleInputChange}
+                    margin="normal"
+                    inputProps={{ min: 0, step: 0.01 }}
+                    InputProps={{
+                      startAdornment: <InputAdornment position="start">Rs.</InputAdornment>,
+                    }}
+                  />
+                </Box>
+                
+                <Box sx={{ display: 'flex', gap: 2 }}>
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Stock Quantity"
+                    name="stockQuantity"
+                    value={formData.stockQuantity}
+                    onChange={handleInputChange}
+                    required
+                    margin="normal"
+                    inputProps={{ min: 0 }}
+                  />
+                  
+                  <TextField
+                    fullWidth
+                    type="number"
+                    label="Reorder Level"
+                    name="reorderLevel"
+                    value={formData.reorderLevel}
+                    onChange={handleInputChange}
+                    margin="normal"
+                    inputProps={{ min: 0 }}
+                  />
+                </Box>
+                
+                {/* Product image section removed */}
+              </Box>
+            </Box>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={handleCloseProductForm}>Cancel</Button>
+            <Button type="submit" variant="contained" color="primary">
+              {selectedProduct ? 'Update' : 'Create'} Product
+            </Button>
+          </DialogActions>
+        </form>
+      </Dialog>
+      
       {/* Error and Success Messages */}
       <Snackbar
         open={!!error}
@@ -535,4 +806,4 @@ const Products: React.FC = () => {
   );
 };
 
-export default Products; 
+export default Products;

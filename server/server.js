@@ -52,20 +52,21 @@ app.get('/', (req, res) => {
   res.json({ message: 'Welcome to Bike Parts POS System API' });
 });
 
-// Error handling middleware
-app.use((err, req, res, next) => {
-  console.error('Global error:', err);
-  const statusCode = err.statusCode || 500;
-  res.status(statusCode).json({
-    message: err.message || 'An unexpected error occurred',
-    stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
-  });
-});
+// Debug environment variables
+console.log('Environment variables:');
+console.log(`NODE_ENV: ${process.env.NODE_ENV}`);
+console.log(`MONGO_URI exists: ${Boolean(process.env.MONGO_URI)}`);
+console.log(`Looking for .env file at: ${path.resolve(__dirname, '../.env')}`);
 
 // Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
-  console.log(`Environment: ${process.env.NODE_ENV}`);
-  console.log(`MongoDB URI exists: ${Boolean(process.env.MONGO_URI)}`);
+});
+
+// Handle unhandled promise rejections
+process.on('unhandledRejection', (err, promise) => {
+  console.log(`Error: ${err.message}`);
+  // Close server & exit process
+  // server.close(() => process.exit(1));
 });

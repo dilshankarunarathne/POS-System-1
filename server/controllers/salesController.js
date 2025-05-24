@@ -1,5 +1,9 @@
-const { Sale, SaleItem, Product, User, sequelize } = require('../models');
-const { Op } = require('sequelize');
+const mongoose = require('mongoose');
+const Sale = require('../models/Sale');
+const SaleItem = require('../models/SaleItem');
+const Product = require('../models/Product');
+const User = require('../models/User');
+const Customer = require('../models/Customer');
 
 // Generate invoice number
 const generateInvoiceNumber = async () => {
@@ -8,119 +12,120 @@ const generateInvoiceNumber = async () => {
   
   // Get the last invoice number for today
   const lastSale = await Sale.findOne({
-    where: {
-      invoiceNumber: {
-        [Op.like]: `INV-${dateStr}-%`
-      }
-    },
-    order: [['createdAt', 'DESC']]
-  });
+    invoiceNumber: new RegExp(`^INV-${dateStr}-`)
+  }).sort({ createdAt: -1 });
   
   let nextNumber = 1;
-  if (lastSale) {
+  if (lastSale && lastSale.invoiceNumber) {
     const parts = lastSale.invoiceNumber.split('-');
-    nextNumber = parseInt(parts[2]) + 1;
+    if (parts.length >= 3) {
+      nextNumber = parseInt(parts[2]) + 1;
+    }
   }
   
   return `INV-${dateStr}-${nextNumber.toString().padStart(4, '0')}`;
 };
 
 // Create a new sale
-exports.createSale = async (req, res) => {
-  const transaction = await sequelize.transaction();
+const createSale = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   
   try {
     const {
+      customer,
       items,
       subtotal,
       discount = 0,
       tax = 0,
       total,
       paymentMethod,
-      customerName,
-      customerPhone,
       notes
     } = req.body;
     
     if (!items || !Array.isArray(items) || items.length === 0) {
-      await transaction.rollback();
+      await session.abortTransaction();
+      session.endSession();
       return res.status(400).json({ message: 'Sale items are required' });
     }
     
     // Generate invoice number
     const invoiceNumber = await generateInvoiceNumber();
     
-    // Create sale
-    const sale = await Sale.create({
+    // Create new sale
+    const sale = new Sale({
       invoiceNumber,
+      customer,
+      items: [],
       subtotal,
       discount,
       tax,
       total,
       paymentMethod,
-      customerName,
-      customerPhone,
+      user: req.user.id,
       notes,
-      userId: req.user.id
-    }, { transaction });
+      createdAt: new Date()
+    });
     
-    // Create sale items and update product stock
+    // Process items and update product stock
     for (const item of items) {
       // Check if product exists and has enough stock
-      const product = await Product.findByPk(item.productId, { transaction });
+      const product = await Product.findById(item.product).session(session);
       
       if (!product) {
-        await transaction.rollback();
-        return res.status(404).json({ message: `Product with ID ${item.productId} not found` });
+        await session.abortTransaction();
+        session.endSession();
+        return res.status(404).json({ message: `Product with ID ${item.product} not found` });
       }
       
-      if (product.stockQuantity < item.quantity) {
-        await transaction.rollback();
+      if (product.quantity < item.quantity) {
+        await session.abortTransaction();
+        session.endSession();
         return res.status(400).json({ 
           message: `Insufficient stock for product: ${product.name}`,
           product: product.name,
-          available: product.stockQuantity,
+          available: product.quantity,
           requested: item.quantity
         });
       }
       
-      // Create sale item
-      await SaleItem.create({
-        saleId: sale.id,
-        productId: item.productId,
+      // Add item to sale
+      sale.items.push({
+        product: product._id,
         quantity: item.quantity,
-        unitPrice: item.unitPrice,
-        discount: item.discount || 0,
-        subtotal: item.subtotal
-      }, { transaction });
+        price: item.price,
+        discount: item.discount || 0
+      });
       
       // Update product stock
-      await product.update({
-        stockQuantity: product.stockQuantity - item.quantity
-      }, { transaction });
+      product.quantity -= item.quantity;
+      await product.save({ session });
     }
     
-    // Commit transaction
-    await transaction.commit();
+    // Save the sale
+    await sale.save({ session });
     
-    // Return created sale with items
-    const createdSale = await Sale.findByPk(sale.id, {
-      include: [
-        { model: SaleItem, include: [Product] },
-        { model: User, as: 'cashier', attributes: ['id', 'username'] }
-      ]
-    });
+    // Commit transaction
+    await session.commitTransaction();
+    session.endSession();
+    
+    // Return created sale with populated fields
+    const createdSale = await Sale.findById(sale._id)
+      .populate('customer')
+      .populate('user', 'name username')
+      .populate('items.product');
     
     res.status(201).json(createdSale);
   } catch (error) {
-    await transaction.rollback();
+    await session.abortTransaction();
+    session.endSession();
     console.error('Error creating sale:', error);
-    res.status(500).json({ message: 'Server error while creating sale' });
+    res.status(500).json({ message: 'Server error creating sale' });
   }
 };
 
 // Get all sales with pagination and filtering
-exports.getAllSales = async (req, res) => {
+const getAllSales = async (req, res) => {
   try {
     const {
       page = 1,
@@ -128,163 +133,165 @@ exports.getAllSales = async (req, res) => {
       startDate,
       endDate,
       paymentMethod,
-      status,
       minAmount,
       maxAmount,
       sort = 'createdAt',
-      order = 'DESC'
+      order = 'desc'
     } = req.query;
     
     // Prepare filter conditions
-    const whereConditions = {};
+    const filter = {};
     
     // Date range filter
-    if (startDate && endDate) {
-      whereConditions.date = {
-        [Op.between]: [new Date(startDate), new Date(endDate)]
-      };
-    } else if (startDate) {
-      whereConditions.date = {
-        [Op.gte]: new Date(startDate)
-      };
-    } else if (endDate) {
-      whereConditions.date = {
-        [Op.lte]: new Date(endDate)
-      };
+    if (startDate || endDate) {
+      filter.createdAt = {};
+      if (startDate) {
+        filter.createdAt.$gte = new Date(startDate);
+      }
+      if (endDate) {
+        const endDateTime = new Date(endDate);
+        endDateTime.setHours(23, 59, 59, 999);
+        filter.createdAt.$lte = endDateTime;
+      }
     }
     
     // Payment method filter
     if (paymentMethod) {
-      whereConditions.paymentMethod = paymentMethod;
-    }
-    
-    // Status filter
-    if (status) {
-      whereConditions.status = status;
+      filter.paymentMethod = paymentMethod;
     }
     
     // Amount range filter
     if (minAmount || maxAmount) {
-      whereConditions.total = {};
+      filter.total = {};
       if (minAmount) {
-        whereConditions.total[Op.gte] = minAmount;
+        filter.total.$gte = Number(minAmount);
       }
       if (maxAmount) {
-        whereConditions.total[Op.lte] = maxAmount;
+        filter.total.$lte = Number(maxAmount);
       }
     }
     
-    // Query sales with pagination
-    const { count, rows: sales } = await Sale.findAndCountAll({
-      where: whereConditions,
-      include: [
-        { model: User, as: 'cashier', attributes: ['id', 'username'] }
-      ],
-      order: [[sort, order]],
-      limit: parseInt(limit),
-      offset: (parseInt(page) - 1) * parseInt(limit)
-    });
+    // Set up sort options
+    const sortOptions = {};
+    sortOptions[sort] = order === 'desc' ? -1 : 1;
     
-    res.json({
+    // Query sales with pagination
+    const sales = await Sale.find(filter)
+      .populate('customer')
+      .populate('user', 'name username')
+      .sort(sortOptions)
+      .skip((Number(page) - 1) * Number(limit))
+      .limit(Number(limit));
+    
+    // Get total count for pagination
+    const totalSales = await Sale.countDocuments(filter);
+    
+    res.status(200).json({
       sales,
-      totalPages: Math.ceil(count / parseInt(limit)),
-      currentPage: parseInt(page),
-      totalSales: count
+      totalPages: Math.ceil(totalSales / Number(limit)),
+      currentPage: Number(page),
+      totalSales
     });
   } catch (error) {
     console.error('Error fetching sales:', error);
-    res.status(500).json({ message: 'Server error while fetching sales' });
+    res.status(500).json({ message: 'Server error fetching sales' });
   }
 };
 
 // Get a single sale by ID with all details
-exports.getSaleById = async (req, res) => {
+const getSaleById = async (req, res) => {
   try {
-    const sale = await Sale.findByPk(req.params.id, {
-      include: [
-        { 
-          model: SaleItem, 
-          include: [{ model: Product, attributes: ['id', 'name', 'barcode', 'price'] }] 
-        },
-        { model: User, as: 'cashier', attributes: ['id', 'username'] }
-      ]
-    });
+    const sale = await Sale.findById(req.params.id)
+      .populate('customer')
+      .populate('user', 'name username')
+      .populate('items.product');
     
     if (!sale) {
       return res.status(404).json({ message: 'Sale not found' });
     }
     
-    res.json(sale);
+    res.status(200).json(sale);
   } catch (error) {
     console.error('Error fetching sale:', error);
-    res.status(500).json({ message: 'Server error while fetching sale' });
+    res.status(500).json({ message: 'Server error fetching sale' });
   }
 };
 
 // Update sale status (for returns or cancellations)
-exports.updateSaleStatus = async (req, res) => {
-  const transaction = await sequelize.transaction();
+const updateSaleStatus = async (req, res) => {
+  const session = await mongoose.startSession();
+  session.startTransaction();
   
   try {
     const { id } = req.params;
     const { status, reason } = req.body;
     
-    if (!['completed', 'returned', 'cancelled'].includes(status)) {
-      await transaction.rollback();
-      return res.status(400).json({ message: 'Invalid status' });
+    if (!status) {
+      await session.abortTransaction();
+      session.endSession();
+      return res.status(400).json({ message: 'Status is required' });
     }
     
-    const sale = await Sale.findByPk(id, {
-      include: [{ model: SaleItem }],
-      transaction
-    });
+    const sale = await Sale.findById(id).session(session);
     
     if (!sale) {
-      await transaction.rollback();
+      await session.abortTransaction();
+      session.endSession();
       return res.status(404).json({ message: 'Sale not found' });
     }
     
-    const oldStatus = sale.status;
+    const oldStatus = sale.status || 'completed';
     
-    // Update sale status
-    await sale.update({
+    // Update sale with new status
+    sale.status = status;
+    
+    // Add status history
+    if (!sale.statusHistory) {
+      sale.statusHistory = [];
+    }
+    
+    sale.statusHistory.push({
       status,
-      notes: reason ? `${sale.notes || ''} Status changed from ${oldStatus} to ${status}. Reason: ${reason}` : sale.notes
-    }, { transaction });
+      reason,
+      updatedBy: req.user.id,
+      updatedAt: new Date()
+    });
     
-    // If status changes to returned or from returned, update product stock
-    if ((oldStatus !== 'returned' && status === 'returned') || 
-        (oldStatus === 'returned' && status !== 'returned')) {
-      
-      for (const item of sale.SaleItems) {
-        const product = await Product.findByPk(item.productId, { transaction });
-        
+    await sale.save({ session });
+    
+    // If returning items, adjust product inventory
+    if ((oldStatus !== 'returned' && status === 'returned')) {
+      for (const item of sale.items) {
+        const product = await Product.findById(item.product).session(session);
         if (product) {
-          // If changing to returned, add stock back
-          // If changing from returned, remove stock again
-          const stockChange = status === 'returned' ? item.quantity : -item.quantity;
-          
-          await product.update({
-            stockQuantity: product.stockQuantity + stockChange
-          }, { transaction });
+          // Add the returned quantity back to inventory
+          product.quantity += item.quantity;
+          await product.save({ session });
         }
       }
     }
     
-    await transaction.commit();
+    await session.commitTransaction();
+    session.endSession();
     
-    // Return updated sale
-    const updatedSale = await Sale.findByPk(id, {
-      include: [
-        { model: SaleItem, include: [Product] },
-        { model: User, as: 'cashier', attributes: ['id', 'username'] }
-      ]
-    });
+    // Return updated sale with populated data
+    const updatedSale = await Sale.findById(id)
+      .populate('customer')
+      .populate('user', 'name username')
+      .populate('items.product');
     
-    res.json(updatedSale);
+    res.status(200).json(updatedSale);
   } catch (error) {
-    await transaction.rollback();
+    await session.abortTransaction();
+    session.endSession();
     console.error('Error updating sale status:', error);
-    res.status(500).json({ message: 'Server error while updating sale status' });
+    res.status(500).json({ message: 'Server error updating sale status' });
   }
-}; 
+};
+
+module.exports = {
+  createSale,
+  getAllSales,
+  getSaleById,
+  updateSaleStatus
+};

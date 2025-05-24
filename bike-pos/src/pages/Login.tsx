@@ -1,16 +1,15 @@
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import {
-  Alert,
-  Avatar,
-  Box,
-  Button,
-  CircularProgress,
-  Container,
-  Grid,
-  Paper,
-  Snackbar,
-  TextField,
-  Typography,
+    Alert,
+    Avatar,
+    Box,
+    Button,
+    CircularProgress,
+    Container,
+    Paper,
+    Snackbar,
+    TextField,
+    Typography,
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -132,11 +131,11 @@ const Login: React.FC = () => {
               {loading ? <CircularProgress size={24} /> : 'Sign In'}
             </Button>
             
-            <Grid container>
-              <Grid item xs>
-                <Typography variant="body2" color="text.secondary">
-                  Demo Accounts:
-                </Typography>
+            <Box sx={{ mt: 2 }}>
+              <Typography variant="body2" color="text.secondary">
+                Demo Accounts:
+              </Typography>
+              <Box sx={{ mt: 1 }}>
                 <Typography variant="caption" color="text.secondary" component="div">
                   Admin: admin / password
                 </Typography>
@@ -146,8 +145,8 @@ const Login: React.FC = () => {
                 <Typography variant="caption" color="text.secondary" component="div">
                   Cashier: cashier / password
                 </Typography>
-              </Grid>
-            </Grid>
+              </Box>
+            </Box>
           </Box>
         </Paper>
       </Box>

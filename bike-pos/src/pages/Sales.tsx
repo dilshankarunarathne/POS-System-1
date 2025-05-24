@@ -1,48 +1,47 @@
 import {
-    CheckCircle as CheckCircleIcon,
-    Close as CloseIcon,
-    FilterList as FilterListIcon,
-    Print as PrintIcon,
-    Refresh as RefreshIcon,
-    Search as SearchIcon,
-    ShoppingBag as ShoppingBagIcon,
+  CheckCircle as CheckCircleIcon,
+  Close as CloseIcon,
+  FilterList as FilterListIcon,
+  Print as PrintIcon,
+  Refresh as RefreshIcon,
+  Search as SearchIcon,
+  ShoppingBag as ShoppingBagIcon,
 } from '@mui/icons-material';
 import {
-    Alert,
-    Box,
-    Button,
-    Card,
-    CardContent,
-    Chip,
-    CircularProgress,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    Divider,
-    FormControl,
-    Grid,
-    IconButton,
-    InputAdornment,
-    InputLabel,
-    List,
-    ListItem,
-    ListItemText,
-    MenuItem,
-    Paper,
-    Select,
-    Snackbar,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TablePagination,
-    TableRow,
-    TextField,
-    Toolbar,
-    Tooltip,
-    Typography,
+  Alert,
+  Box,
+  Button,
+  Card,
+  CardContent,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  FormControl,
+  IconButton,
+  InputAdornment,
+  InputLabel,
+  List,
+  ListItem,
+  ListItemText,
+  MenuItem,
+  Paper,
+  Select,
+  Snackbar,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TablePagination,
+  TableRow,
+  TextField,
+  Toolbar,
+  Tooltip,
+  Typography
 } from '@mui/material';
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
@@ -236,7 +235,7 @@ const Sales: React.FC = () => {
   // Generate and print receipt
   const handlePrintReceipt = async (saleId: number) => {
     try {
-      const response = await printApi.generateReceipt(saleId);
+      const response = await printApi.printReceipt(saleId);
       
       setReceiptUrl(response.data.downloadUrl);
       setReceiptDialogOpen(true);
@@ -309,26 +308,26 @@ const Sales: React.FC = () => {
         </Toolbar>
         
         <LocalizationProvider dateAdapter={AdapterDateFns}>
-          <Grid container spacing={2} alignItems="center">
-            <Grid item xs={12} sm={6} md={2}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+            <Box sx={{ width: { xs: '100%', sm: '50%', md: '16.66%' } }}>
               <DatePicker
                 label="Start Date"
                 value={startDate}
                 onChange={setStartDate}
                 slotProps={{ textField: { fullWidth: true, size: 'small' } }}
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} sm={6} md={2}>
+            <Box sx={{ width: { xs: '100%', sm: '50%', md: '16.66%' } }}>
               <DatePicker
                 label="End Date"
                 value={endDate}
                 onChange={setEndDate}
                 slotProps={{ textField: { fullWidth: true, size: 'small' } }}
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} sm={6} md={2}>
+            <Box sx={{ width: { xs: '100%', sm: '50%', md: '16.66%' } }}>
               <FormControl fullWidth size="small">
                 <InputLabel id="payment-method-filter-label">Payment Method</InputLabel>
                 <Select
@@ -346,9 +345,9 @@ const Sales: React.FC = () => {
                   <MenuItem value="other">Other</MenuItem>
                 </Select>
               </FormControl>
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} sm={6} md={2}>
+            <Box sx={{ width: { xs: '100%', sm: '50%', md: '16.66%' } }}>
               <FormControl fullWidth size="small">
                 <InputLabel id="status-filter-label">Status</InputLabel>
                 <Select
@@ -364,9 +363,9 @@ const Sales: React.FC = () => {
                   <MenuItem value="cancelled">Cancelled</MenuItem>
                 </Select>
               </FormControl>
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} sm={6} md={2}>
+            <Box sx={{ width: { xs: '100%', sm: '50%', md: '16.66%' } }}>
               <TextField
                 fullWidth
                 label="Search Invoice #"
@@ -382,9 +381,9 @@ const Sales: React.FC = () => {
                   ),
                 }}
               />
-            </Grid>
+            </Box>
             
-            <Grid item xs={12} sm={6} md={2}>
+            <Box sx={{ width: { xs: '100%', sm: '50%', md: '16.66%' } }}>
               <Button
                 fullWidth
                 variant="outlined"
@@ -393,8 +392,8 @@ const Sales: React.FC = () => {
               >
                 Reset Filters
               </Button>
-            </Grid>
-          </Grid>
+            </Box>
+          </Box>
         </LocalizationProvider>
       </Paper>
       
@@ -493,43 +492,43 @@ const Sales: React.FC = () => {
         <DialogContent>
           {selectedSale && (
             <Box>
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
+              <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
+                <Box sx={{ flex: 1 }}>
                   <Typography variant="subtitle1" gutterBottom>
                     Sale Information
                   </Typography>
                   
                   <Card variant="outlined" sx={{ mb: 2 }}>
                     <CardContent>
-                      <Grid container spacing={2}>
-                        <Grid item xs={6}>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+                        <Box sx={{ width: 'calc(50% - 8px)' }}>
                           <Typography variant="body2" color="text.secondary">
                             Invoice Number
                           </Typography>
                           <Typography variant="body1">
                             {selectedSale.invoiceNumber}
                           </Typography>
-                        </Grid>
+                        </Box>
                         
-                        <Grid item xs={6}>
+                        <Box sx={{ width: 'calc(50% - 8px)' }}>
                           <Typography variant="body2" color="text.secondary">
                             Date & Time
                           </Typography>
                           <Typography variant="body1">
                             {formatDate(selectedSale.date)}
                           </Typography>
-                        </Grid>
+                        </Box>
                         
-                        <Grid item xs={6}>
+                        <Box sx={{ width: 'calc(50% - 8px)' }}>
                           <Typography variant="body2" color="text.secondary">
                             Cashier
                           </Typography>
                           <Typography variant="body1">
                             {selectedSale.cashier.username}
                           </Typography>
-                        </Grid>
+                        </Box>
                         
-                        <Grid item xs={6}>
+                        <Box sx={{ width: 'calc(50% - 8px)' }}>
                           <Typography variant="body2" color="text.secondary">
                             Status
                           </Typography>
@@ -538,53 +537,53 @@ const Sales: React.FC = () => {
                             color={getStatusChipColor(selectedSale.status)}
                             size="small"
                           />
-                        </Grid>
+                        </Box>
                         
-                        <Grid item xs={6}>
+                        <Box sx={{ width: 'calc(50% - 8px)' }}>
                           <Typography variant="body2" color="text.secondary">
                             Payment Method
                           </Typography>
                           <Typography variant="body1">
                             {formatPaymentMethod(selectedSale.paymentMethod)}
                           </Typography>
-                        </Grid>
+                        </Box>
                         
-                        <Grid item xs={6}>
+                        <Box sx={{ width: 'calc(50% - 8px)' }}>
                           <Typography variant="body2" color="text.secondary">
                             Customer
                           </Typography>
                           <Typography variant="body1">
                             {selectedSale.customerName || 'Walk-in Customer'}
                           </Typography>
-                        </Grid>
+                        </Box>
                         
                         {selectedSale.customerPhone && (
-                          <Grid item xs={12}>
+                          <Box sx={{ width: '100%' }}>
                             <Typography variant="body2" color="text.secondary">
                               Customer Phone
                             </Typography>
                             <Typography variant="body1">
                               {selectedSale.customerPhone}
                             </Typography>
-                          </Grid>
+                          </Box>
                         )}
                         
                         {selectedSale.notes && (
-                          <Grid item xs={12}>
+                          <Box sx={{ width: '100%' }}>
                             <Typography variant="body2" color="text.secondary">
                               Notes
                             </Typography>
                             <Typography variant="body1">
                               {selectedSale.notes}
                             </Typography>
-                          </Grid>
+                          </Box>
                         )}
-                      </Grid>
+                      </Box>
                     </CardContent>
                   </Card>
-                </Grid>
+                </Box>
                 
-                <Grid item xs={12} md={6}>
+                <Box sx={{ flex: 1 }}>
                   <Typography variant="subtitle1" gutterBottom>
                     Sale Summary
                   </Typography>
@@ -638,8 +637,8 @@ const Sales: React.FC = () => {
                       </Button>
                     )}
                   </Box>
-                </Grid>
-              </Grid>
+                </Box>
+              </Box>
               
               <Box sx={{ mt: 3 }}>
                 <Typography variant="subtitle1" gutterBottom>
@@ -782,4 +781,4 @@ const Sales: React.FC = () => {
   );
 };
 
-export default Sales; 
+export default Sales;

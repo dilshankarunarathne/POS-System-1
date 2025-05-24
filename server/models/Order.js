@@ -1,13 +1,15 @@
 const mongoose = require('mongoose');
 
-const SaleSchema = new mongoose.Schema({
-  invoiceNumber: {
+const OrderSchema = new mongoose.Schema({
+  orderNumber: {
     type: String,
+    required: true,
     unique: true
   },
-  customer: {
+  supplier: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Customer'
+    ref: 'Supplier',
+    required: true
   },
   items: [{
     product: {
@@ -23,10 +25,7 @@ const SaleSchema = new mongoose.Schema({
       type: Number,
       required: true
     },
-    discount: {
-      type: Number,
-      default: 0
-    }
+    notes: String
   }],
   subtotal: {
     type: Number,
@@ -36,48 +35,37 @@ const SaleSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  discount: {
-    type: Number,
-    default: 0
-  },
   total: {
     type: Number,
     required: true
   },
-  paymentMethod: {
+  status: {
     type: String,
-    required: true,
-    enum: ['cash', 'credit', 'debit', 'other']
+    enum: ['draft', 'pending', 'approved', 'shipped', 'received', 'cancelled'],
+    default: 'pending'
+  },
+  notes: {
+    type: String
   },
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
     required: true
   },
-  status: {
-    type: String,
-    enum: ['completed', 'returned', 'cancelled'],
-    default: 'completed'
+  expectedDeliveryDate: {
+    type: Date
   },
-  statusHistory: [{
-    status: String,
-    reason: String,
-    updatedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    updatedAt: {
-      type: Date,
-      default: Date.now
-    }
-  }],
+  deliveryDate: {
+    type: Date
+  },
   createdAt: {
     type: Date,
     default: Date.now
   },
-  notes: {
-    type: String
+  updatedAt: {
+    type: Date,
+    default: Date.now
   }
 });
 
-module.exports = mongoose.model('Sale', SaleSchema);
+module.exports = mongoose.model('Order', OrderSchema);

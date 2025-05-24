@@ -40,13 +40,18 @@ const upload = multer({
   }
 });
 
-// Routes
-router.get('/', authenticate, productController.getAllProducts);
-router.get('/:id', authenticate, productController.getProductById);
+// Routes - IMPORTANT: Order matters for route matching!
+// Put more specific routes before generic ones
+router.get('/refresh', authenticate, productController.refreshProducts);
+router.get('/latest', authenticate, productController.getLatestProducts);
+router.get('/barcode/:barcode', authenticate, productController.getProductByBarcode);
 router.post('/', authenticate, authorize('admin', 'manager'), upload.single('image'), productController.createProduct);
+router.get('/', authenticate, productController.getAllProducts);
+
+// ID-specific routes after other specific paths but before wildcard routes
+router.get('/:id', authenticate, productController.getProductById);
 router.put('/:id', authenticate, authorize('admin', 'manager'), upload.single('image'), productController.updateProduct);
 router.delete('/:id', authenticate, authorize('admin'), productController.deleteProduct);
-router.get('/barcode/:barcode', authenticate, productController.getProductByBarcode);
 router.patch('/:id/stock', authenticate, authorize('admin', 'manager'), productController.updateStock);
 
-module.exports = router; 
+module.exports = router;

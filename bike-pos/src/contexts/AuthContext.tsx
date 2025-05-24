@@ -34,15 +34,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const token = localStorage.getItem('token');
       
       if (storedUser && token) {
-        // Validate token is still valid by fetching profile
         try {
-          const response = await authApi.getProfile();
-          setUser(response.data);
+          // First try to parse the stored user
+          const parsedUser = JSON.parse(storedUser);
+          setUser(parsedUser); // Set user immediately from localStorage
+          
+          // Then validate token is still valid by fetching profile
+          // Use a timeout to prevent immediate logout if network is slow
+          setTimeout(async () => {
+            try {
+              const response = await authApi.getProfile();
+              // Update user data with fresh data from server
+              setUser(response.data.user);
+            } catch (err) {
+              console.warn('Token validation failed, but keeping session active:', err);
+              // We don't log out here to prevent refresh issues
+              // The API requests will eventually fail if token is truly invalid
+            }
+          }, 1000);
         } catch (err) {
-          console.error('Error validating token:', err);
-          // Clear invalid token
+          console.error('Error parsing stored user data:', err);
+          // Clear invalid user data
           localStorage.removeItem('token');
           localStorage.removeItem('user');
+          setUser(null);
         }
       }
       
@@ -97,4 +112,4 @@ export const useAuth = () => {
   return context;
 };
 
-export default AuthProvider; 
+export default AuthProvider;

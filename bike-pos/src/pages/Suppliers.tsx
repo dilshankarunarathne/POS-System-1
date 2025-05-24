@@ -1,38 +1,38 @@
 import {
-    Add as AddIcon,
-    Delete as DeleteIcon,
-    Edit as EditIcon,
-    Email as EmailIcon,
-    Phone as PhoneIcon,
+  Add as AddIcon,
+  Delete as DeleteIcon,
+  Edit as EditIcon,
+  Email as EmailIcon,
+  Phone as PhoneIcon,
 } from '@mui/icons-material';
 import {
-    Alert,
-    Box,
-    Button,
-    Chip,
-    CircularProgress,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    Grid,
-    IconButton,
-    Paper,
-    Snackbar,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    TextField,
-    Typography
+  Alert,
+  Box,
+  Button,
+  Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  IconButton,
+  Paper,
+  Snackbar,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  TextField,
+  Typography
 } from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { suppliersApi } from '../services/api';
 
+// Update the Supplier interface to match MongoDB model
 interface Supplier {
-  id: number;
+  _id: string; // MongoDB uses _id instead of id
   name: string;
   contactPerson: string;
   email: string;
@@ -82,9 +82,9 @@ const Suppliers: React.FC = () => {
       const response = await suppliersApi.getAll();
       setSuppliers(response.data);
       setLoading(false);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching suppliers:', err);
-      setError('Failed to load suppliers');
+      setError(err.response?.data?.message || 'Failed to load suppliers');
       setLoading(false);
     }
   };
@@ -137,7 +137,7 @@ const Suppliers: React.FC = () => {
       
       if (selectedSupplier) {
         // Update existing supplier
-        await suppliersApi.update(selectedSupplier.id, supplierForm);
+        await suppliersApi.update(selectedSupplier._id, supplierForm); // Use _id instead of id
         setSuccessMessage('Supplier updated successfully');
       } else {
         // Create new supplier
@@ -147,9 +147,9 @@ const Suppliers: React.FC = () => {
       
       handleCloseDialog();
       fetchSuppliers();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving supplier:', err);
-      setError('Failed to save supplier');
+      setError(err.response?.data?.message || 'Failed to save supplier');
     }
   };
   
@@ -170,13 +170,13 @@ const Suppliers: React.FC = () => {
     if (!selectedSupplier) return;
     
     try {
-      await suppliersApi.delete(selectedSupplier.id);
+      await suppliersApi.delete(selectedSupplier._id); // Use _id instead of id
       setSuccessMessage('Supplier deleted successfully');
       handleCloseDeleteDialog();
       fetchSuppliers();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error deleting supplier:', err);
-      setError('Failed to delete supplier');
+      setError(err.response?.data?.message || 'Failed to delete supplier');
     }
   };
   
@@ -225,7 +225,7 @@ const Suppliers: React.FC = () => {
                 </TableRow>
               ) : (
                 suppliers.map((supplier) => (
-                  <TableRow key={supplier.id}>
+                  <TableRow key={supplier._id}>
                     <TableCell>
                       <Typography variant="body1" fontWeight="bold">
                         {supplier.name}
@@ -282,8 +282,8 @@ const Suppliers: React.FC = () => {
         </DialogTitle>
         <DialogContent>
           <Box component="form" sx={{ pt: 1 }}>
-            <Grid container spacing={2}>
-              <Grid item xs={12}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <Box>
                 <TextField
                   autoFocus
                   name="name"
@@ -295,9 +295,9 @@ const Suppliers: React.FC = () => {
                   onChange={handleFormChange}
                   required
                 />
-              </Grid>
+              </Box>
               
-              <Grid item xs={12} sm={6}>
+              <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
                 <TextField
                   name="contactPerson"
                   label="Contact Person"
@@ -307,9 +307,7 @@ const Suppliers: React.FC = () => {
                   value={supplierForm.contactPerson}
                   onChange={handleFormChange}
                 />
-              </Grid>
-              
-              <Grid item xs={12} sm={6}>
+                
                 <TextField
                   name="phone"
                   label="Phone Number"
@@ -319,9 +317,9 @@ const Suppliers: React.FC = () => {
                   value={supplierForm.phone}
                   onChange={handleFormChange}
                 />
-              </Grid>
+              </Box>
               
-              <Grid item xs={12}>
+              <Box>
                 <TextField
                   name="email"
                   label="Email"
@@ -331,9 +329,9 @@ const Suppliers: React.FC = () => {
                   value={supplierForm.email}
                   onChange={handleFormChange}
                 />
-              </Grid>
+              </Box>
               
-              <Grid item xs={12}>
+              <Box>
                 <TextField
                   name="address"
                   label="Address"
@@ -345,9 +343,9 @@ const Suppliers: React.FC = () => {
                   multiline
                   rows={2}
                 />
-              </Grid>
+              </Box>
               
-              <Grid item xs={12}>
+              <Box>
                 <TextField
                   name="notes"
                   label="Notes"
@@ -359,8 +357,8 @@ const Suppliers: React.FC = () => {
                   multiline
                   rows={3}
                 />
-              </Grid>
-            </Grid>
+              </Box>
+            </Box>
           </Box>
         </DialogContent>
         <DialogActions>
@@ -416,4 +414,4 @@ const Suppliers: React.FC = () => {
   );
 };
 
-export default Suppliers; 
+export default Suppliers;

@@ -411,6 +411,15 @@ const generateLabels = async (req, res) => {
     const labels = [];
     
     for (const product of products) {
+      for (let i = 0; i < quantity; i++) {
+        labels.push({
+          name: product.name,
+          price: product.price,
+          barcode: product.barcode,
+          category: product.category ? product.category.name : 'Uncategorized',
+          sku: product.sku
+        });
+      }
     }
     
     // In a real implementation, this would generate a PDF

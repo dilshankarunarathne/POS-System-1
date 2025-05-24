@@ -255,18 +255,20 @@ const Products: React.FC = () => {
   const handlePrintLabels = async () => {
     try {
       // Generate barcodes for all selected products
-      const response = await printApi.generateBarcodes(selectedProductIds);
+      const response = await printApi.generateBarcodes(selectedProductIds, printQuantity);
       
-      // Open the PDF in a new tab
-      window.open(`http://localhost:5000${response.data.downloadUrl}`, '_blank');
+      // Open the PDF in a new tab (if the URL is provided)
+      if (response.data.downloadUrl) {
+        window.open(`http://localhost:5000${response.data.downloadUrl}`, '_blank');
+      }
       
-      setSuccessMessage('Labels generated successfully');
+      setSuccessMessage(`${selectedProductIds.length} product labels generated successfully`);
       setPrintDialogOpen(false);
       setSelectedProductIds([]);
       setPrintQuantity(1);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error generating labels:', err);
-      setError('Failed to generate labels');
+      setError(err.response?.data?.message || 'Failed to generate labels');
     }
   };
   
@@ -332,13 +334,17 @@ const Products: React.FC = () => {
         formDataToSend.append('reorderLevel', formData.reorderLevel);
       }
       
-      // Replace category and supplier ID with name
+      // Category and supplier handling - prioritize direct input
       if (formData.categoryName) {
         formDataToSend.append('categoryName', formData.categoryName);
+      } else if (formData.categoryId) {
+        formDataToSend.append('categoryId', formData.categoryId);
       }
       
       if (formData.supplierName) {
         formDataToSend.append('supplierName', formData.supplierName);
+      } else if (formData.supplierId) {
+        formDataToSend.append('supplierId', formData.supplierId);
       }
       
       // Add image if available

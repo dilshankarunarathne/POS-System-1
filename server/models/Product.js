@@ -89,6 +89,11 @@ ProductSchema.pre('save', async function(next) {
   }
 });
 
+// Add index to improve lookup performance
+ProductSchema.index({ barcode: 1 });
+ProductSchema.index({ category: 1 });
+ProductSchema.index({ supplier: 1 });
+
 // Virtual property for mapping backend field names to frontend expectations
 ProductSchema.virtual('stockQuantity').get(function() {
   return this.quantity;

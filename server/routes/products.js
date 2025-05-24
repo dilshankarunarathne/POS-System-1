@@ -48,6 +48,9 @@ router.get('/barcode/:barcode', authenticate, productController.getProductByBarc
 router.post('/', authenticate, authorize('admin', 'manager'), upload.single('image'), productController.createProduct);
 router.get('/', authenticate, productController.getAllProducts);
 
+// Add a specific route for printing labels
+router.post('/print-labels', authenticate, productController.generateLabels);
+
 // ID-specific routes after other specific paths but before wildcard routes
 router.get('/:id', authenticate, productController.getProductById);
 router.put('/:id', authenticate, authorize('admin', 'manager'), upload.single('image'), productController.updateProduct);

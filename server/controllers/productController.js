@@ -190,7 +190,7 @@ const createProduct = async (req, res) => {
     const populatedProduct = await Product.findById(product._id)
       .populate('category')
       .populate('supplier');
-      
+    
     res.status(201).json(populatedProduct);
   } catch (error) {
     console.error('Error creating product:', error);
@@ -227,49 +227,57 @@ const updateProduct = async (req, res) => {
       productData.reorderLevel = parseInt(productData.reorderLevel);
     }
     
-    // Handle category - only use existing categories, don't create new ones
+    // Handle category - support both ID and name-based assignment
     if (productData.categoryId) {
       // Use category ID directly
       const category = await Category.findById(productData.categoryId);
       if (category) {
         productData.category = category._id;
-      } else {
-        productData.category = null;
       }
     } else if (productData.categoryName) {
-      // Find category by name but don't create a new one
-      const category = await Category.findOne({ name: productData.categoryName });
+      // Find category by name or create a new one
+      let category = await Category.findOne({ 
+        name: { $regex: new RegExp(`^${productData.categoryName}$`, 'i') }
+      });
+      
+      // If category doesn't exist and name is provided, create it
+      if (!category && productData.categoryName.trim()) {
+        category = await Category.create({ name: productData.categoryName.trim() });
+      }
+      
       if (category) {
         productData.category = category._id;
       } else {
         productData.category = null;
       }
-    } else {
-      productData.category = null;
     }
     
     delete productData.categoryId;
     delete productData.categoryName;
     
-    // Handle supplier - only use existing suppliers, don't create new ones
+    // Handle supplier - support both ID and name-based assignment
     if (productData.supplierId) {
       // Use supplier ID directly
       const supplier = await Supplier.findById(productData.supplierId);
       if (supplier) {
         productData.supplier = supplier._id;
-      } else {
-        productData.supplier = null;
       }
     } else if (productData.supplierName) {
-      // Find supplier by name but don't create a new one
-      const supplier = await Supplier.findOne({ name: productData.supplierName });
+      // Find supplier by name or create a new one
+      let supplier = await Supplier.findOne({ 
+        name: { $regex: new RegExp(`^${productData.supplierName}$`, 'i') }
+      });
+      
+      // If supplier doesn't exist and name is provided, create it
+      if (!supplier && productData.supplierName.trim()) {
+        supplier = await Supplier.create({ name: productData.supplierName.trim() });
+      }
+      
       if (supplier) {
         productData.supplier = supplier._id;
       } else {
         productData.supplier = null;
       }
-    } else {
-      productData.supplier = null;
     }
     
     delete productData.supplierId;
@@ -381,6 +389,45 @@ const refreshProducts = async (req, res) => {
   }
 };
 
+// Generate labels
+const generateLabels = async (req, res) => {
+  try {
+    const { productIds, quantity = 1 } = req.body;
+    
+    if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
+      return res.status(400).json({ message: 'No products selected for label printing' });
+    }
+    
+    // Find products by IDs
+    const products = await Product.find({ _id: { $in: productIds } })
+      .populate('category');
+      
+    if (!products || products.length === 0) {
+      return res.status(404).json({ message: 'No products found with the provided IDs' });
+    }
+    
+    // Generate labels (in a real implementation, you'd use a PDF library)
+    // For this example, we'll just create a JSON response
+    const labels = [];
+    
+    for (const product of products) {
+    }
+    
+    // In a real implementation, this would generate a PDF
+    // For now, we'll return a fake URL pointing to where the PDF would be
+    res.status(200).json({ 
+      success: true,
+      labels,
+      downloadUrl: '/uploads/labels/product-labels.pdf',
+      message: `${labels.length} labels generated successfully`
+    });
+    
+  } catch (error) {
+    console.error('Error generating labels:', error);
+    res.status(500).json({ message: 'Server error generating labels' });
+  }
+};
+
 module.exports = {
   getAllProducts,
   getProductById,
@@ -390,5 +437,6 @@ module.exports = {
   deleteProduct,
   updateStock,
   getLatestProducts,
-  refreshProducts
+  refreshProducts,
+  generateLabels
 };

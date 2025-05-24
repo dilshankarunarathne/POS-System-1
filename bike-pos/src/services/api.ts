@@ -38,23 +38,30 @@ api.interceptors.response.use(
 
 // Product interface
 interface Product {
-  id?: number;
+  id?: string | number;
+  _id?: string;
   name: string;
   description?: string;
   price: number;
-  cost: number;
+  cost?: number;
+  costPrice?: number;
   barcode?: string;
   sku?: string;
-  categoryId?: number;
-  supplierId?: number;
-  quantity: number;
+  categoryId?: string;
+  supplierId?: string;
+  category?: { _id: string; name: string };
+  supplier?: { _id: string; name: string };
+  quantity?: number;
+  stockQuantity?: number;
+  reorderLevel?: number;
   minStock?: number;
   image?: string | File;
 }
 
 // Supplier interface
 interface Supplier {
-  id?: number;
+  id?: string | number;
+  _id?: string;
   name: string;
   contactPerson?: string;
   email?: string;
@@ -175,8 +182,8 @@ export const reportsApi = {
 
 // Print API
 export const printApi = {
-  generateBarcodes: (productIds: number[], quantity = 1) => 
-    api.post('/print/barcodes', { productIds, quantity }),
+  generateBarcodes: (productIds: (string | number)[], quantity = 1) => 
+    api.post('/products/print-labels', { productIds, quantity }),
   printReceipt: (orderId: string | number) => 
     api.post(`/print/receipt/${orderId}`)
 };

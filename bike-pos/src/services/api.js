@@ -86,7 +86,7 @@ export const printApi = {
   printReceipt: (saleId) => api.get(`/print/receipt/${saleId}`),
   printInventory: (params) => api.get('/print/inventory', { params }),
   printBarcode: (productId) => api.get(`/print/barcode/${productId}`),
-  printMultipleBarcode: (data) => api.post('/print/barcodes', data),
+  generateBarcodes: (productIds, quantity = 1) => api.post('/print/barcodes', { productIds, quantity }),
 };
 
 export default api;

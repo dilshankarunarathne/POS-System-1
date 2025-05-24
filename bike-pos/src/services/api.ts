@@ -182,8 +182,14 @@ export const reportsApi = {
 
 // Print API
 export const printApi = {
-  generateBarcodes: (productIds: (string | number)[], quantity = 1) => 
-    api.post('/products/print-labels', { productIds, quantity }),
+  generateBarcodes: (productIds: number[], quantity: number) => {
+    return api.post('/products/print-labels', { 
+      productIds, 
+      quantity 
+    }, { 
+      responseType: 'blob'  // Set response type to blob for direct file download
+    });
+  },
   printReceipt: (orderId: string | number) => 
     api.post(`/print/receipt/${orderId}`)
 };

@@ -103,6 +103,17 @@ ProductSchema.virtual('costPrice').get(function() {
   return this.cost;
 });
 
+// Add utility method for QR code data
+ProductSchema.methods.getQRData = function() {
+  return {
+    id: this._id.toString(),
+    name: this.name,
+    price: this.price,
+    barcode: this.barcode || '',
+    sku: this.sku || ''
+  };
+};
+
 // Configure the schema to include virtuals when converted to JSON
 ProductSchema.set('toJSON', { virtuals: true });
 ProductSchema.set('toObject', { virtuals: true });

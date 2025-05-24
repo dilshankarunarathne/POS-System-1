@@ -1,6 +1,8 @@
 const Product = require('../models/Product');
 const Category = require('../models/Category');
 const Supplier = require('../models/Supplier');
+const path = require('path');
+const fs = require('fs');
 
 // Get all products
 const getAllProducts = async (req, res) => {
@@ -392,48 +394,17 @@ const refreshProducts = async (req, res) => {
 // Generate labels
 const generateLabels = async (req, res) => {
   try {
-    const { productIds, quantity = 1 } = req.body;
-    
-    if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
-      return res.status(400).json({ message: 'No products selected for label printing' });
-    }
-    
-    // Find products by IDs
-    const products = await Product.find({ _id: { $in: productIds } })
-      .populate('category');
-      
-    if (!products || products.length === 0) {
-      return res.status(404).json({ message: 'No products found with the provided IDs' });
-    }
-    
-    // Generate labels (in a real implementation, you'd use a PDF library)
-    // For this example, we'll just create a JSON response
-    const labels = [];
-    
-    for (const product of products) {
-      for (let i = 0; i < quantity; i++) {
-        labels.push({
-          name: product.name,
-          price: product.price,
-          barcode: product.barcode,
-          category: product.category ? product.category.name : 'Uncategorized',
-          sku: product.sku
-        });
-      }
-    }
-    
-    // In a real implementation, this would generate a PDF
-    // For now, we'll return a fake URL pointing to where the PDF would be
-    res.status(200).json({ 
-      success: true,
-      labels,
-      downloadUrl: '/uploads/labels/product-labels.pdf',
-      message: `${labels.length} labels generated successfully`
-    });
-    
+    console.log('Redirecting label generation to print controller');
+    // Forward this request to the print controller
+    const printController = require('./printController');
+    return printController.generateProductLabels(req, res);
   } catch (error) {
     console.error('Error generating labels:', error);
-    res.status(500).json({ message: 'Server error generating labels' });
+    res.status(500).json({
+      success: false,
+      message: 'Server error generating labels',
+      error: error.message
+    });
   }
 };
 

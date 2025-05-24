@@ -81,12 +81,13 @@ export const suppliersApi = {
   delete: (id) => api.delete(`/suppliers/${id}`),
 };
 
-// Print API (Missing in original file)
+// Print API
 export const printApi = {
   printReceipt: (saleId) => api.get(`/print/receipt/${saleId}`),
   printInventory: (params) => api.get('/print/inventory', { params }),
   printBarcode: (productId) => api.get(`/print/barcode/${productId}`),
-  generateBarcodes: (productIds, quantity = 1) => api.post('/print/barcodes', { productIds, quantity }),
+  generateBarcodes: (productIds, quantity = 1) => 
+    api.post('/products/print-labels', { productIds, quantity }, { responseType: 'blob' })
 };
 
 export default api;

@@ -48,6 +48,8 @@ const Products: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  // Add loading state for print operation
+  const [printLoading, setPrintLoading] = useState(false);
   
   // State for pagination
   const [page, setPage] = useState(0);
@@ -254,21 +256,74 @@ const Products: React.FC = () => {
   // Print product labels
   const handlePrintLabels = async () => {
     try {
+      setPrintLoading(true);
+      
+      if (selectedProductIds.length === 0) {
+        setError('No products selected for printing labels');
+        return;
+      }
+      
+      console.log('Sending request to generate barcodes for products:', selectedProductIds);
+      
       // Generate barcodes for all selected products
       const response = await printApi.generateBarcodes(selectedProductIds, printQuantity);
       
-      // Open the PDF in a new tab (if the URL is provided)
-      if (response.data.downloadUrl) {
-        window.open(`http://localhost:5000${response.data.downloadUrl}`, '_blank');
-      }
+      // Create a download link for the blob data
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      
+      // Create an anchor element and trigger download
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `product-labels-${Date.now()}.pdf`;
+      
+      // Append to the document, click and remove
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Clean up the URL object
+      window.URL.revokeObjectURL(url);
       
       setSuccessMessage(`${selectedProductIds.length} product labels generated successfully`);
       setPrintDialogOpen(false);
       setSelectedProductIds([]);
       setPrintQuantity(1);
+      
     } catch (err: any) {
       console.error('Error generating labels:', err);
-      setError(err.response?.data?.message || 'Failed to generate labels');
+      
+      // Provide more detailed error information
+      if (err.response) {
+        // Server responded with an error status code
+        if (err.response.data instanceof Blob) {
+          // Try to read the error message from the blob
+          try {
+            const text = await err.response.data.text();
+            let errorMsg = 'Unknown error';
+            try {
+              const errorObj = JSON.parse(text);
+              errorMsg = errorObj.message || 'Error generating labels';
+            } catch (e) {
+              errorMsg = text || 'Error generating labels';
+            }
+            setError(`Failed to generate labels: ${errorMsg}`);
+          } catch (textErr) {
+            setError(`Failed to generate labels: Server returned an error`);
+          }
+        } else {
+          const errorMessage = err.response.data?.message || `Server error: ${err.response.status}`;
+          setError(`Failed to generate labels: ${errorMessage}`);
+        }
+      } else if (err.request) {
+        // Request was made but no response received
+        setError('Failed to generate labels: No response from server. Please check your network connection.');
+      } else {
+        // Error in request setup
+        setError(`Failed to generate labels: ${err.message || 'Unknown error'}`);
+      }
+    } finally {
+      setPrintLoading(false);
     }
   };
   
@@ -624,9 +679,20 @@ const Products: React.FC = () => {
           </Box>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setPrintDialogOpen(false)}>Cancel</Button>
-          <Button onClick={handlePrintLabels} variant="contained" color="primary">
-            Print Labels
+          <Button 
+            onClick={() => setPrintDialogOpen(false)}
+            disabled={printLoading}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={handlePrintLabels} 
+            variant="contained" 
+            color="primary"
+            disabled={printLoading}
+            startIcon={printLoading ? <CircularProgress size={20} /> : <PrintIcon />}
+          >
+            {printLoading ? 'Generating...' : 'Print Labels'}
           </Button>
         </DialogActions>
       </Dialog>

@@ -48,7 +48,7 @@ router.get('/barcode/:barcode', authenticate, productController.getProductByBarc
 router.post('/', authenticate, authorize('admin', 'manager'), upload.single('image'), productController.createProduct);
 router.get('/', authenticate, productController.getAllProducts);
 
-// Add a specific route for printing labels - using the product controller as a proxy to print controller
+// Add a specific route for printing labels
 router.post('/print-labels', authenticate, productController.generateLabels);
 
 // ID-specific routes after other specific paths but before wildcard routes
@@ -58,3 +58,6 @@ router.delete('/:id', authenticate, authorize('admin'), productController.delete
 router.patch('/:id/stock', authenticate, authorize('admin', 'manager'), productController.updateStock);
 
 module.exports = router;
+
+// Serve static files from the uploads directory
+app.use('/uploads', express.static(path.join(__dirname, 'uploads')));

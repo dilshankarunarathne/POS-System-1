@@ -80,4 +80,22 @@ const SaleSchema = new mongoose.Schema({
   }
 });
 
+// Add utility method for receipt data
+SaleSchema.methods.getReceiptData = function() {
+  return {
+    id: this._id.toString(),
+    invoiceNumber: this.invoiceNumber,
+    date: this.createdAt,
+    customer: this.customer,
+    items: this.items,
+    subtotal: this.subtotal,
+    tax: this.tax,
+    discount: this.discount,
+    total: this.total,
+    paymentMethod: this.paymentMethod,
+    user: this.user,
+    notes: this.notes
+  };
+};
+
 module.exports = mongoose.model('Sale', SaleSchema);

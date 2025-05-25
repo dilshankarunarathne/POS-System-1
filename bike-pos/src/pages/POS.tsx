@@ -82,6 +82,7 @@ const POS: React.FC = () => {
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [manualDiscount, setManualDiscount] = useState<number>(0);
   
   // Checkout dialog state
   const [checkoutDialogOpen, setCheckoutDialogOpen] = useState(false);
@@ -176,7 +177,7 @@ const POS: React.FC = () => {
   const cartSubtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
   const cartDiscount = cartItems.reduce((sum, item) => sum + item.discount, 0);
   const cartTax = 0; // We can implement tax calculation if needed
-  const cartTotal = cartSubtotal - cartDiscount + cartTax;
+  const cartTotal = cartSubtotal - cartDiscount - manualDiscount + cartTax;
   
   // Handle barcode scan/input
   const handleBarcodeSubmit = async (e: React.FormEvent) => {
@@ -369,7 +370,7 @@ const POS: React.FC = () => {
           price: item.product.price
         })),
         subtotal: cartSubtotal,
-        discount: cartDiscount,
+        discount: cartDiscount + manualDiscount, // Include manual discount
         tax: cartTax,
         total: cartTotal,
         paymentMethod,
@@ -401,10 +402,11 @@ const POS: React.FC = () => {
       // Clear cart
       clearCart();
       
-      // Reset checkout form
+      // Reset checkout form and discount
       setCustomerName('');
       setCustomerPhone('');
       setPaymentMethod('cash');
+      setManualDiscount(0);
       
     } catch (err: any) {
       console.error('Error processing sale:', err);
@@ -672,6 +674,28 @@ const POS: React.FC = () => {
                     <Typography variant="body1">Rs. {cartDiscount.toFixed(2)}</Typography>
                   </Box>
                 )}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center' }}>
+                  <Typography variant="body1">Discount:</Typography>
+                  <TextField
+                    type="number"
+                    size="small"
+                    InputProps={{
+                      startAdornment: <InputAdornment position="start">Rs.</InputAdornment>,
+                    }}
+                    value={manualDiscount}
+                    onChange={(e) => {
+                      const value = parseFloat(e.target.value);
+                      if (isNaN(value) || value < 0) {
+                        setManualDiscount(0);
+                      } else if (value > cartSubtotal) {
+                        setManualDiscount(cartSubtotal);
+                      } else {
+                        setManualDiscount(value);
+                      }
+                    }}
+                    sx={{ width: '100px' }}
+                  />
+                </Box>
                 {cartTax > 0 && (
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body1">Tax:</Typography>
@@ -682,6 +706,7 @@ const POS: React.FC = () => {
                   <Typography variant="h6">Total:</Typography>
                   <Typography variant="h6">Rs. {cartTotal.toFixed(2)}</Typography>
                 </Box>
+               
               </Box>
               {/* Cart Actions */}
               <Box sx={{ display: 'flex', gap: 1 }}>

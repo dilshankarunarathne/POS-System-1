@@ -57,10 +57,23 @@ export const productsApi = {
   // Get product by barcode
   getByBarcode: async (barcode) => {
     try {
-      const response = await axiosInstance.get(`/products/barcode/${barcode}`);
+      const response = await api.get(`/products/barcode/${barcode}`);
       return response.data;
     } catch (error) {
       console.error('Error fetching product by barcode:', error);
+      if (error.code === 'ECONNABORTED') {
+        throw new Error('Connection timeout. Server might be unavailable.');
+      }
+      if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
+        throw new Error('Network error. Please check server connection.');
+      }
+      if (error.response) {
+        // The server responded with an error status
+        if (error.response.status === 404) {
+          throw new Error(`Product with barcode ${barcode} not found`);
+        }
+        throw new Error(`Server error (${error.response.status}): ${error.response.data?.message || 'Unknown error'}`);
+      }
       throw error;
     }
   },

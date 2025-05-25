@@ -8,8 +8,6 @@ import {
 import {
   Box,
   Button,
-  Card,
-  CardContent,
   CircularProgress,
   Divider,
   IconButton,
@@ -19,6 +17,12 @@ import {
   ListItemSecondaryAction,
   ListItemText,
   Paper,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
   TextField,
   Typography
 } from '@mui/material';
@@ -416,7 +420,7 @@ const POS: React.FC = () => {
     const productsToRender = filteredProducts || [];
     
     return (
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
+      <Box sx={{ width: '100%' }}>
         {loadingProducts ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', width: '100%', mt: 4 }}>
             <CircularProgress />
@@ -428,103 +432,53 @@ const POS: React.FC = () => {
             </Typography>
           </Box>
         ) : (
-          productsToRender.map(product => (
-            <Box 
-              key={product.id}
-              sx={{ 
-                width: {
-                  xs: 'calc(50% - 8px)',
-                  sm: 'calc(33.33% - 10.67px)',
-                  md: 'calc(25% - 12px)',
-                  lg: 'calc(16.66% - 13.33px)'
-                }
-              }}
-            >
-              <Card
-                sx={{
-                  height: '100%',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  cursor: 'pointer',
-                  '&:hover': {
-                    bgcolor: 'action.hover',
-                  },
-                }}
-                onClick={() => {
-                  if (product.stockQuantity > 0) {
-                    addToCart(product);
-                  } else {
-                    setError('Product is out of stock.');
-                  }
-                }}
-              >
-                <CardContent sx={{ p: 1, flex: 1, display: 'flex', flexDirection: 'column' }}>
-                  {product.stockQuantity <= 0 && (
-                    <Box
-                      sx={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        height: '100%',
-                        bgcolor: 'rgba(0, 0, 0, 0.5)',
-                        display: 'flex',
-                        justifyContent: 'center',
-                        alignItems: 'center',
-                        zIndex: 1,
-                      }}
-                    >
-                      <Typography variant="h6" color="white">
-                        Out of Stock
-                      </Typography>
-                    </Box>
-                  )}
-                  
-                  <Box sx={{ textAlign: 'center', mb: 1 }}>
-                    {product.image ? (
-                      <Box
-                        component="img"
-                        src={`http://localhost:5000${product.image}`}
-                        alt={product.name}
-                        sx={{ height: 60, maxWidth: '100%', objectFit: 'contain' }}
-                      />
-                    ) : (
-                      <Box
-                        sx={{
-                          height: 60,
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          bgcolor: 'grey.200',
+          <TableContainer component={Paper}>
+            <Table size="small">
+              <TableHead>
+                <TableRow>
+                  <TableCell>Name</TableCell>
+                  <TableCell>Category</TableCell>
+                  <TableCell align="right">Price</TableCell>
+                  <TableCell align="right">Stock</TableCell>
+                  <TableCell align="center">Action</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {productsToRender.map(product => (
+                  <TableRow
+                    key={product.id}
+                    sx={{
+                      '&:hover': { bgcolor: 'action.hover' },
+                      bgcolor: product.stockQuantity <= 0 ? 'rgba(0, 0, 0, 0.04)' : 'inherit',
+                    }}
+                  >
+                    <TableCell component="th" scope="row">
+                      {product.name}
+                    </TableCell>
+                    <TableCell>{product.Category?.name || 'Uncategorized'}</TableCell>
+                    <TableCell align="right">Rs. {product.price.toFixed(2)}</TableCell>
+                    <TableCell align="right">{product.stockQuantity}</TableCell>
+                    <TableCell align="center">
+                      <Button
+                        variant="contained"
+                        size="small"
+                        disabled={product.stockQuantity <= 0}
+                        onClick={() => {
+                          if (product.stockQuantity > 0) {
+                            addToCart(product);
+                          } else {
+                            setError('Product is out of stock.');
+                          }
                         }}
                       >
-                        <Typography variant="body2" color="text.secondary">
-                          No Image
-                        </Typography>
-                      </Box>
-                    )}
-                  </Box>
-                  
-                  <Typography variant="body2" component="div" sx={{ fontWeight: 'bold', mb: 0.5 }}>
-                    {product.name}
-                  </Typography>
-                  
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                    {product.Category?.name || 'Uncategorized'}
-                  </Typography>
-                  
-                  <Box sx={{ mt: 'auto', display: 'flex', justifyContent: 'space-between' }}>
-                    <Typography variant="body2" color="text.secondary">
-                      Stock: {product.stockQuantity}
-                    </Typography>
-                    <Typography variant="body2" color="primary" fontWeight="bold">
-                      Rs. {product.price.toFixed(2)}
-                    </Typography>
-                  </Box>
-                </CardContent>
-              </Card>
-            </Box>
-          ))
+                        Add
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         )}
       </Box>
     );

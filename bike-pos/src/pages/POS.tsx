@@ -1,26 +1,16 @@
 import {
   Add as AddIcon,
-  CreditCard as CardIcon,
-  Payments as CashIcon,
   Clear as ClearIcon,
   Delete as DeleteIcon,
-  Print as PrintIcon,
-  QrCodeScanner as QrCodeScannerIcon,
-  ReceiptLong as ReceiptIcon,
   Remove as RemoveIcon,
-  Search as SearchIcon,
+  Search as SearchIcon
 } from '@mui/icons-material';
 import {
-  Alert,
   Box,
   Button,
   Card,
   CardContent,
   CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Divider,
   IconButton,
   InputAdornment,
@@ -29,7 +19,6 @@ import {
   ListItemSecondaryAction,
   ListItemText,
   Paper,
-  Snackbar,
   TextField,
   Typography
 } from '@mui/material';
@@ -101,8 +90,9 @@ const POS: React.FC = () => {
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
   const [receiptUrl, setReceiptUrl] = useState('');
   
-  // Add QR scanner dialog state
-  const [qrScannerOpen, setQrScannerOpen] = useState(false);
+  // QR scanner state
+  const [scanningMessage, setScanningMessage] = useState<string | null>(null);
+  const [scanningProduct, setScanningProduct] = useState<Product | null>(null);
   
   // Focus references
   const barcodeInputRef = useRef<HTMLInputElement>(null);
@@ -152,6 +142,31 @@ const POS: React.FC = () => {
       barcodeInputRef.current.focus();
     }
   }, []);
+  
+  // Add a new useEffect to ensure the QR scanner is always running when the component mounts
+  useEffect(() => {
+    // This ensures the camera is activated when the component mounts
+    const activateCamera = () => {
+      const qrScannerElement = document.querySelector('.qr-scanner-container video');
+      if (qrScannerElement) {
+        // If there's a start button in the QR scanner, simulate a click on it
+        const startButton = document.querySelector('.qr-scanner-container button') as HTMLButtonElement;
+        if (startButton) {
+          startButton.click();
+        }
+      }
+    };
+    
+    // Initial activation
+    activateCamera();
+    
+    // Try again after a short delay (in case the elements aren't immediately ready)
+    const timeoutId = setTimeout(activateCamera, 1000);
+    
+    return () => {
+      clearTimeout(timeoutId);
+    };
+  }, []); // Empty dependency array means this runs once on mount
   
   // Calculate cart totals
   const cartSubtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
@@ -205,11 +220,12 @@ const POS: React.FC = () => {
   const handleQRScanSuccess = async (qrData: any) => {
     try {
       setLoading(true);
-      setError(null);
+      setScanningMessage(null);
+      setScanningProduct(null);
       
       // Check if we have a barcode or id in the QR data
       if (!qrData.barcode && !qrData.id) {
-        setError('Invalid QR code data. Missing product identifier.');
+        setScanningMessage('Invalid QR code data. Missing product identifier.');
         return;
       }
       
@@ -229,28 +245,28 @@ const POS: React.FC = () => {
       
       // Check if product exists
       if (!product) {
-        setError('Product not found. Please try again with a different code.');
+        setScanningMessage('Product not found. Please try again with a different code.');
         return;
       }
       
       // Check if product is in stock
       if (product.stockQuantity <= 0) {
-        setError('Product is out of stock.');
+        setScanningMessage('Product is out of stock.');
         return;
       }
+      
+      // Set the scanned product for display
+      setScanningProduct(product);
       
       // Add product to cart
       addToCart(product);
       
-      // Close QR scanner
-      setQrScannerOpen(false);
-      
       // Show success message
-      setSuccessMessage(`Added ${product.name} to cart`);
+      setScanningMessage(`Added ${product.name} to cart! Scan another item.`);
       
     } catch (err) {
       console.error('Error processing QR code:', err);
-      setError('Error processing QR code. Please try again.');
+      setScanningMessage('Error processing QR code. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -588,38 +604,86 @@ const POS: React.FC = () => {
   };
   
   return (
-    <Box>
-      <Typography variant="h5" sx={{ mb: 3 }}>
-        Point of Sale
-      </Typography>
-      
-      <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
-        {/* Left Side - Products */}
-        <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 66.66%' } }}>
-          <Paper sx={{ p: 2, mb: 3 }}>
-            <Box sx={{ display: 'flex', mb: 2 }}>
-              {/* Barcode Scanner Input */}
-              <Box component="form" onSubmit={handleBarcodeSubmit} sx={{ mr: 2, flex: 1 }}>
+    <Box sx={{ display: 'flex', height: '100vh' }}>
+      {/* QR Scanner Section */}
+      <Box
+        sx={{
+          width: { xs: '100%', md: '25%' },
+          bgcolor: 'background.paper',
+          p: 2,
+          borderRight: '1px solid #ddd',
+          display: 'flex',
+          flexDirection: 'column',
+        }}
+      >
+        <Typography variant="h6" sx={{ mb: 2 }}>
+          QR Scanner
+        </Typography>
+        <Box sx={{ flex: 1, position: 'relative' }} className="qr-scanner-container">
+          <QRScanner
+            onScanSuccess={handleQRScanSuccess}
+            onScanError={(error) => setScanningMessage(error)}
+            autoStart={true} // Add autoStart property if your QRScanner component supports it
+          />
+          
+        
+        </Box>
+      </Box>
+
+      {/* Main Content Section */}
+      <Box sx={{ flex: 1, p: 2, overflow: 'auto' }}>
+        <Typography variant="h5" sx={{ mb: 3 }}>
+          Point of Sale
+        </Typography>
+        <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 3 }}>
+          {/* Left Side - Products */}
+          <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 66.66%' } }}>
+            {/* Product Search and Grid */}
+            <Paper sx={{ p: 2, mb: 3 }}>
+              <Box sx={{ display: 'flex', mb: 2 }}>
+                {/* Barcode Scanner Input */}
+                <Box component="form" onSubmit={handleBarcodeSubmit} sx={{ mr: 2, flex: 1 }}>
+                  <TextField
+                    fullWidth
+                    label="Scan Barcode"
+                    variant="outlined"
+                    size="small"
+                    value={barcodeInput}
+                    onChange={(e) => setBarcodeInput(e.target.value)}
+                    inputRef={barcodeInputRef}
+                    disabled={loading}
+                    InputProps={{
+                      endAdornment: loading ? (
+                        <InputAdornment position="end">
+                          <CircularProgress size={20} />
+                        </InputAdornment>
+                      ) : barcodeInput ? (
+                        <InputAdornment position="end">
+                          <IconButton edge="end" onClick={() => setBarcodeInput('')}>
+                            <ClearIcon />
+                          </IconButton>
+                        </InputAdornment>
+                      ) : null,
+                    }}
+                  />
+                </Box>
+                {/* Product Search */}
                 <TextField
-                  fullWidth
-                  label="Scan Barcode"
+                  label="Search Products"
                   variant="outlined"
                   size="small"
-                  value={barcodeInput}
-                  onChange={(e) => setBarcodeInput(e.target.value)}
-                  inputRef={barcodeInputRef}
-                  disabled={loading}
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  sx={{ flex: 1 }}
                   InputProps={{
-                    endAdornment: loading ? (
-                      <InputAdornment position="end">
-                        <CircularProgress size={20} />
+                    startAdornment: (
+                      <InputAdornment position="start">
+                        <SearchIcon />
                       </InputAdornment>
-                    ) : barcodeInput ? (
+                    ),
+                    endAdornment: searchQuery ? (
                       <InputAdornment position="end">
-                        <IconButton
-                          edge="end"
-                          onClick={() => setBarcodeInput('')}
-                        >
+                        <IconButton edge="end" onClick={() => setSearchQuery('')}>
                           <ClearIcon />
                         </IconButton>
                       </InputAdornment>
@@ -627,337 +691,69 @@ const POS: React.FC = () => {
                   }}
                 />
               </Box>
-              
-              {/* QR Scanner Button */}
-              <Button
-                variant="outlined"
-                startIcon={<QrCodeScannerIcon />}
-                onClick={() => setQrScannerOpen(true)}
-                sx={{ mr: 2 }}
-              >
-                Scan QR
-              </Button>
-              
-              {/* Product Search */}
-              <TextField
-                label="Search Products"
-                variant="outlined"
-                size="small"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                sx={{ flex: 1 }}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ),
-                  endAdornment: searchQuery ? (
-                    <InputAdornment position="end">
-                      <IconButton
-                        edge="end"
-                        onClick={() => setSearchQuery('')}
-                      >
-                        <ClearIcon />
-                      </IconButton>
-                    </InputAdornment>
-                  ) : null,
-                }}
-              />
-            </Box>
-            
-            {/* Products Grid */}
-            <Box sx={{ mt: 2 }}>
-              {renderProductGrid()}
-            </Box>
-          </Paper>
-        </Box>
-        
-        {/* Right Side - Cart */}
-        <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 33.33%' } }}>
-          <Paper sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
-            <Typography variant="h6" gutterBottom>
-              Cart
-            </Typography>
-            
-            <Divider sx={{ mb: 2 }} />
-            
-            {/* Cart Items */}
-            <Box sx={{ flex: 1, overflow: 'auto' }}>
-              {renderCartItems()}
-            </Box>
-            
-            <Divider sx={{ my: 2 }} />
-            
-            {/* Cart Summary */}
-            <Box sx={{ mb: 2 }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body1">Subtotal:</Typography>
-                <Typography variant="body1">Rs. {cartSubtotal.toFixed(2)}</Typography>
-              </Box>
-              
-              {cartDiscount > 0 && (
+              {/* Products Grid */}
+              <Box sx={{ mt: 2 }}>{renderProductGrid()}</Box>
+            </Paper>
+          </Box>
+
+          {/* Right Side - Cart */}
+          <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 33.33%' } }}>
+            <Paper sx={{ p: 2, height: '100%', display: 'flex', flexDirection: 'column' }}>
+              <Typography variant="h6" gutterBottom>
+                Cart
+              </Typography>
+              <Divider sx={{ mb: 2 }} />
+              {/* Cart Items */}
+              <Box sx={{ flex: 1, overflow: 'auto' }}>{renderCartItems()}</Box>
+              <Divider sx={{ my: 2 }} />
+              {/* Cart Summary */}
+              <Box sx={{ mb: 2 }}>
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body1">Discount:</Typography>
-                  <Typography variant="body1">Rs. {cartDiscount.toFixed(2)}</Typography>
+                  <Typography variant="body1">Subtotal:</Typography>
+                  <Typography variant="body1">Rs. {cartSubtotal.toFixed(2)}</Typography>
                 </Box>
-              )}
-              
-              {cartTax > 0 && (
-                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                  <Typography variant="body1">Tax:</Typography>
-                  <Typography variant="body1">Rs. {cartTax.toFixed(2)}</Typography>
+                {cartDiscount > 0 && (
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body1">Discount:</Typography>
+                    <Typography variant="body1">Rs. {cartDiscount.toFixed(2)}</Typography>
+                  </Box>
+                )}
+                {cartTax > 0 && (
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body1">Tax:</Typography>
+                    <Typography variant="body1">Rs. {cartTax.toFixed(2)}</Typography>
+                  </Box>
+                )}
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
+                  <Typography variant="h6">Total:</Typography>
+                  <Typography variant="h6">Rs. {cartTotal.toFixed(2)}</Typography>
                 </Box>
-              )}
-              
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 1 }}>
-                <Typography variant="h6">Total:</Typography>
-                <Typography variant="h6">Rs. {cartTotal.toFixed(2)}</Typography>
               </Box>
-            </Box>
-            
-            {/* Cart Actions */}
-            <Box sx={{ display: 'flex', gap: 1 }}>
-              <Button
-                variant="outlined"
-                color="error"
-                fullWidth
-                onClick={clearCart}
-                disabled={cartItems.length === 0}
-              >
-                Clear
-              </Button>
-              
-              <Button
-                variant="contained"
-                color="primary"
-                fullWidth
-                onClick={handleCheckout}
-                disabled={cartItems.length === 0}
-              >
-                Checkout
-              </Button>
-            </Box>
-          </Paper>
+              {/* Cart Actions */}
+              <Box sx={{ display: 'flex', gap: 1 }}>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  fullWidth
+                  onClick={clearCart}
+                  disabled={cartItems.length === 0}
+                >
+                  Clear
+                </Button>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  fullWidth
+                  onClick={handleCheckout}
+                  disabled={cartItems.length === 0}
+                >
+                  Checkout
+                </Button>
+              </Box>
+            </Paper>
+          </Box>
         </Box>
       </Box>
-      
-      {/* QR Scanner Dialog */}
-      <Dialog
-        open={qrScannerOpen}
-        onClose={() => setQrScannerOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Scan QR Code</DialogTitle>
-        <DialogContent>
-          <QRScanner 
-            onScanSuccess={handleQRScanSuccess} 
-            onScanError={(error) => setError(error)}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setQrScannerOpen(false)}>
-            Cancel
-          </Button>
-        </DialogActions>
-      </Dialog>
-      
-      {/* Checkout Dialog */}
-      <Dialog
-        open={checkoutDialogOpen}
-        onClose={() => !processingSale && setCheckoutDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Complete Sale</DialogTitle>
-        
-        <DialogContent>
-          <Box sx={{ mt: 1 }}>
-            <Typography variant="h6" gutterBottom>
-              Sale Summary
-            </Typography>
-            
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="body1">Total Items:</Typography>
-              <Typography variant="body1">{cartItems.reduce((sum, item) => sum + item.quantity, 0)}</Typography>
-            </Box>
-            
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-              <Typography variant="body1">Subtotal:</Typography>
-              <Typography variant="body1">Rs. {cartSubtotal.toFixed(2)}</Typography>
-            </Box>
-            
-            {cartDiscount > 0 && (
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                <Typography variant="body1">Discount:</Typography>
-                <Typography variant="body1">Rs. {cartDiscount.toFixed(2)}</Typography>
-              </Box>
-            )}
-            
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 3 }}>
-              <Typography variant="h6">Total:</Typography>
-              <Typography variant="h6">Rs. {cartTotal.toFixed(2)}</Typography>
-            </Box>
-            
-            <Divider sx={{ mb: 3 }} />
-            
-            <Typography variant="h6" gutterBottom>
-              Customer Information (Optional)
-            </Typography>
-            
-            <TextField
-              margin="dense"
-              label="Customer Name"
-              fullWidth
-              variant="outlined"
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              sx={{ mb: 2 }}
-            />
-            
-            <TextField
-              margin="dense"
-              label="Customer Phone"
-              fullWidth
-              variant="outlined"
-              value={customerPhone}
-              onChange={(e) => setCustomerPhone(e.target.value)}
-              sx={{ mb: 3 }}
-            />
-            
-            <Typography variant="h6" gutterBottom>
-              Payment Method
-            </Typography>
-            
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }}>
-              <Button
-                variant={paymentMethod === 'cash' ? 'contained' : 'outlined'}
-                color="primary"
-                onClick={() => setPaymentMethod('cash')}
-                startIcon={<CashIcon />}
-              >
-                Cash
-              </Button>
-              
-              <Button
-                variant={paymentMethod === 'credit_card' ? 'contained' : 'outlined'}
-                color="primary"
-                onClick={() => setPaymentMethod('credit_card')}
-                startIcon={<CardIcon />}
-              >
-                Credit Card
-              </Button>
-              
-              <Button
-                variant={paymentMethod === 'debit_card' ? 'contained' : 'outlined'}
-                color="primary"
-                onClick={() => setPaymentMethod('debit_card')}
-                startIcon={<CardIcon />}
-              >
-                Debit Card
-              </Button>
-              
-              <Button
-                variant={paymentMethod === 'mobile_payment' ? 'contained' : 'outlined'}
-                color="primary"
-                onClick={() => setPaymentMethod('mobile_payment')}
-                startIcon={<CardIcon />}
-              >
-                Mobile Payment
-              </Button>
-            </Box>
-          </Box>
-        </DialogContent>
-        
-        <DialogActions>
-          <Button
-            onClick={() => setCheckoutDialogOpen(false)}
-            disabled={processingSale}
-          >
-            Cancel
-          </Button>
-          
-          <Button
-            onClick={handleCheckout}
-            variant="contained"
-            color="primary"
-            disabled={processingSale}
-            startIcon={processingSale ? <CircularProgress size={20} /> : <ReceiptIcon />}
-          >
-            {processingSale ? 'Processing...' : 'Complete Sale'}
-          </Button>
-        </DialogActions>
-      </Dialog>
-      
-      {/* Receipt Dialog */}
-      <Dialog
-        open={receiptDialogOpen}
-        onClose={() => setReceiptDialogOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Receipt Generated</DialogTitle>
-        
-        <DialogContent>
-          <Typography variant="body1" gutterBottom>
-            Sale has been completed successfully!
-          </Typography>
-          
-          <Box
-            sx={{
-              display: 'flex',
-              justifyContent: 'center',
-              alignItems: 'center',
-              my: 3,
-            }}
-          >
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<PrintIcon />}
-              onClick={() => {
-                // Open receipt in new tab
-                window.open(`http://localhost:5000${receiptUrl}`, '_blank');
-              }}
-            >
-              Print Receipt
-            </Button>
-          </Box>
-        </DialogContent>
-        
-        <DialogActions>
-          <Button
-            onClick={() => setReceiptDialogOpen(false)}
-            variant="contained"
-          >
-            Done
-          </Button>
-        </DialogActions>
-      </Dialog>
-      
-      {/* Error/Success Messages */}
-      <Snackbar
-        open={!!error}
-        autoHideDuration={6000}
-        onClose={() => setError(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setError(null)} severity="error" sx={{ width: '100%' }}>
-          {error}
-        </Alert>
-      </Snackbar>
-      
-      <Snackbar
-        open={!!successMessage}
-        autoHideDuration={6000}
-        onClose={() => setSuccessMessage(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setSuccessMessage(null)} severity="success" sx={{ width: '100%' }}>
-          {successMessage}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 };

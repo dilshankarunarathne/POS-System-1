@@ -16,6 +16,11 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
   const isMounted = useRef(true);
   const scannerInitialized = useRef(false);
   
+  // Add refs to track scan cooldown and last scanned data
+  const lastScanTime = useRef<number>(0);
+  const lastScannedData = useRef<string>('');
+  const SCAN_COOLDOWN_MS = 2000; // 2 seconds cooldown between processing the same scan
+  
   // Add keyboard listener for external scanner input
   useEffect(() => {
     let barcodeBuffer = '';
@@ -63,7 +68,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
     };
   }, [onScanError, onScanSuccess]);
   
-  // Simplified cleanup function that's less aggressive
+  // Improved cleanup function to ensure only one preview exists
   const cleanupAllCameras = async () => {
     // First, try to stop the scanner from the library
     if (scannerRef.current) {
@@ -79,6 +84,19 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
         console.error("Error cleaning up scanner:", err);
       }
     }
+    
+    // Explicitly remove all video elements to ensure no duplicates
+    const allVideoElements = document.querySelectorAll("#qr-reader video");
+    allVideoElements.forEach(element => {
+      const video = element as HTMLVideoElement;
+      if (video.srcObject) {
+        const stream = video.srcObject as MediaStream;
+        if (stream) {
+          stream.getTracks().forEach(track => track.stop());
+        }
+      }
+      video.remove();
+    });
     
     // Clear the scanner DOM element completely
     const qrReader = document.getElementById("qr-reader");
@@ -131,6 +149,16 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
       
       const qrCodeSuccessCallback = (decodedText: string) => {
         try {
+          // Check for duplicate scan or if we're still in cooldown period
+          const now = Date.now();
+          if (
+            decodedText === lastScannedData.current && 
+            now - lastScanTime.current < SCAN_COOLDOWN_MS
+          ) {
+            console.log("Duplicate scan detected within cooldown period, ignoring");
+            return;
+          }
+          
           // First try to parse directly
           let productData;
           try {
@@ -159,10 +187,14 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
             }
           }
           
+          // Update the last scan time and data
+          lastScanTime.current = now;
+          lastScannedData.current = decodedText;
+          
           // Log successful data for debugging
           console.log("Successfully parsed QR data:", productData);
           
-          // Stop scanning and return the data
+          // Send the data to parent component
           onScanSuccess(productData);
         } catch (error) {
           console.error("QR parsing error:", error, "Raw text:", decodedText);

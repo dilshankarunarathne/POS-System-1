@@ -341,6 +341,22 @@ const POS: React.FC = () => {
     });
   };
   
+  // Handle item discount change
+  const handleItemDiscountChange = (index: number, discount: number) => {
+    setCartItems(prevItems => {
+      const updatedItems = [...prevItems];
+      const item = updatedItems[index];
+      
+      // Ensure discount doesn't exceed item subtotal
+      const maxDiscount = item.subtotal;
+      const validDiscount = isNaN(discount) || discount < 0 ? 0 : 
+                           discount > maxDiscount ? maxDiscount : discount;
+      
+      item.discount = validDiscount;
+      return updatedItems;
+    });
+  };
+
   // Remove item from cart
   const removeCartItem = (index: number) => {
     setCartItems(prevItems => {
@@ -548,8 +564,24 @@ const POS: React.FC = () => {
                   </IconButton>
                 </Box>
                 
+                <Box sx={{ mt: 1, display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
+                  <Typography variant="body2" sx={{ mr: 1 }}>
+                    Discount:
+                  </Typography>
+                  <TextField
+                    type="number"
+                    size="small"
+                    value={item.discount}
+                    onChange={(e) => handleItemDiscountChange(index, parseFloat(e.target.value))}
+                    InputProps={{
+                      startAdornment: <InputAdornment position="start">Rs.</InputAdornment>,
+                    }}
+                    sx={{ width: '100px' }}
+                  />
+                </Box>
+                
                 <Typography variant="body2" sx={{ mt: 1, textAlign: 'right', fontWeight: 'bold' }}>
-                  Rs. {item.subtotal.toFixed(2)}
+                  Rs. {(item.subtotal - item.discount).toFixed(2)}
                 </Typography>
               </ListItemSecondaryAction>
             </ListItem>
@@ -670,12 +702,12 @@ const POS: React.FC = () => {
                 </Box>
                 {cartDiscount > 0 && (
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                    <Typography variant="body1">Discount:</Typography>
+                    <Typography variant="body1">Item Discounts:</Typography>
                     <Typography variant="body1">Rs. {cartDiscount.toFixed(2)}</Typography>
                   </Box>
                 )}
                 <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1, alignItems: 'center' }}>
-                  <Typography variant="body1">Discount:</Typography>
+                  <Typography variant="body1">Additional Discount:</Typography>
                   <TextField
                     type="number"
                     size="small"
@@ -687,8 +719,8 @@ const POS: React.FC = () => {
                       const value = parseFloat(e.target.value);
                       if (isNaN(value) || value < 0) {
                         setManualDiscount(0);
-                      } else if (value > cartSubtotal) {
-                        setManualDiscount(cartSubtotal);
+                      } else if (value > cartSubtotal - cartDiscount) {
+                        setManualDiscount(cartSubtotal - cartDiscount);
                       } else {
                         setManualDiscount(value);
                       }
@@ -696,6 +728,17 @@ const POS: React.FC = () => {
                     sx={{ width: '100px' }}
                   />
                 </Box>
+                
+                {/* Display total discount (item discounts + manual discount) */}
+                {(cartDiscount > 0 || manualDiscount > 0) && (
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                    <Typography variant="body1" color="primary.main">Total Discount:</Typography>
+                    <Typography variant="body1" color="primary.main">
+                      Rs. {(cartDiscount + manualDiscount).toFixed(2)}
+                    </Typography>
+                  </Box>
+                )}
+                
                 {cartTax > 0 && (
                   <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
                     <Typography variant="body1">Tax:</Typography>

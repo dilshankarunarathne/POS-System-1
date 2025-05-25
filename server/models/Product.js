@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 const { v4: uuidv4 } = require('uuid');
+const generateBarcode = require('../utils/barcodeGenerator');
 
 const ProductSchema = new mongoose.Schema({
   name: {
@@ -62,10 +63,7 @@ ProductSchema.pre('save', async function(next) {
   try {
     // Generate unique barcode if not provided
     if (!this.barcode) {
-      // Create a unique barcode based on timestamp and random number
-      const timestamp = new Date().getTime().toString().slice(-8);
-      const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
-      this.barcode = `POS-${timestamp}${random}`;
+      this.barcode = await generateBarcode(this);
     }
     
     // Update the updatedAt timestamp

@@ -108,6 +108,42 @@ const getProductByBarcode = async (req, res) => {
   }
 };
 
+// Get product by barcode
+const getByBarcode = async (req, res) => {
+  try {
+    const { barcode } = req.params;
+    
+    if (!barcode) {
+      return res.status(400).json({ 
+        success: false,
+        message: 'Barcode parameter is required' 
+      });
+    }
+    
+    const product = await Product.findOne({ barcode })
+      .populate('category');
+    
+    if (!product) {
+      return res.status(404).json({ 
+        success: false,
+        message: 'Product not found with this barcode' 
+      });
+    }
+    
+    return res.status(200).json({
+      success: true,
+      data: product
+    });
+  } catch (error) {
+    console.error('Error fetching product by barcode:', error);
+    return res.status(500).json({
+      success: false,
+      message: 'Server error while fetching product',
+      error: error.message
+    });
+  }
+};
+
 // Create product
 const createProduct = async (req, res) => {
   try {
@@ -418,5 +454,6 @@ module.exports = {
   updateStock,
   getLatestProducts,
   refreshProducts,
-  generateLabels
+  generateLabels,
+  getByBarcode
 };

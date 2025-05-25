@@ -5,6 +5,7 @@ import {
   Clear as ClearIcon,
   Delete as DeleteIcon,
   Print as PrintIcon,
+  QrCodeScanner as QrCodeScannerIcon,
   ReceiptLong as ReceiptIcon,
   Remove as RemoveIcon,
   Search as SearchIcon,
@@ -33,6 +34,7 @@ import {
   Typography
 } from '@mui/material';
 import React, { useEffect, useRef, useState } from 'react';
+import QRScanner from '../components/QRScanner';
 import { useAuth } from '../contexts/AuthContext';
 import { printApi, productsApi, salesApi } from '../services/api';
 
@@ -98,6 +100,9 @@ const POS: React.FC = () => {
   // Receipt dialog state
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
   const [receiptUrl, setReceiptUrl] = useState('');
+  
+  // Add QR scanner dialog state
+  const [qrScannerOpen, setQrScannerOpen] = useState(false);
   
   // Focus references
   const barcodeInputRef = useRef<HTMLInputElement>(null);
@@ -196,6 +201,61 @@ const POS: React.FC = () => {
     }
   };
   
+  // Handle successful QR scan
+  const handleQRScanSuccess = async (qrData: any) => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Check if we have a barcode or id in the QR data
+      if (!qrData.barcode && !qrData.id) {
+        setError('Invalid QR code data. Missing product identifier.');
+        return;
+      }
+      
+      let product;
+      
+      // Try to fetch product by barcode first if available
+      if (qrData.barcode) {
+        const response = await productsApi.getByBarcode(qrData.barcode);
+        product = response.data;
+      }
+      
+      // If no product found by barcode, try by ID
+      if (!product && qrData.id) {
+        const response = await productsApi.getById(qrData.id);
+        product = response.data;
+      }
+      
+      // Check if product exists
+      if (!product) {
+        setError('Product not found. Please try again with a different code.');
+        return;
+      }
+      
+      // Check if product is in stock
+      if (product.stockQuantity <= 0) {
+        setError('Product is out of stock.');
+        return;
+      }
+      
+      // Add product to cart
+      addToCart(product);
+      
+      // Close QR scanner
+      setQrScannerOpen(false);
+      
+      // Show success message
+      setSuccessMessage(`Added ${product.name} to cart`);
+      
+    } catch (err) {
+      console.error('Error processing QR code:', err);
+      setError('Error processing QR code. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Add product to cart
   const addToCart = (product: Product) => {
     setCartItems(prevItems => {
@@ -568,6 +628,16 @@ const POS: React.FC = () => {
                 />
               </Box>
               
+              {/* QR Scanner Button */}
+              <Button
+                variant="outlined"
+                startIcon={<QrCodeScannerIcon />}
+                onClick={() => setQrScannerOpen(true)}
+                sx={{ mr: 2 }}
+              >
+                Scan QR
+              </Button>
+              
               {/* Product Search */}
               <TextField
                 label="Search Products"
@@ -671,6 +741,27 @@ const POS: React.FC = () => {
           </Paper>
         </Box>
       </Box>
+      
+      {/* QR Scanner Dialog */}
+      <Dialog
+        open={qrScannerOpen}
+        onClose={() => setQrScannerOpen(false)}
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle>Scan QR Code</DialogTitle>
+        <DialogContent>
+          <QRScanner 
+            onScanSuccess={handleQRScanSuccess} 
+            onScanError={(error) => setError(error)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setQrScannerOpen(false)}>
+            Cancel
+          </Button>
+        </DialogActions>
+      </Dialog>
       
       {/* Checkout Dialog */}
       <Dialog

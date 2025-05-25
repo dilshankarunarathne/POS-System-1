@@ -32,6 +32,14 @@ api.interceptors.response.use(
   }
 );
 
+// Create axios instance
+const axiosInstance = axios.create({
+  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3001/api',
+  headers: {
+    'Content-Type': 'application/json'
+  }
+});
+
 // Auth API
 export const authApi = {
   login: (data) => api.post('/auth/login', data),
@@ -45,6 +53,17 @@ export const productsApi = {
   create: (data) => api.post('/products', data),
   update: (id, data) => api.put(`/products/${id}`, data),
   delete: (id) => api.delete(`/products/${id}`),
+
+  // Get product by barcode
+  getByBarcode: async (barcode) => {
+    try {
+      const response = await axiosInstance.get(`/products/barcode/${barcode}`);
+      return response.data;
+    } catch (error) {
+      console.error('Error fetching product by barcode:', error);
+      throw error;
+    }
+  },
 };
 
 // Categories API

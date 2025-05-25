@@ -69,26 +69,36 @@ const generateProductLabels = async (req, res) => {
         doc.fontSize(5)
            .text(`Rs. ${product.price?.toFixed(2) || '0.00'}`, x + 3, y + 10);
         
+        // Show barcode prominently if available
         if (product.barcode) {
           doc.fontSize(4)
-             .text(`${product.barcode}`, x + 3, y + 16);
+             .text(`${product.barcode}`, x + 3, y + 16, { width: labelWidth - 8 });
         }
         
-        // Create QR code data - simplified for small labels
-        const qrData = {
-          id: product.barcode,
-          price: product.price
-        };
+        // Create QR code data - using structured JSON instead of just barcode
+        // This provides richer data that can be properly parsed by scanning systems
+        const qrData = JSON.stringify({
+          id: product._id.toString(),
+          barcode: product.barcode || '',
+          name: product.name,
+          price: product.price?.toFixed(2) || '0.00'
+        });
         
-        // Generate QR code as data URL - smaller size
+        // Generate QR code as data URL - optimized for scanning
         try {
-          const qrDataUrl = await QRCode.toDataURL(JSON.stringify(qrData), {
-            errorCorrectionLevel: 'L', // Lower correction level for smaller codes
-            margin: 0,
-            width: 50
+          // Using JSON data format for better system integration
+          const qrDataUrl = await QRCode.toDataURL(qrData, {
+            errorCorrectionLevel: 'H', // Higher correction level for better scanning
+            margin: 1, // Smaller margin for better recognition on small labels
+            width: 55, // Optimized size for label 
+            scale: 2, // Balance between clarity and scan reliability
+            type: 'image/jpeg', // Sometimes more reliable than default PNG
+            rendererOpts: {
+              quality: 0.8 // Good quality while maintaining clear edges for scanning
+            }
           });
           
-          // Add QR code to label - smaller and repositioned
+          // Add QR code to label - better positioned and sized
           doc.image(qrDataUrl, x + 25, y + 20, { width: 40 });
           
         } catch (qrErr) {

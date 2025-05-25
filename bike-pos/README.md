@@ -15,6 +15,7 @@ A comprehensive Point of Sale (POS) system designed specifically for bike spare 
 
 - **Point of Sale (POS)**
   - Barcode scanning support
+  - QR code scanning for quick product lookup
   - Quick product search
   - Cart management
   - Multiple payment methods
@@ -25,7 +26,7 @@ A comprehensive Point of Sale (POS) system designed specifically for bike spare 
   - Categories management
   - Suppliers management
   - Stock level tracking
-  - Product labels and barcode generation
+  - Product labels and barcode/QR code generation
 
 - **Sales Management**
   - Sales history and details

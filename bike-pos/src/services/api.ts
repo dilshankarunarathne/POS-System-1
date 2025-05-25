@@ -5,7 +5,8 @@ const api = axios.create({
   baseURL: 'http://localhost:5000/api',
   headers: {
     'Content-Type': 'application/json'
-  }
+  },
+  timeout: 10000 // Add timeout of 10 seconds for all requests
 });
 
 // Add token to requests
@@ -98,8 +99,28 @@ export const authApi = {
 // Products API
 export const productsApi = {
   getAll: (params = {}) => api.get('/products', { params }),
-  getById: (id: string | number) => api.get(`/products/${id}`),
-  getByBarcode: (barcode: string) => api.get(`/products/barcode/${barcode}`),
+  getById: (id: string | number) => {
+    return api.get(`/products/${id}`);
+  },
+  getByBarcode: (barcode: string) => 
+    api.get(`/products/barcode/${barcode}`)
+      .catch(error => {
+        // Enhanced error handling specifically for barcode scanning
+        if (error.code === 'ECONNABORTED') {
+          throw new Error('Connection timeout. Server might be unavailable.');
+        }
+        if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
+          throw new Error('Network error. Please check server connection.');
+        }
+        if (error.response) {
+          // The server responded with an error status
+          if (error.response.status === 404) {
+            throw new Error(`Product with barcode ${barcode} not found`);
+          }
+          throw new Error(`Server error (${error.response.status}): ${error.response.data?.message || 'Unknown error'}`);
+        }
+        throw error;
+      }),
   create: (data: FormData) => {
     // Use multipart/form-data for file uploads
     return api.post('/products', data, {
@@ -192,6 +213,13 @@ export const printApi = {
   },
   printReceipt: (orderId: string | number) => 
     api.post(`/print/receipt/${orderId}`)
+};
+
+// Helper function to check server connectivity
+export const checkServerConnectivity = () => {
+  return api.get('/health-check')
+    .then(() => true)
+    .catch(() => false);
 };
 
 export default api;

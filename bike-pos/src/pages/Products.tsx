@@ -1,44 +1,29 @@
-import {
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-  FilterList as FilterListIcon,
-  Print as PrintIcon,
-  Search as SearchIcon,
-} from '@mui/icons-material';
-import {
-  Alert,
-  Box,
-  Button,
-  Chip,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  IconButton,
-  InputAdornment,
-  InputLabel,
-  MenuItem,
-  Paper,
-  Select,
-  SelectChangeEvent,
-  Snackbar,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TablePagination,
-  TableRow,
-  TextField,
-  Toolbar,
-  Tooltip,
-  Typography
-} from '@mui/material';
 import React, { useEffect, useState } from 'react';
+import {
+  Badge,
+  Button,
+  Card,
+  Col,
+  Container,
+  Form,
+  InputGroup,
+  Modal,
+  Pagination,
+  Row,
+  Spinner,
+  Table,
+  Toast, ToastContainer
+} from 'react-bootstrap';
 import { categoriesApi, printApi, productsApi, suppliersApi } from '../services/api';
+// Fix icon imports
+import {
+  FaFilter,
+  FaPencilAlt,
+  FaPlus,
+  FaPrint,
+  FaSearch,
+  FaTrash
+} from 'react-icons/fa';
 
 const Products: React.FC = () => {
   // State for products data
@@ -81,7 +66,6 @@ const Products: React.FC = () => {
     reorderLevel: '',
     categoryId: '',
     supplierId: '',
-    // Add direct text input fields for category and supplier
     categoryName: '',
     supplierName: '',
     image: null as File | null,
@@ -128,7 +112,6 @@ const Products: React.FC = () => {
         reorderLevel: selectedProduct.reorderLevel?.toString() || '',
         categoryId: selectedProduct.categoryId?.toString() || selectedProduct.category?.id?.toString() || '',
         supplierId: selectedProduct.supplierId?.toString() || selectedProduct.supplier?.id?.toString() || '',
-        // Set category and supplier name fields from product data
         categoryName: selectedProduct.category?.name || '',
         supplierName: selectedProduct.supplier?.name || '',
         image: null,
@@ -167,7 +150,6 @@ const Products: React.FC = () => {
         lowStock: showLowStock,
       });
       
-      // Ensure products is always an array even if the response is undefined
       setProducts(response.data?.products || []);
       setTotalProducts(response.data?.pagination?.total || 0);
       
@@ -182,13 +164,13 @@ const Products: React.FC = () => {
   };
   
   // Handle page change
-  const handleChangePage = (event: unknown, newPage: number) => {
-    setPage(newPage);
+  const handleChangePage = (pageNumber: number) => {
+    setPage(pageNumber);
   };
   
   // Handle rows per page change
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
+  const handleChangeRowsPerPage = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setRowsPerPage(parseInt(e.target.value, 10));
     setPage(0);
   };
   
@@ -265,24 +247,19 @@ const Products: React.FC = () => {
       
       console.log('Sending request to generate barcodes for products:', selectedProductIds);
       
-      // Generate barcodes for all selected products
       const response = await printApi.generateBarcodes(selectedProductIds, printQuantity);
       
-      // Create a download link for the blob data
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       
-      // Create an anchor element and trigger download
       const link = document.createElement('a');
       link.href = url;
       link.download = `product-labels-${Date.now()}.pdf`;
       
-      // Append to the document, click and remove
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       
-      // Clean up the URL object
       window.URL.revokeObjectURL(url);
       
       setSuccessMessage(`${selectedProductIds.length} product labels generated successfully`);
@@ -293,11 +270,8 @@ const Products: React.FC = () => {
     } catch (err: any) {
       console.error('Error generating labels:', err);
       
-      // Provide more detailed error information
       if (err.response) {
-        // Server responded with an error status code
         if (err.response.data instanceof Blob) {
-          // Try to read the error message from the blob
           try {
             const text = await err.response.data.text();
             let errorMsg = 'Unknown error';
@@ -316,10 +290,8 @@ const Products: React.FC = () => {
           setError(`Failed to generate labels: ${errorMessage}`);
         }
       } else if (err.request) {
-        // Request was made but no response received
         setError('Failed to generate labels: No response from server. Please check your network connection.');
       } else {
-        // Error in request setup
         setError(`Failed to generate labels: ${err.message || 'Unknown error'}`);
       }
     } finally {
@@ -333,15 +305,15 @@ const Products: React.FC = () => {
     setFormData(prev => ({ ...prev, [name]: value }));
   };
   
-  // Handle select field changes (FIXED)
-  const handleSelectChange = (event: SelectChangeEvent<string>) => {
-    const { name, value } = event.target;
-    setFormData(prev => ({ ...prev, [name as string]: value }));
+  // Handle select field changes
+  const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
   
-  // Handle filter select changes (FIXED)
-  const handleFilterSelectChange = (event: SelectChangeEvent<string>, filterType: 'category' | 'supplier') => {
-    const value = event.target.value;
+  // Handle filter select changes
+  const handleFilterSelectChange = (e: React.ChangeEvent<HTMLSelectElement>, filterType: 'category' | 'supplier') => {
+    const value = e.target.value;
     if (filterType === 'category') {
       setCategoryFilter(value);
     } else {
@@ -368,11 +340,9 @@ const Products: React.FC = () => {
     try {
       const formDataToSend = new FormData();
       
-      // Add all text fields
       formDataToSend.append('name', formData.name);
       formDataToSend.append('description', formData.description);
       
-      // Only add barcode if provided (otherwise backend will auto-generate)
       if (formData.barcode) {
         formDataToSend.append('barcode', formData.barcode);
       }
@@ -389,7 +359,6 @@ const Products: React.FC = () => {
         formDataToSend.append('reorderLevel', formData.reorderLevel);
       }
       
-      // Category and supplier handling - prioritize direct input
       if (formData.categoryName) {
         formDataToSend.append('categoryName', formData.categoryName);
       } else if (formData.categoryId) {
@@ -402,22 +371,18 @@ const Products: React.FC = () => {
         formDataToSend.append('supplierId', formData.supplierId);
       }
       
-      // Add image if available
       if (formData.image) {
         formDataToSend.append('image', formData.image);
       }
       
       if (selectedProduct) {
-        // Update existing product
         await productsApi.update(selectedProduct.id, formDataToSend);
         setSuccessMessage('Product updated successfully');
       } else {
-        // Create new product
         await productsApi.create(formDataToSend);
         setSuccessMessage('Product created successfully');
       }
       
-      // Close form and refresh product list
       handleCloseProductForm();
       fetchProducts();
     } catch (err) {
@@ -426,455 +391,496 @@ const Products: React.FC = () => {
     }
   };
   
+  // Calculate pagination items
+  const paginationItems = () => {
+    const totalPages = Math.ceil(totalProducts / rowsPerPage);
+    let items = [];
+    
+    for (let number = 0; number < totalPages; number++) {
+      items.push(
+        <Pagination.Item key={number} active={number === page} onClick={() => handleChangePage(number)}>
+          {number + 1}
+        </Pagination.Item>
+      );
+    }
+    
+    return items;
+  };
+
   return (
-    <Box>
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h4" gutterBottom>
-          Products
-        </Typography>
+    <Container fluid className="py-4">
+      {/* Header */}
+      <Row className="mb-4 align-items-center">
+        <Col>
+          <h4>Products</h4>
+        </Col>
         
-        <Box>
-          <Button
-            variant="contained"
-            color="primary"
-            startIcon={<AddIcon />}
-            onClick={() => handleOpenProductForm()}
-            sx={{ ml: 1 }}
-          >
-            Add Product
+        <Col xs="auto" className="d-flex gap-2">
+          <Button variant="primary" onClick={() => handleOpenProductForm()}>
+            <>{FaPlus({ className: "me-1" })}</> Add Product
           </Button>
           
           {selectedProductIds.length > 0 && (
-            <Button
-              variant="outlined"
-              startIcon={<PrintIcon />}
-              onClick={handleOpenPrintDialog}
-              sx={{ ml: 1 }}
-            >
-              Print Labels ({selectedProductIds.length})
+            <Button variant="outline-primary" onClick={handleOpenPrintDialog}>
+              <>{FaPrint({ className: "me-1" })}</> Print Labels ({selectedProductIds.length})
             </Button>
           )}
-        </Box>
-      </Box>
+        </Col>
+      </Row>
       
       {/* Filters */}
-      <Paper sx={{ mb: 4, p: 2 }}>
-        <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 1 } }}>
-          <Typography
-            sx={{ flex: '1 1 100%' }}
-            variant="h6"
-            id="tableTitle"
-            component="div"
-          >
-            Filters
-          </Typography>
-          
-          <Tooltip title="Filter list">
-            <IconButton>
-              <FilterListIcon />
-            </IconButton>
-          </Tooltip>
-        </Toolbar>
+      <Card className="mb-4">
+        <Card.Header className="d-flex justify-content-between align-items-center">
+          <h6 className="mb-0">Filters</h6>
+          <Button variant="link" className="p-0">
+            <>{FaFilter({})}</>
+          </Button>
+        </Card.Header>
         
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-          <Box sx={{ width: { xs: '100%', sm: '33.33%' } }}>
-            <TextField
-              fullWidth
-              label="Search Products"
-              variant="outlined"
-              size="small"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              InputProps={{
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <SearchIcon />
-                  </InputAdornment>
-                ),
-              }}
-            />
-          </Box>
-          
-          <Box sx={{ width: { xs: '100%', sm: '25%' } }}>
-            <FormControl fullWidth size="small">
-              <InputLabel id="category-filter-label">Category</InputLabel>
-              <Select
-                labelId="category-filter-label"
-                id="category-filter"
+        <Card.Body>
+          <Row className="g-3">
+            <Col xs={12} md={4}>
+              <InputGroup>
+                <InputGroup.Text>
+                  <>{FaSearch({})}</>
+                </InputGroup.Text>
+                <Form.Control
+                  placeholder="Search Products"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </InputGroup>
+            </Col>
+            
+            <Col xs={12} sm={6} md={3}>
+              <Form.Select
                 value={categoryFilter}
-                label="Category"
                 onChange={(e) => handleFilterSelectChange(e, 'category')}
               >
-                <MenuItem value="">All Categories</MenuItem>
+                <option value="">All Categories</option>
                 {categories.map((category) => (
-                  <MenuItem key={category.id} value={category.id?.toString() || ''}>
+                  <option key={category.id} value={category.id?.toString() || ''}>
                     {category.name}
-                  </MenuItem>
+                  </option>
                 ))}
-              </Select>
-            </FormControl>
-          </Box>
-          
-          <Box sx={{ width: { xs: '100%', sm: '25%' } }}>
-            <FormControl fullWidth size="small">
-              <InputLabel id="supplier-filter-label">Supplier</InputLabel>
-              <Select
-                labelId="supplier-filter-label"
-                id="supplier-filter"
+              </Form.Select>
+            </Col>
+            
+            <Col xs={12} sm={6} md={3}>
+              <Form.Select
                 value={supplierFilter}
-                label="Supplier"
                 onChange={(e) => handleFilterSelectChange(e, 'supplier')}
               >
-                <MenuItem value="">All Suppliers</MenuItem>
+                <option value="">All Suppliers</option>
                 {suppliers.map((supplier) => (
-                  <MenuItem key={supplier.id} value={supplier.id?.toString() || ''}>
+                  <option key={supplier.id} value={supplier.id?.toString() || ''}>
                     {supplier.name}
-                  </MenuItem>
+                  </option>
                 ))}
-              </Select>
-            </FormControl>
-          </Box>
-          
-          <Box sx={{ width: { xs: '100%', sm: '16.66%' } }}>
-            <Button
-              fullWidth
-              variant={showLowStock ? "contained" : "outlined"}
-              color={showLowStock ? "warning" : "primary"}
-              onClick={() => setShowLowStock(!showLowStock)}
-            >
-              {showLowStock ? "All Stock" : "Low Stock"}
-            </Button>
-          </Box>
-        </Box>
-      </Paper>
+              </Form.Select>
+            </Col>
+            
+            <Col xs={12} sm={6} md={2}>
+              <Button
+                variant={showLowStock ? "warning" : "outline-warning"}
+                className="w-100"
+                onClick={() => setShowLowStock(!showLowStock)}
+              >
+                {showLowStock ? "All Stock" : "Low Stock"}
+              </Button>
+            </Col>
+          </Row>
+        </Card.Body>
+      </Card>
       
       {/* Products Table */}
-      <Paper>
-        <TableContainer>
-          <Table sx={{ minWidth: 650 }} aria-label="products table">
-            <TableHead>
-              <TableRow>
-                <TableCell padding="checkbox"></TableCell>
-                <TableCell>Name</TableCell>
-                <TableCell>Barcode</TableCell>
-                <TableCell>Category</TableCell>
-                <TableCell>Price</TableCell>
-                <TableCell>Stock</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
-                    <CircularProgress />
-                  </TableCell>
-                </TableRow>
-              ) : products.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
-                    No products found
-                  </TableCell>
-                </TableRow>
-              ) : (
-                products.map((product) => {
-                  // Add null checks for all properties that might be undefined
-                  const isLowStock = (product.stockQuantity || 0) <= (product.reorderLevel || 0);
-                  const isSelected = selectedProductIds.includes(product.id);
-                  
-                  return (
-                    <TableRow
-                      key={product.id}
-                      hover
-                      selected={isSelected}
-                      onClick={() => toggleProductSelection(product.id)}
-                      sx={{ cursor: 'pointer' }}
-                    >
-                      <TableCell padding="checkbox">
-                        <Chip
-                          size="small"
-                          label={isSelected ? "Selected" : "Select"}
-                          color={isSelected ? "primary" : "default"}
-                          variant={isSelected ? "filled" : "outlined"}
-                        />
-                      </TableCell>
-                      
-                      <TableCell>{product.name}</TableCell>
-                      <TableCell>{product.barcode}</TableCell>
-                      <TableCell>{product.category ? product.category.name : 'Uncategorized'}</TableCell>
-                      <TableCell>Rs. {(product.price || 0).toFixed(2)}</TableCell>
-                      
-                      <TableCell>
-                        <Chip
-                          label={`${product.stockQuantity || 0} units`}
-                          color={isLowStock ? 'error' : 'success'}
-                          variant={isLowStock ? 'outlined' : 'filled'}
-                          size="small"
-                        />
-                      </TableCell>
-                      
-                      <TableCell>
-                        <Box sx={{ display: 'flex' }}>
-                          <IconButton
-                            size="small"
-                            color="primary"
+      <Card>
+        <Card.Body className="p-0">
+          <div className="table-responsive">
+            <Table hover>
+              <thead>
+                <tr>
+                  <th style={{ width: '80px' }}></th>
+                  <th>Name</th>
+                  <th>Barcode</th>
+                  <th>Category</th>
+                  <th>Price</th>
+                  <th>Stock</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-4">
+                      <Spinner animation="border" />
+                    </td>
+                  </tr>
+                ) : products.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-4">
+                      No products found
+                    </td>
+                  </tr>
+                ) : (
+                  products.map((product) => {
+                    const isLowStock = (product.stockQuantity || 0) <= (product.reorderLevel || 0);
+                    const isSelected = selectedProductIds.includes(product.id);
+                    
+                    return (
+                      <tr 
+                        key={product.id}
+                        onClick={() => toggleProductSelection(product.id)}
+                        className={isSelected ? "table-primary" : ""}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <td>
+                          <Badge 
+                            bg={isSelected ? "primary" : "light"} 
+                            text={isSelected ? "white" : "dark"}
+                          >
+                            {isSelected ? "Selected" : "Select"}
+                          </Badge>
+                        </td>
+                        
+                        <td>{product.name}</td>
+                        <td>{product.barcode}</td>
+                        <td>{product.category ? product.category.name : 'Uncategorized'}</td>
+                        <td>Rs. {(product.price || 0).toFixed(2)}</td>
+                        
+                        <td>
+                          <Badge 
+                            bg={isLowStock ? "danger" : "success"}
+                          >
+                            {product.stockQuantity || 0} units
+                          </Badge>
+                        </td>
+                        
+                        <td>
+                          <Button 
+                            variant="link" 
+                            className="p-1 me-1"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleOpenProductForm(product);
                             }}
                           >
-                            <EditIcon />
-                          </IconButton>
+                            <>{FaPencilAlt({})}</>
+                          </Button>
                           
-                          <IconButton
-                            size="small"
-                            color="error"
+                          <Button 
+                            variant="link" 
+                            className="p-1 text-danger"
                             onClick={(e) => {
                               e.stopPropagation();
                               handleOpenDeleteDialog(product);
                             }}
                           >
-                            <DeleteIcon />
-                          </IconButton>
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        
-        <TablePagination
-          rowsPerPageOptions={[5, 10, 25]}
-          component="div"
-          count={totalProducts}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-        />
-      </Paper>
-      
-      {/* Print Labels Dialog */}
-      <Dialog open={printDialogOpen} onClose={() => setPrintDialogOpen(false)}>
-        <DialogTitle>Print Product Labels</DialogTitle>
-        <DialogContent>
-          <Box sx={{ pt: 1 }}>
-            <Typography variant="body2" gutterBottom>
-              You are about to print labels for {selectedProductIds.length} selected products.
-            </Typography>
+                            <>{FaTrash({})}</>
+                          </Button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </Table>
+          </div>
+          
+          <div className="d-flex justify-content-between align-items-center p-3 flex-wrap">
+            <div className="d-flex align-items-center mb-2 mb-sm-0">
+              <span className="me-2">Rows per page:</span>
+              <Form.Select 
+                style={{ width: '80px' }}
+                value={rowsPerPage.toString()}
+                onChange={handleChangeRowsPerPage}
+              >
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="25">25</option>
+              </Form.Select>
+            </div>
             
-            <TextField
-              fullWidth
+            <div>
+              <span className="me-3">
+                {page * rowsPerPage + 1}-{Math.min((page + 1) * rowsPerPage, totalProducts)} of {totalProducts}
+              </span>
+              <Pagination className="d-inline-flex mb-0">
+                <Pagination.Prev 
+                  onClick={() => setPage(Math.max(0, page - 1))}
+                  disabled={page === 0}
+                />
+                {paginationItems()}
+                <Pagination.Next
+                  onClick={() => setPage(Math.min(Math.ceil(totalProducts / rowsPerPage) - 1, page + 1))}
+                  disabled={page >= Math.ceil(totalProducts / rowsPerPage) - 1}
+                />
+              </Pagination>
+            </div>
+          </div>
+        </Card.Body>
+      </Card>
+      
+      {/* Print Labels Modal */}
+      <Modal show={printDialogOpen} onHide={() => setPrintDialogOpen(false)}>
+        <Modal.Header closeButton>
+          <Modal.Title>Print Product Labels</Modal.Title>
+        </Modal.Header>
+        
+        <Modal.Body>
+          <p>
+            You are about to print labels for {selectedProductIds.length} selected products.
+          </p>
+          
+          <Form.Group className="mt-3">
+            <Form.Label>Quantity per product</Form.Label>
+            <Form.Control
               type="number"
-              label="Quantity per product"
               value={printQuantity}
               onChange={(e) => setPrintQuantity(Math.max(1, parseInt(e.target.value) || 1))}
-              margin="normal"
-              InputProps={{ inputProps: { min: 1 } }}
+              min={1}
             />
-          </Box>
-        </DialogContent>
-        <DialogActions>
+          </Form.Group>
+        </Modal.Body>
+        
+        <Modal.Footer>
           <Button 
+            variant="secondary" 
             onClick={() => setPrintDialogOpen(false)}
             disabled={printLoading}
           >
             Cancel
           </Button>
           <Button 
-            onClick={handlePrintLabels} 
-            variant="contained" 
-            color="primary"
+            variant="primary" 
+            onClick={handlePrintLabels}
             disabled={printLoading}
-            startIcon={printLoading ? <CircularProgress size={20} /> : <PrintIcon />}
           >
-            {printLoading ? 'Generating...' : 'Print Labels'}
+            {printLoading ? (
+              <>
+                <Spinner as="span" animation="border" size="sm" className="me-1" /> 
+                Generating...
+              </>
+            ) : (
+              <>
+                <>{FaPrint({ className: "me-1" })}</> Print Labels
+              </>
+            )}
           </Button>
-        </DialogActions>
-      </Dialog>
+        </Modal.Footer>
+      </Modal>
       
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={handleCloseDeleteDialog}>
-        <DialogTitle>Delete Product</DialogTitle>
-        <DialogContent>
-          <Typography>
+      {/* Delete Confirmation Modal */}
+      <Modal show={deleteDialogOpen} onHide={handleCloseDeleteDialog}>
+        <Modal.Header closeButton>
+          <Modal.Title>Delete Product</Modal.Title>
+        </Modal.Header>
+        
+        <Modal.Body>
+          <p>
             Are you sure you want to delete the product: <strong>{selectedProduct?.name}</strong>?
-          </Typography>
-          <Typography variant="body2" color="error" sx={{ mt: 2 }}>
-            This action cannot be undone.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDeleteDialog}>Cancel</Button>
-          <Button onClick={handleDeleteProduct} color="error" variant="contained">
+          </p>
+          <p className="text-danger">This action cannot be undone.</p>
+        </Modal.Body>
+        
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleCloseDeleteDialog}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={handleDeleteProduct}>
             Delete
           </Button>
-        </DialogActions>
-      </Dialog>
+        </Modal.Footer>
+      </Modal>
       
-      {/* Product Form Dialog */}
-      <Dialog 
-        open={productFormOpen} 
-        onClose={handleCloseProductForm}
-        fullWidth
-        maxWidth="md"
+      {/* Product Form Modal */}
+      <Modal 
+        show={productFormOpen} 
+        onHide={handleCloseProductForm}
+        size="lg"
       >
         <form onSubmit={handleSubmitForm}>
-          <DialogTitle>
-            {selectedProduct ? 'Edit Product' : 'Add New Product'}
-          </DialogTitle>
-          <DialogContent>
-            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, mt: 2 }}>
-              <Box sx={{ flex: 1 }}>
-                <TextField
-                  fullWidth
-                  label="Product Name"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  required
-                  margin="normal"
-                />
-                
-                <TextField
-                  fullWidth
-                  label="Description"
-                  name="description"
-                  value={formData.description}
-                  onChange={handleInputChange}
-                  multiline
-                  rows={3}
-                  margin="normal"
-                />
-                
-                <TextField
-                  fullWidth
-                  label="Barcode"
-                  name="barcode"
-                  value={formData.barcode}
-                  onChange={handleInputChange}
-                  margin="normal"
-                  helperText="Leave empty to auto-generate a unique barcode"
-                />
-                
-                <Box sx={{ display: 'flex', gap: 2, mt: 2 }}>
-                  <TextField
-                    fullWidth
-                    label="Category"
-                    name="categoryName"
-                    value={formData.categoryName}
+          <Modal.Header closeButton>
+            <Modal.Title>
+              {selectedProduct ? 'Edit Product' : 'Add New Product'}
+            </Modal.Title>
+          </Modal.Header>
+          
+          <Modal.Body>
+            <Row className="g-3">
+              <Col md={6}>
+                <Form.Group className="mb-3">
+                  <Form.Label>Product Name</Form.Label>
+                  <Form.Control
+                    name="name"
+                    value={formData.name}
                     onChange={handleInputChange}
-                    margin="normal"
+                    required
                   />
-                  
-                  <TextField
-                    fullWidth
-                    label="Supplier"
-                    name="supplierName"
-                    value={formData.supplierName}
+                </Form.Group>
+                
+                <Form.Group className="mb-3">
+                  <Form.Label>Description</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={3}
+                    name="description"
+                    value={formData.description}
                     onChange={handleInputChange}
-                    margin="normal"
                   />
-                </Box>
-              </Box>
+                </Form.Group>
+                
+                <Form.Group className="mb-3">
+                  <Form.Label>Barcode</Form.Label>
+                  <Form.Control
+                    name="barcode"
+                    value={formData.barcode}
+                    onChange={handleInputChange}
+                  />
+                  <Form.Text className="text-muted">
+                    Leave empty to auto-generate a unique barcode
+                  </Form.Text>
+                </Form.Group>
+                
+                <Row>
+                  <Col>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Category</Form.Label>
+                      <Form.Control
+                        name="categoryName"
+                        value={formData.categoryName}
+                        onChange={handleInputChange}
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Supplier</Form.Label>
+                      <Form.Control
+                        name="supplierName"
+                        value={formData.supplierName}
+                        onChange={handleInputChange}
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </Col>
               
-              <Box sx={{ flex: 1 }}>
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                  <TextField
-                    fullWidth
-                    type="number"
-                    label="Price"
-                    name="price"
-                    value={formData.price}
-                    onChange={handleInputChange}
-                    required
-                    margin="normal"
-                    inputProps={{ min: 0, step: 0.01 }}
-                    InputProps={{
-                      startAdornment: <InputAdornment position="start">Rs.</InputAdornment>,
-                    }}
-                  />
-                  
-                  <TextField
-                    fullWidth
-                    type="number"
-                    label="Cost Price"
-                    name="costPrice"
-                    value={formData.costPrice}
-                    onChange={handleInputChange}
-                    margin="normal"
-                    inputProps={{ min: 0, step: 0.01 }}
-                    InputProps={{
-                      startAdornment: <InputAdornment position="start">Rs.</InputAdornment>,
-                    }}
-                  />
-                </Box>
+              <Col md={6}>
+                <Row>
+                  <Col>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Price</Form.Label>
+                      <InputGroup>
+                        <InputGroup.Text>Rs.</InputGroup.Text>
+                        <Form.Control
+                          type="number"
+                          name="price"
+                          value={formData.price}
+                          onChange={handleInputChange}
+                          required
+                          min="0"
+                          step="0.01"
+                        />
+                      </InputGroup>
+                    </Form.Group>
+                  </Col>
+                  <Col>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Cost Price</Form.Label>
+                      <InputGroup>
+                        <InputGroup.Text>Rs.</InputGroup.Text>
+                        <Form.Control
+                          type="number"
+                          name="costPrice"
+                          value={formData.costPrice}
+                          onChange={handleInputChange}
+                          min="0"
+                          step="0.01"
+                        />
+                      </InputGroup>
+                    </Form.Group>
+                  </Col>
+                </Row>
                 
-                <Box sx={{ display: 'flex', gap: 2 }}>
-                  <TextField
-                    fullWidth
-                    type="number"
-                    label="Stock Quantity"
-                    name="stockQuantity"
-                    value={formData.stockQuantity}
-                    onChange={handleInputChange}
-                    required
-                    margin="normal"
-                    inputProps={{ min: 0 }}
-                  />
-                  
-                  <TextField
-                    fullWidth
-                    type="number"
-                    label="Reorder Level"
-                    name="reorderLevel"
-                    value={formData.reorderLevel}
-                    onChange={handleInputChange}
-                    margin="normal"
-                    inputProps={{ min: 0 }}
-                  />
-                </Box>
-                
-                {/* Product image section removed */}
-              </Box>
-            </Box>
-          </DialogContent>
-          <DialogActions>
-            <Button onClick={handleCloseProductForm}>Cancel</Button>
-            <Button type="submit" variant="contained" color="primary">
+                <Row>
+                  <Col>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Stock Quantity</Form.Label>
+                      <Form.Control
+                        type="number"
+                        name="stockQuantity"
+                        value={formData.stockQuantity}
+                        onChange={handleInputChange}
+                        required
+                        min="0"
+                      />
+                    </Form.Group>
+                  </Col>
+                  <Col>
+                    <Form.Group className="mb-3">
+                      <Form.Label>Reorder Level</Form.Label>
+                      <Form.Control
+                        type="number"
+                        name="reorderLevel"
+                        value={formData.reorderLevel}
+                        onChange={handleInputChange}
+                        min="0"
+                      />
+                    </Form.Group>
+                  </Col>
+                </Row>
+              </Col>
+            </Row>
+          </Modal.Body>
+          
+          <Modal.Footer>
+            <Button variant="secondary" onClick={handleCloseProductForm}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="primary">
               {selectedProduct ? 'Update' : 'Create'} Product
             </Button>
-          </DialogActions>
+          </Modal.Footer>
         </form>
-      </Dialog>
+      </Modal>
       
-      {/* Error and Success Messages */}
-      <Snackbar
-        open={!!error}
-        autoHideDuration={6000}
-        onClose={() => setError(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setError(null)} severity="error">
-          {error}
-        </Alert>
-      </Snackbar>
-      
-      <Snackbar
-        open={!!successMessage}
-        autoHideDuration={6000}
-        onClose={() => setSuccessMessage(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setSuccessMessage(null)} severity="success">
-          {successMessage}
-        </Alert>
-      </Snackbar>
-    </Box>
+      {/* Toasts for notifications */}
+      <ToastContainer position="bottom-center" className="p-3">
+        {error && (
+          <Toast 
+            onClose={() => setError(null)} 
+            show={!!error} 
+            delay={6000} 
+            autohide 
+            bg="danger"
+            className="text-white"
+          >
+            <Toast.Header>
+              <strong className="me-auto">Error</strong>
+            </Toast.Header>
+            <Toast.Body>{error}</Toast.Body>
+          </Toast>
+        )}
+        
+        {successMessage && (
+          <Toast 
+            onClose={() => setSuccessMessage(null)} 
+            show={!!successMessage} 
+            delay={6000} 
+            autohide 
+            bg="success"
+            className="text-white"
+          >
+            <Toast.Header>
+              <strong className="me-auto">Success</strong>
+            </Toast.Header>
+            <Toast.Body>{successMessage}</Toast.Body>
+          </Toast>
+        )}
+      </ToastContainer>
+    </Container>
   );
 };
 

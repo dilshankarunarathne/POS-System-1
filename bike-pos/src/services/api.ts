@@ -212,7 +212,16 @@ export const printApi = {
     });
   },
   printReceipt: (orderId: string | number) => 
-    api.post(`/print/receipt/${orderId}`)
+    api.post(`/print/receipt/${orderId}`),
+  
+  // Add new methods for thermal printing
+  printReceiptToThermal: (orderId: string | number) => 
+    api.post(`/print/thermal/${orderId}`),
+  
+  getReceiptPdf: (orderId: string | number) => 
+    api.get(`/print/receipt/${orderId}`, {
+      responseType: 'blob'
+    })
 };
 
 // Helper function to check server connectivity

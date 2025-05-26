@@ -1,0 +1,130 @@
+.login-page {
+  position: relative;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+.login-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(135deg, #4b6cb7 0%, #182848 100%);
+  z-index: -1;
+}
+
+.login-card {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  transition: all 0.3s ease;
+  animation: fadeIn 0.8s ease;
+}
+
+.login-brand-section {
+  background: linear-gradient(135deg, #3a7bd5 0%, #1a3c6e 100%);
+  border-radius: 12px 0 0 12px;
+}
+
+.logo-area {
+  animation: slideDown 1s ease;
+}
+
+.brand-name {
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.brand-tagline {
+  font-weight: 300;
+  opacity: 0.8;
+  font-size: 0.9rem;
+}
+
+.login-form-section {
+  background: #ffffff;
+}
+
+.login-input {
+  padding: 0.7rem 1rem;
+  border-radius: 8px;
+  transition: all 0.3s;
+}
+
+.login-input:focus {
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border-color: #3a7bd5;
+}
+
+.login-button {
+  border-radius: 8px;
+  font-weight: 600;
+  transition: all 0.3s;
+  background: linear-gradient(to right, #4b6cb7, #182848);
+  border: none;
+}
+
+.login-button:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(75, 108, 183, 0.3);
+}
+
+.login-alert {
+  border-radius: 8px;
+  animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+.demo-accounts {
+  animation: fadeIn 1s ease 0.5s both;
+}
+
+.demo-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+.demo-account {
+  padding: 8px 12px;
+  border-radius: 6px;
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  display: flex;
+  flex-direction: column;
+}
+
+.demo-role {
+  font-weight: 600;
+  color: #495057;
+  font-size: 0.8rem;
+}
+
+.demo-credentials {
+  font-family: monospace;
+  color: #6c757d;
+  font-size: 0.8rem;
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-20px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+  20%, 40%, 60%, 80% { transform: translateX(5px); }
+}
+
+@media (max-width: 767.98px) {
+  .login-card {
+    margin: 1rem;
+  }
+}

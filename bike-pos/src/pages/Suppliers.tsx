@@ -1,33 +1,27 @@
-import {
-  Add as AddIcon,
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-  Email as EmailIcon,
-  Phone as PhoneIcon,
-} from '@mui/icons-material';
-import {
-  Alert,
-  Box,
-  Button,
-  Chip,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  IconButton,
-  Paper,
-  Snackbar,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography
-} from '@mui/material';
 import React, { useEffect, useState } from 'react';
+import {
+  Badge,
+  Button,
+  Card,
+  Col,
+  Container,
+  Form,
+  InputGroup,
+  Modal,
+  Row,
+  Spinner,
+  Table,
+  Toast,
+  ToastContainer
+} from 'react-bootstrap';
+import {
+  Envelope,
+  Pencil,
+  PlusLg,
+  Search,
+  Telephone,
+  Trash
+} from 'react-bootstrap-icons';
 import { suppliersApi } from '../services/api';
 
 // Update the Supplier interface to match MongoDB model
@@ -57,6 +51,10 @@ const Suppliers: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   
+  // Search and filter state
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filteredSuppliers, setFilteredSuppliers] = useState<Supplier[]>([]);
+  
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -75,12 +73,30 @@ const Suppliers: React.FC = () => {
     fetchSuppliers();
   }, []);
   
+  // Filter suppliers when search query changes
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredSuppliers(suppliers);
+      return;
+    }
+    
+    const filtered = suppliers.filter(supplier => 
+      supplier.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      supplier.contactPerson.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      supplier.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      supplier.phone.includes(searchQuery)
+    );
+    
+    setFilteredSuppliers(filtered);
+  }, [searchQuery, suppliers]);
+  
   // Fetch suppliers from API
   const fetchSuppliers = async () => {
     try {
       setLoading(true);
       const response = await suppliersApi.getAll();
       setSuppliers(response.data);
+      setFilteredSuppliers(response.data);
       setLoading(false);
     } catch (err: any) {
       console.error('Error fetching suppliers:', err);
@@ -122,7 +138,7 @@ const Suppliers: React.FC = () => {
   };
   
   // Handle form input changes
-  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setSupplierForm(prev => ({ ...prev, [name]: value }));
   };
@@ -137,7 +153,7 @@ const Suppliers: React.FC = () => {
       
       if (selectedSupplier) {
         // Update existing supplier
-        await suppliersApi.update(selectedSupplier._id, supplierForm); // Use _id instead of id
+        await suppliersApi.update(selectedSupplier._id, supplierForm);
         setSuccessMessage('Supplier updated successfully');
       } else {
         // Create new supplier
@@ -170,7 +186,7 @@ const Suppliers: React.FC = () => {
     if (!selectedSupplier) return;
     
     try {
-      await suppliersApi.delete(selectedSupplier._id); // Use _id instead of id
+      await suppliersApi.delete(selectedSupplier._id);
       setSuccessMessage('Supplier deleted successfully');
       handleCloseDeleteDialog();
       fetchSuppliers();
@@ -180,237 +196,428 @@ const Suppliers: React.FC = () => {
     }
   };
   
-  return (
-    <Box>
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h4" gutterBottom>
-          Suppliers
-        </Typography>
-        
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-        >
-          Add Supplier
-        </Button>
-      </Box>
-      
-      <Paper>
-        <TableContainer>
-          <Table sx={{ minWidth: 650 }} aria-label="suppliers table">
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Contact Person</TableCell>
-                <TableCell>Contact Info</TableCell>
-                <TableCell>Address</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
-                    <CircularProgress />
-                  </TableCell>
-                </TableRow>
-              ) : suppliers.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} align="center" sx={{ py: 3 }}>
-                    No suppliers found
-                  </TableCell>
-                </TableRow>
-              ) : (
-                suppliers.map((supplier) => (
-                  <TableRow key={supplier._id}>
-                    <TableCell>
-                      <Typography variant="body1" fontWeight="bold">
-                        {supplier.name}
-                      </Typography>
-                      {!supplier.active && (
-                        <Chip size="small" label="Inactive" color="error" variant="outlined" sx={{ mt: 1 }} />
-                      )}
-                    </TableCell>
-                    <TableCell>{supplier.contactPerson || '—'}</TableCell>
-                    <TableCell>
-                      {supplier.phone && (
-                        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                          <PhoneIcon fontSize="small" color="action" sx={{ mr: 1 }} />
-                          <Typography variant="body2">{supplier.phone}</Typography>
-                        </Box>
-                      )}
-                      {supplier.email && (
-                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                          <EmailIcon fontSize="small" color="action" sx={{ mr: 1 }} />
-                          <Typography variant="body2">{supplier.email}</Typography>
-                        </Box>
-                      )}
-                    </TableCell>
-                    <TableCell>{supplier.address || '—'}</TableCell>
-                    <TableCell>
-                      <IconButton
-                        size="small"
-                        color="primary"
-                        onClick={() => handleOpenDialog(supplier)}
-                      >
-                        <EditIcon />
-                      </IconButton>
-                      
-                      <IconButton
-                        size="small"
-                        color="error"
-                        onClick={() => handleOpenDeleteDialog(supplier)}
-                      >
-                        <DeleteIcon />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))
+  // Render supplier card for mobile view
+  const renderSupplierCard = (supplier: Supplier) => {
+    return (
+      <Card className="mb-3 shadow-sm" key={supplier._id}>
+        <Card.Body>
+          <div className="d-flex justify-content-between align-items-start mb-2">
+            <div>
+              <h5 className="mb-1">{supplier.name}</h5>
+              {supplier.contactPerson && (
+                <p className="text-muted mb-1 small">Contact: {supplier.contactPerson}</p>
               )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      </Paper>
-      
-      {/* Add/Edit Supplier Dialog */}
-      <Dialog open={dialogOpen} onClose={handleCloseDialog} fullWidth maxWidth="md">
-        <DialogTitle>
-          {selectedSupplier ? 'Edit Supplier' : 'Add Supplier'}
-        </DialogTitle>
-        <DialogContent>
-          <Box component="form" sx={{ pt: 1 }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <Box>
-                <TextField
-                  autoFocus
-                  name="name"
-                  label="Supplier Name"
-                  type="text"
-                  fullWidth
-                  variant="outlined"
-                  value={supplierForm.name}
-                  onChange={handleFormChange}
-                  required
-                />
-              </Box>
-              
-              <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, gap: 2 }}>
-                <TextField
-                  name="contactPerson"
-                  label="Contact Person"
-                  type="text"
-                  fullWidth
-                  variant="outlined"
-                  value={supplierForm.contactPerson}
-                  onChange={handleFormChange}
-                />
-                
-                <TextField
-                  name="phone"
-                  label="Phone Number"
-                  type="text"
-                  fullWidth
-                  variant="outlined"
-                  value={supplierForm.phone}
-                  onChange={handleFormChange}
-                />
-              </Box>
-              
-              <Box>
-                <TextField
-                  name="email"
-                  label="Email"
-                  type="email"
-                  fullWidth
-                  variant="outlined"
-                  value={supplierForm.email}
-                  onChange={handleFormChange}
-                />
-              </Box>
-              
-              <Box>
-                <TextField
-                  name="address"
-                  label="Address"
-                  type="text"
-                  fullWidth
-                  variant="outlined"
-                  value={supplierForm.address}
-                  onChange={handleFormChange}
-                  multiline
-                  rows={2}
-                />
-              </Box>
-              
-              <Box>
-                <TextField
-                  name="notes"
-                  label="Notes"
-                  type="text"
-                  fullWidth
-                  variant="outlined"
-                  value={supplierForm.notes}
-                  onChange={handleFormChange}
-                  multiline
-                  rows={3}
-                />
-              </Box>
-            </Box>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button onClick={handleSaveSupplier} variant="contained" color="primary">
-            Save
+            </div>
+            {!supplier.active && (
+              <Badge bg="danger" text="white">Inactive</Badge>
+            )}
+          </div>
+          
+          <Row className="g-2 mb-3">
+            {supplier.phone && (
+              <Col xs={12}>
+                <div className="d-flex align-items-center">
+                  <Telephone className="me-2" size={14} />
+                  <a href={`tel:${supplier.phone}`} className="text-decoration-none">
+                    {supplier.phone}
+                  </a>
+                </div>
+              </Col>
+            )}
+            
+            {supplier.email && (
+              <Col xs={12}>
+                <div className="d-flex align-items-center">
+                  <Envelope className="me-2" size={14} />
+                  <a href={`mailto:${supplier.email}`} className="text-decoration-none text-truncate">
+                    {supplier.email}
+                  </a>
+                </div>
+              </Col>
+            )}
+            
+            {supplier.address && (
+              <Col xs={12}>
+                <div className="small text-muted mt-1">
+                  {supplier.address}
+                </div>
+              </Col>
+            )}
+          </Row>
+          
+          <div className="d-flex justify-content-end">
+            <Button 
+              variant="outline-primary" 
+              size="sm" 
+              className="me-2"
+              onClick={() => handleOpenDialog(supplier)}
+            >
+              <Pencil size={16} /> Edit
+            </Button>
+            <Button 
+              variant="outline-danger" 
+              size="sm"
+              onClick={() => handleOpenDeleteDialog(supplier)}
+            >
+              <Trash size={16} /> Delete
+            </Button>
+          </div>
+        </Card.Body>
+      </Card>
+    );
+  };
+  
+  return (
+    <Container fluid className="px-4">
+      <Row className="mb-4 align-items-center">
+        <Col>
+          <h2 className="mb-0">Suppliers</h2>
+          <p className="text-muted mb-0">Manage your product suppliers</p>
+        </Col>
+        <Col xs="auto">
+          <Button 
+            variant="primary" 
+            className="d-flex align-items-center" 
+            onClick={() => handleOpenDialog()}
+          >
+            <PlusLg className="me-2" /> Add Supplier
           </Button>
-        </DialogActions>
-      </Dialog>
+        </Col>
+      </Row>
       
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={handleCloseDeleteDialog}>
-        <DialogTitle>Delete Supplier</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete the supplier: <strong>{selectedSupplier?.name}</strong>?
-          </Typography>
-          <Typography variant="body2" color="error" sx={{ mt: 2 }}>
-            This may affect products associated with this supplier.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDeleteDialog}>Cancel</Button>
-          <Button onClick={handleDeleteSupplier} color="error" variant="contained">
+      {/* Search Bar */}
+      <Card className="mb-4 shadow-sm">
+        <Card.Body>
+          <Row>
+            <Col md={6} lg={4}>
+              <InputGroup>
+                <InputGroup.Text className="bg-light">
+                  <Search size={16} />
+                </InputGroup.Text>
+                <Form.Control
+                  placeholder="Search suppliers..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+                {searchQuery && (
+                  <Button 
+                    variant="outline-secondary" 
+                    onClick={() => setSearchQuery('')}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </InputGroup>
+            </Col>
+          </Row>
+        </Card.Body>
+      </Card>
+      
+      {/* Mobile View - Card Layout */}
+      <div className="d-md-none">
+        {loading ? (
+          <div className="text-center py-5">
+            <Spinner animation="border" variant="primary" />
+          </div>
+        ) : filteredSuppliers.length === 0 ? (
+          <Card className="text-center p-4 shadow-sm">
+            <Card.Body className="p-5">
+              <p className="mb-0">No suppliers found</p>
+            </Card.Body>
+          </Card>
+        ) : (
+          filteredSuppliers.map(renderSupplierCard)
+        )}
+      </div>
+      
+      {/* Desktop View - Table Layout */}
+      <div className="d-none d-md-block">
+        <Card className="shadow-sm">
+          <Card.Body className="p-0">
+            <div className="table-responsive">
+              <Table hover className="mb-0 align-middle">
+                <thead className="table-light">
+                  <tr>
+                    <th className="border-0">Name</th>
+                    <th className="border-0">Contact Person</th>
+                    <th className="border-0">Contact Info</th>
+                    <th className="border-0">Address</th>
+                    <th className="border-0 text-end">Actions</th>
+                  </tr>
+                </thead>
+                
+                <tbody>
+                  {loading ? (
+                    <tr>
+                      <td colSpan={5} className="text-center py-5">
+                        <Spinner animation="border" variant="primary" />
+                      </td>
+                    </tr>
+                  ) : filteredSuppliers.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="text-center py-5">
+                        <p className="mb-0 text-muted">No suppliers found</p>
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredSuppliers.map((supplier) => (
+                      <tr key={supplier._id}>
+                        <td className="ps-3">
+                          <div className="fw-medium">{supplier.name}</div>
+                          {!supplier.active && (
+                            <Badge bg="danger" text="white" pill className="mt-1">Inactive</Badge>
+                          )}
+                        </td>
+                        <td>{supplier.contactPerson || '—'}</td>
+                        <td>
+                          {supplier.phone && (
+                            <div className="d-flex align-items-center mb-1">
+                              <Telephone className="me-1" size={14} />
+                              <a href={`tel:${supplier.phone}`} className="text-decoration-none">
+                                {supplier.phone}
+                              </a>
+                            </div>
+                          )}
+                          {supplier.email && (
+                            <div className="d-flex align-items-center">
+                              <Envelope className="me-1" size={14} />
+                              <a href={`mailto:${supplier.email}`} className="text-decoration-none">
+                                {supplier.email}
+                              </a>
+                            </div>
+                          )}
+                          {!supplier.phone && !supplier.email && '—'}
+                        </td>
+                        <td>
+                          <div className="text-truncate" style={{ maxWidth: '200px' }}>
+                            {supplier.address || '—'}
+                          </div>
+                        </td>
+                        <td className="text-end pe-3">
+                          <Button 
+                            variant="outline-primary" 
+                            size="sm" 
+                            className="me-2"
+                            onClick={() => handleOpenDialog(supplier)}
+                          >
+                            <Pencil size={14} className="me-1" /> Edit
+                          </Button>
+                          <Button 
+                            variant="outline-danger" 
+                            size="sm"
+                            onClick={() => handleOpenDeleteDialog(supplier)}
+                          >
+                            <Trash size={14} className="me-1" /> Delete
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </Table>
+            </div>
+          </Card.Body>
+        </Card>
+      </div>
+      
+      {/* Add/Edit Supplier Modal */}
+      <Modal 
+        show={dialogOpen} 
+        onHide={handleCloseDialog} 
+        size="lg"
+        centered
+        backdrop="static"
+      >
+        <Modal.Header closeButton className="border-bottom-0 pb-0">
+          <Modal.Title>
+            {selectedSupplier ? 'Edit Supplier' : 'Add Supplier'}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="pt-0">
+          <hr className="mt-0 mb-4" />
+          <Form>
+            <Row className="mb-3">
+              <Col md={6}>
+                <Form.Group controlId="supplierName" className="mb-3">
+                  <Form.Label>Supplier Name <span className="text-danger">*</span></Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="name"
+                    value={supplierForm.name}
+                    onChange={handleFormChange}
+                    required
+                    placeholder="Enter supplier name"
+                    autoFocus
+                    className="border-primary"
+                  />
+                  <Form.Text className="text-muted">
+                    Company or business name
+                  </Form.Text>
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group controlId="contactPerson" className="mb-3">
+                  <Form.Label>Contact Person</Form.Label>
+                  <Form.Control
+                    type="text"
+                    name="contactPerson"
+                    value={supplierForm.contactPerson}
+                    onChange={handleFormChange}
+                    placeholder="Primary contact name"
+                  />
+                </Form.Group>
+              </Col>
+            </Row>
+            
+            <Row className="mb-3">
+              <Col md={6}>
+                <Form.Group controlId="email" className="mb-3">
+                  <Form.Label>Email</Form.Label>
+                  <InputGroup>
+                    <InputGroup.Text><Envelope size={16} /></InputGroup.Text>
+                    <Form.Control
+                      type="email"
+                      name="email"
+                      value={supplierForm.email}
+                      onChange={handleFormChange}
+                      placeholder="Email address"
+                    />
+                  </InputGroup>
+                </Form.Group>
+              </Col>
+              <Col md={6}>
+                <Form.Group controlId="phone" className="mb-3">
+                  <Form.Label>Phone</Form.Label>
+                  <InputGroup>
+                    <InputGroup.Text><Telephone size={16} /></InputGroup.Text>
+                    <Form.Control
+                      type="tel"
+                      name="phone"
+                      value={supplierForm.phone}
+                      onChange={handleFormChange}
+                      placeholder="Phone number"
+                    />
+                  </InputGroup>
+                </Form.Group>
+              </Col>
+            </Row>
+            
+            <Form.Group className="mb-3" controlId="address">
+              <Form.Label>Address</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={2}
+                name="address"
+                value={supplierForm.address}
+                onChange={handleFormChange}
+                placeholder="Business address"
+              />
+            </Form.Group>
+            
+            <Form.Group controlId="notes">
+              <Form.Label>Notes</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={3}
+                name="notes"
+                value={supplierForm.notes}
+                onChange={handleFormChange}
+                placeholder="Additional information about this supplier"
+              />
+            </Form.Group>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer className="border-top-0 pt-0">
+          <hr className="w-100 mb-3" />
+          <Button 
+            variant="outline-secondary" 
+            onClick={handleCloseDialog}
+            className="px-4"
+          >
+            Cancel
+          </Button>
+          <Button 
+            variant="primary" 
+            onClick={handleSaveSupplier}
+            className="px-4"
+          >
+            {selectedSupplier ? 'Update Supplier' : 'Add Supplier'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+      
+      {/* Delete Confirmation Modal */}
+      <Modal 
+        show={deleteDialogOpen} 
+        onHide={handleCloseDeleteDialog}
+        centered
+      >
+        <Modal.Header closeButton className="border-bottom-0">
+          <Modal.Title>Delete Supplier</Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="text-center">
+          <div className="d-flex justify-content-center mb-3">
+            <div className="bg-danger bg-opacity-10 p-3 rounded-circle">
+              <Trash size={28} className="text-danger" />
+            </div>
+          </div>
+          <h5>Are you sure?</h5>
+          <p>You are about to delete <strong>{selectedSupplier?.name}</strong></p>
+          <p className="text-danger small">This action cannot be undone.</p>
+        </Modal.Body>
+        <Modal.Footer className="border-top-0">
+          <Button 
+            variant="outline-secondary" 
+            onClick={handleCloseDeleteDialog}
+            className="px-4"
+          >
+            Cancel
+          </Button>
+          <Button 
+            variant="danger" 
+            onClick={handleDeleteSupplier}
+            className="px-4"
+          >
             Delete
           </Button>
-        </DialogActions>
-      </Dialog>
+        </Modal.Footer>
+      </Modal>
       
-      {/* Error and Success Messages */}
-      <Snackbar
-        open={!!error}
-        autoHideDuration={6000}
-        onClose={() => setError(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setError(null)} severity="error">
-          {error}
-        </Alert>
-      </Snackbar>
-      
-      <Snackbar
-        open={!!successMessage}
-        autoHideDuration={6000}
-        onClose={() => setSuccessMessage(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setSuccessMessage(null)} severity="success">
-          {successMessage}
-        </Alert>
-      </Snackbar>
-    </Box>
+      {/* Toast notifications */}
+      <ToastContainer position="bottom-end" className="p-3">
+        {error && (
+          <Toast 
+            onClose={() => setError(null)} 
+            show={!!error} 
+            delay={6000} 
+            autohide 
+            bg="danger"
+            className="text-white"
+          >
+            <Toast.Header>
+              <strong className="me-auto">Error</strong>
+            </Toast.Header>
+            <Toast.Body>{error}</Toast.Body>
+          </Toast>
+        )}
+        
+        {successMessage && (
+          <Toast 
+            onClose={() => setSuccessMessage(null)} 
+            show={!!successMessage} 
+            delay={3000} 
+            autohide
+            bg="success"
+            className="text-white"
+          >
+            <Toast.Header>
+              <strong className="me-auto">Success</strong>
+            </Toast.Header>
+            <Toast.Body>{successMessage}</Toast.Body>
+          </Toast>
+        )}
+      </ToastContainer>
+    </Container>
   );
 };
 

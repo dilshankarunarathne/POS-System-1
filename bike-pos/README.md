@@ -44,7 +44,7 @@ A comprehensive Point of Sale (POS) system designed specifically for bike spare 
 ### Frontend
 - React
 - TypeScript
-- Material-UI
+- React Bootstrap
 - React Router
 - Axios
 - Chart.js
@@ -52,7 +52,7 @@ A comprehensive Point of Sale (POS) system designed specifically for bike spare 
 ### Backend
 - Node.js
 - Express
-- PostgreSQL
+- MongoDB
 - JWT Authentication
 - PDF Generation
 

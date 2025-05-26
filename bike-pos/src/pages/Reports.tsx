@@ -1,51 +1,38 @@
+import 'bootstrap/dist/css/bootstrap.min.css';
 import {
-    BarChart as BarChartIcon,
-    Download as DownloadIcon,
-    Print as PrintIcon,
-    Summarize as SummarizeIcon
-} from '@mui/icons-material';
-import {
-    Alert,
-    Box,
-    Button,
-    Card,
-    CardContent,
-    CircularProgress,
-    Divider,
-    FormControl,
-    InputLabel,
-    MenuItem,
-    Paper,
-    Select,
-    Snackbar,
-    Tab,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    Tabs,
-    TextField,
-    Typography
-} from '@mui/material';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import {
-    ArcElement,
-    BarElement,
-    CategoryScale,
-    Chart as ChartJS,
-    Tooltip as ChartTooltip,
-    Legend,
-    LinearScale,
-    LineElement,
-    PointElement,
-    Title,
+  ArcElement,
+  BarElement,
+  CategoryScale,
+  Chart as ChartJS,
+  Tooltip as ChartTooltip,
+  Legend,
+  LinearScale,
+  LineElement,
+  PointElement,
+  Title,
 } from 'chart.js';
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
+import {
+  Button,
+  Card,
+  Col,
+  Container,
+  Form,
+  Nav,
+  Row,
+  Spinner,
+  Table,
+  Toast, ToastContainer
+} from 'react-bootstrap';
+import {
+  BarChart,
+  Download,
+  FileEarmarkText,
+  Printer
+} from 'react-bootstrap-icons';
 import { Bar, Line, Pie } from 'react-chartjs-2';
+import DatePicker from 'react-datepicker';
+import "react-datepicker/dist/react-datepicker.css";
 import { categoriesApi, reportsApi } from '../services/api';
 
 // Register ChartJS components
@@ -61,62 +48,50 @@ ChartJS.register(
   Legend
 );
 
-// Define tab panel interface
-interface TabPanelProps {
-  children?: React.ReactNode;
-  index: number;
-  value: number;
-}
-
-// Tab panel component
-function TabPanel(props: TabPanelProps) {
-  const { children, value, index, ...other } = props;
-
-  return (
-    <div
-      role="tabpanel"
-      hidden={value !== index}
-      id={`report-tabpanel-${index}`}
-      aria-labelledby={`report-tab-${index}`}
-      {...other}
-    >
-      {value === index && <Box sx={{ py: 3 }}>{children}</Box>}
-    </div>
-  );
-}
-
-const Reports: React.FC = () => {
-  const [activeTab, setActiveTab] = useState(0);
+const Reports = () => {
+  const [activeTab, setActiveTab] = useState('sales');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   
   // Dates for filtering
-  const [startDate, setStartDate] = useState<Date | null>(() => {
+  const [startDate, setStartDate] = useState<Date>(() => {
     const date = new Date();
     date.setDate(date.getDate() - 30); // Default to last 30 days
     return date;
   });
-  const [endDate, setEndDate] = useState<Date | null>(new Date());
+  const [endDate, setEndDate] = useState<Date>(new Date());
   
   // Sales summary data
-  const [salesSummary, setSalesSummary] = useState<any>({ summary: [], totals: {} });
+  const [salesSummary, setSalesSummary] = useState<{ summary: any[], totals: any }>({ summary: [], totals: {} });
   const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month'>('day');
   
   // Product sales data
-  const [productSales, setProductSales] = useState<any[]>([]);
+  interface ProductSale {
+    name: string;
+    category: string;
+    quantitySold: number;
+    totalRevenue: number;
+    profit: number;
+    profitMargin: string;
+  }
+  const [productSales, setProductSales] = useState<ProductSale[]>([]);
   const [categoryFilter, setCategoryFilter] = useState('');
-  const [categories, setCategories] = useState<any[]>([]);
+  const [categories, setCategories] = useState<{id: string, name: string}[]>([]);
   const [topProductsLimit, setTopProductsLimit] = useState(10);
   
   // Inventory data
-  const [inventoryData, setInventoryData] = useState<any>({ inventory: [], summary: {} });
+  interface InventoryItem {
+    name: string;
+    barcode: string;
+    category: string;
+    stockQuantity: number;
+    reorderLevel: number;
+    value: number;
+    stockStatus: string;
+  }
+  const [inventoryData, setInventoryData] = useState<{ inventory: InventoryItem[], summary: any }>({ inventory: [], summary: {} });
   const [showLowStock, setShowLowStock] = useState(false);
-  
-  // Handle tab change
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
-    setActiveTab(newValue);
-  };
   
   // Fetch categories on component mount
   useEffect(() => {
@@ -133,7 +108,7 @@ const Reports: React.FC = () => {
   }, []);
   
   // Format date for API
-  const formatDateForApi = (date: Date | null) => {
+  const formatDateForApi = (date: Date | null): string => {
     if (!date) return '';
     return date.toISOString().split('T')[0];
   };
@@ -230,11 +205,11 @@ const Reports: React.FC = () => {
   
   // Load data when tab changes or filters change
   useEffect(() => {
-    if (activeTab === 0) {
+    if (activeTab === 'sales') {
       fetchSalesSummary();
-    } else if (activeTab === 1) {
+    } else if (activeTab === 'products') {
       fetchProductSales();
-    } else if (activeTab === 2) {
+    } else if (activeTab === 'inventory') {
       fetchInventoryData();
     }
   }, [activeTab, startDate, endDate, groupBy, categoryFilter, topProductsLimit, showLowStock]);
@@ -259,7 +234,7 @@ const Reports: React.FC = () => {
     datasets: [
       {
         label: 'Sales',
-        data: salesSummary.summary.map((item: any) => parseFloat(item.total)),
+        data: salesSummary.summary.map((item) => parseFloat(item.total)),
         borderColor: 'rgba(75, 192, 192, 1)',
         backgroundColor: 'rgba(75, 192, 192, 0.2)',
         tension: 0.4,
@@ -285,7 +260,7 @@ const Reports: React.FC = () => {
   const getInventoryCategoryData = () => {
     const categoryMap = new Map();
     
-    inventoryData.inventory.forEach((item: any) => {
+    inventoryData.inventory.forEach((item) => {
       const category = item.category || 'Uncategorized';
       if (categoryMap.has(category)) {
         categoryMap.set(category, categoryMap.get(category) + 1);
@@ -315,554 +290,579 @@ const Reports: React.FC = () => {
   };
   
   return (
-    <Box>
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h4" gutterBottom>
-          Reports
-        </Typography>
-        
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<PrintIcon />}
-          onClick={generatePdfReport}
-          disabled={loading}
-        >
-          Generate PDF Report
-        </Button>
-      </Box>
+    <Container fluid className="py-4">
+      <Row className="mb-4 align-items-center">
+        <Col>
+          <h2 className="mb-3">Reports</h2>
+        </Col>
+        <Col xs="auto">
+          <Button 
+            variant="primary"
+            onClick={generatePdfReport}
+            disabled={loading}
+            className="d-flex align-items-center"
+          >
+            <Printer className="me-2" /> Generate PDF Report
+          </Button>
+        </Col>
+      </Row>
       
-      <Paper sx={{ mb: 4 }}>
-        <Tabs
-          value={activeTab}
-          onChange={handleTabChange}
-          indicatorColor="primary"
-          textColor="primary"
-          variant="fullWidth"
-        >
-          <Tab label="Sales Summary" icon={<SummarizeIcon />} iconPosition="start" />
-          <Tab label="Product Sales" icon={<BarChartIcon />} iconPosition="start" />
-          <Tab label="Inventory Status" icon={<DownloadIcon />} iconPosition="start" />
-        </Tabs>
+      <Card className="mb-4">
+        <Card.Header>
+          <Nav variant="tabs" 
+            activeKey={activeTab} 
+            onSelect={(key) => key && setActiveTab(key)}
+            className="flex-nowrap"
+          >
+            <Nav.Item>
+              <Nav.Link eventKey="sales" className="d-flex align-items-center">
+                <FileEarmarkText className="me-2" /> Sales Summary
+              </Nav.Link>
+            </Nav.Item>
+            <Nav.Item>
+              <Nav.Link eventKey="products" className="d-flex align-items-center">
+                <BarChart className="me-2" /> Product Sales
+              </Nav.Link>
+            </Nav.Item>
+            <Nav.Item>
+              <Nav.Link eventKey="inventory" className="d-flex align-items-center">
+                <Download className="me-2" /> Inventory Status
+              </Nav.Link>
+            </Nav.Item>
+          </Nav>
+        </Card.Header>
         
-        {/* Date Range Selector */}
-        <Box sx={{ p: 2, borderTop: 1, borderColor: 'divider' }}>
-          <LocalizationProvider dateAdapter={AdapterDateFns}>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-              <Box sx={{ width: { xs: '100%', md: '23%' } }}>
+        <Card.Body>
+          {/* Date Range Selector */}
+          <Row className="g-3 mb-4">
+            <Col md={6} lg={3}>
+              <Form.Group>
+                <Form.Label>Start Date</Form.Label>
                 <DatePicker
-                  label="Start Date"
-                  value={startDate}
-                  onChange={setStartDate}
-                  slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+                  selected={startDate}
+                  onChange={date => date && setStartDate(date)}
+                  className="form-control"
+                  dateFormat="MM/dd/yyyy"
                 />
-              </Box>
-              
-              <Box sx={{ width: { xs: '100%', md: '23%' } }}>
+              </Form.Group>
+            </Col>
+            
+            <Col md={6} lg={3}>
+              <Form.Group>
+                <Form.Label>End Date</Form.Label>
                 <DatePicker
-                  label="End Date"
-                  value={endDate}
-                  onChange={setEndDate}
-                  slotProps={{ textField: { fullWidth: true, size: 'small' } }}
+                  selected={endDate}
+                  onChange={date => date && setEndDate(date)}
+                  className="form-control"
+                  dateFormat="MM/dd/yyyy"
                 />
-              </Box>
-              
-              {activeTab === 0 && (
-                <Box sx={{ width: { xs: '100%', md: '23%' } }}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="group-by-label">Group By</InputLabel>
-                    <Select
-                      labelId="group-by-label"
-                      id="group-by"
-                      value={groupBy}
-                      label="Group By"
-                      onChange={(e) => setGroupBy(e.target.value as 'day' | 'week' | 'month')}
+              </Form.Group>
+            </Col>
+            
+            {activeTab === 'sales' && (
+              <Col md={6} lg={3}>
+                <Form.Group>
+                  <Form.Label>Group By</Form.Label>
+                  <Form.Select
+                    value={groupBy}
+                    onChange={(e) => setGroupBy(e.target.value as 'day' | 'week' | 'month')}
+                  >
+                    <option value="day">Day</option>
+                    <option value="week">Week</option>
+                    <option value="month">Month</option>
+                  </Form.Select>
+                </Form.Group>
+              </Col>
+            )}
+            
+            {activeTab === 'products' && (
+              <>
+                <Col md={6} lg={3}>
+                  <Form.Group>
+                    <Form.Label>Category</Form.Label>
+                    <Form.Select
+                      value={categoryFilter}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
                     >
-                      <MenuItem value="day">Day</MenuItem>
-                      <MenuItem value="week">Week</MenuItem>
-                      <MenuItem value="month">Month</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Box>
-              )}
-              
-              {activeTab === 1 && (
-                <>
-                  <Box sx={{ width: { xs: '100%', md: '23%' } }}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel id="category-filter-label">Category</InputLabel>
-                      <Select
-                        labelId="category-filter-label"
-                        id="category-filter"
-                        value={categoryFilter}
-                        label="Category"
-                        onChange={(e) => setCategoryFilter(e.target.value)}
-                      >
-                        <MenuItem value="">All Categories</MenuItem>
-                        {categories.map((category) => (
-                          <MenuItem key={category.id} value={category.id}>
-                            {category.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Box>
-                  
-                  <Box sx={{ width: { xs: '100%', md: '23%' } }}>
-                    <TextField
-                      fullWidth
-                      label="Top Products Limit"
+                      <option value="">All Categories</option>
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
+                
+                <Col md={6} lg={3}>
+                  <Form.Group>
+                    <Form.Label>Top Products Limit</Form.Label>
+                    <Form.Control
                       type="number"
-                      size="small"
                       value={topProductsLimit}
                       onChange={(e) => setTopProductsLimit(Math.max(1, parseInt(e.target.value) || 10))}
-                      InputProps={{ inputProps: { min: 1, max: 100 } }}
+                      min={1}
+                      max={100}
                     />
-                  </Box>
-                </>
-              )}
-              
-              {activeTab === 2 && (
-                <>
-                  <Box sx={{ width: { xs: '100%', md: '23%' } }}>
-                    <FormControl fullWidth size="small">
-                      <InputLabel id="category-filter-label">Category</InputLabel>
-                      <Select
-                        labelId="category-filter-label"
-                        id="category-filter"
-                        value={categoryFilter}
-                        label="Category"
-                        onChange={(e) => setCategoryFilter(e.target.value)}
-                      >
-                        <MenuItem value="">All Categories</MenuItem>
-                        {categories.map((category) => (
-                          <MenuItem key={category.id} value={category.id}>
-                            {category.name}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                    </FormControl>
-                  </Box>
-                  
-                  <Box sx={{ width: { xs: '100%', md: '23%' } }}>
-                    <Button
-                      fullWidth
-                      variant={showLowStock ? "contained" : "outlined"}
-                      color={showLowStock ? "warning" : "primary"}
-                      onClick={() => setShowLowStock(!showLowStock)}
+                  </Form.Group>
+                </Col>
+              </>
+            )}
+            
+            {activeTab === 'inventory' && (
+              <>
+                <Col md={6} lg={3}>
+                  <Form.Group>
+                    <Form.Label>Category</Form.Label>
+                    <Form.Select
+                      value={categoryFilter}
+                      onChange={(e) => setCategoryFilter(e.target.value)}
                     >
-                      {showLowStock ? "All Stock" : "Low Stock Only"}
-                    </Button>
-                  </Box>
-                </>
-              )}
-            </Box>
-          </LocalizationProvider>
-        </Box>
-      </Paper>
-      
-      {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-          <CircularProgress />
-        </Box>
-      ) : (
-        <>
-          {/* Sales Summary Tab */}
-          <TabPanel value={activeTab} index={0}>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-              <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 66.66%' } }}>
-                <Paper sx={{ p: 3 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Sales Trend
-                  </Typography>
-                  <Divider sx={{ mb: 2 }} />
-                  
-                  {salesSummary.summary.length > 0 ? (
-                    <Box sx={{ height: 400 }}>
-                      <Line
-                        data={salesChartData}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: {
-                              position: 'top',
-                            },
-                            title: {
-                              display: false,
-                            },
-                          },
-                          scales: {
-                            y: {
-                              beginAtZero: true,
-                              title: {
-                                display: true,
-                                text: 'Sales Amount (Rs.)'
-                              }
-                            },
-                          },
-                        }}
-                      />
-                    </Box>
-                  ) : (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 300 }}>
-                      <Typography variant="body1" color="text.secondary">
-                        No sales data available for the selected period
-                      </Typography>
-                    </Box>
-                  )}
-                </Paper>
-              </Box>
-              
-              <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 33.33%' } }}>
-                <Paper sx={{ p: 3 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Summary
-                  </Typography>
-                  <Divider sx={{ mb: 2 }} />
-                  
-                  <TableContainer>
-                    <Table size="small">
-                      <TableBody>
-                        <TableRow>
-                          <TableCell>Date Range</TableCell>
-                          <TableCell align="right">
-                            {startDate?.toLocaleDateString()} - {endDate?.toLocaleDateString()}
-                          </TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell>Total Sales</TableCell>
-                          <TableCell align="right">
-                            {salesSummary.totals?.totalSales || 0}
-                          </TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell>Subtotal</TableCell>
-                          <TableCell align="right">
-                            Rs. {parseFloat(salesSummary.totals?.subtotal || 0).toFixed(2)}
-                          </TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell>Discount</TableCell>
-                          <TableCell align="right">
-                            Rs. {parseFloat(salesSummary.totals?.discount || 0).toFixed(2)}
-                          </TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell>Tax</TableCell>
-                          <TableCell align="right">
-                            Rs. {parseFloat(salesSummary.totals?.tax || 0).toFixed(2)}
-                          </TableCell>
-                        </TableRow>
-                        <TableRow>
-                          <TableCell sx={{ fontWeight: 'bold' }}>Total Revenue</TableCell>
-                          <TableCell align="right" sx={{ fontWeight: 'bold' }}>
-                            Rs. {parseFloat(salesSummary.totals?.total || 0).toFixed(2)}
-                          </TableCell>
-                        </TableRow>
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Paper>
+                      <option value="">All Categories</option>
+                      {categories.map((category) => (
+                        <option key={category.id} value={category.id}>
+                          {category.name}
+                        </option>
+                      ))}
+                    </Form.Select>
+                  </Form.Group>
+                </Col>
                 
-                <Paper sx={{ p: 3, mt: 3 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Sales by Day
-                  </Typography>
-                  <Divider sx={{ mb: 2 }} />
-                  
-                  <TableContainer sx={{ maxHeight: 400 }}>
-                    <Table size="small" stickyHeader>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Date</TableCell>
-                          <TableCell align="right">Sales</TableCell>
-                          <TableCell align="right">Amount</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
+                <Col md={6} lg={3}>
+                  <Form.Group>
+                    <Form.Label>&nbsp;</Form.Label>
+                    <div className="d-grid">
+                      <Button
+                        variant={showLowStock ? "warning" : "outline-primary"}
+                        onClick={() => setShowLowStock(!showLowStock)}
+                        className="w-100"
+                      >
+                        {showLowStock ? "All Stock" : "Low Stock Only"}
+                      </Button>
+                    </div>
+                  </Form.Group>
+                </Col>
+              </>
+            )}
+          </Row>
+          
+          {loading ? (
+            <div className="text-center py-5">
+              <Spinner animation="border" role="status" variant="primary">
+                <span className="visually-hidden">Loading...</span>
+              </Spinner>
+            </div>
+          ) : (
+            <>
+              {/* Sales Summary Tab */}
+              {activeTab === 'sales' && (
+                <Row className="g-4">
+                  <Col lg={8}>
+                    <Card className="h-100">
+                      <Card.Body>
+                        <h5 className="card-title mb-3">Sales Trend</h5>
+                        <hr className="mb-4" />
+                        
                         {salesSummary.summary.length > 0 ? (
-                          salesSummary.summary.map((item: any, index: number) => (
-                            <TableRow key={index}>
-                              <TableCell>
-                                {groupBy === 'day'
-                                  ? formatDate(item.date)
-                                  : groupBy === 'week'
-                                  ? `Week of ${formatDate(item.date)}`
-                                  : new Date(item.date).toLocaleString('default', { month: 'long', year: 'numeric' })}
-                              </TableCell>
-                              <TableCell align="right">{item.totalSales}</TableCell>
-                              <TableCell align="right">Rs. {parseFloat(item.total).toFixed(2)}</TableCell>
-                            </TableRow>
-                          ))
+                          <div style={{ height: 400 }}>
+                            <Line
+                              data={salesChartData}
+                              options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                  legend: {
+                                    position: 'top',
+                                  },
+                                  title: {
+                                    display: false,
+                                  },
+                                },
+                                scales: {
+                                  y: {
+                                    beginAtZero: true,
+                                    title: {
+                                      display: true,
+                                      text: 'Sales Amount (Rs.)'
+                                    }
+                                  },
+                                },
+                              }}
+                            />
+                          </div>
                         ) : (
-                          <TableRow>
-                            <TableCell colSpan={3} align="center">
-                              No data available
-                            </TableCell>
-                          </TableRow>
+                          <div className="text-center d-flex justify-content-center align-items-center h-100">
+                            <p className="text-muted">
+                              No sales data available for the selected period
+                            </p>
+                          </div>
                         )}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Paper>
-              </Box>
-            </Box>
-          </TabPanel>
-          
-          {/* Product Sales Tab */}
-          <TabPanel value={activeTab} index={1}>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-              <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 66.66%' } }}>
-                <Paper sx={{ p: 3 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Top {topProductsLimit} Products by Sales
-                  </Typography>
-                  <Divider sx={{ mb: 2 }} />
+                      </Card.Body>
+                    </Card>
+                  </Col>
                   
-                  {productSales.length > 0 ? (
-                    <Box sx={{ height: 400 }}>
-                      <Bar
-                        data={productSalesChartData}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: {
-                              display: false,
-                            },
-                          },
-                          scales: {
-                            y: {
-                              beginAtZero: true,
-                              title: {
-                                display: true,
-                                text: 'Quantity Sold'
-                              }
-                            },
-                            x: {
-                              ticks: {
-                                maxRotation: 45,
-                                minRotation: 45
-                              }
-                            }
-                          },
-                        }}
-                      />
-                    </Box>
-                  ) : (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 300 }}>
-                      <Typography variant="body1" color="text.secondary">
-                        No product sales data available for the selected period
-                      </Typography>
-                    </Box>
-                  )}
-                </Paper>
-              </Box>
+                  <Col lg={4}>
+                    <Card className="mb-4">
+                      <Card.Body>
+                        <h5 className="card-title mb-3">Summary</h5>
+                        <hr className="mb-4" />
+                        
+                        <Table hover size="sm" responsive>
+                          <tbody>
+                            <tr>
+                              <td>Date Range</td>
+                              <td className="text-end">
+                                {startDate?.toLocaleDateString()} - {endDate?.toLocaleDateString()}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>Total Sales</td>
+                              <td className="text-end">
+                                {salesSummary.totals?.totalSales || 0}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>Subtotal</td>
+                              <td className="text-end">
+                                Rs. {parseFloat(salesSummary.totals?.subtotal || 0).toFixed(2)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>Discount</td>
+                              <td className="text-end">
+                                Rs. {parseFloat(salesSummary.totals?.discount || 0).toFixed(2)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>Tax</td>
+                              <td className="text-end">
+                                Rs. {parseFloat(salesSummary.totals?.tax || 0).toFixed(2)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="fw-bold">Total Revenue</td>
+                              <td className="text-end fw-bold">
+                                Rs. {parseFloat(salesSummary.totals?.total || 0).toFixed(2)}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </Table>
+                      </Card.Body>
+                    </Card>
+                    
+                    <Card>
+                      <Card.Body>
+                        <h5 className="card-title mb-3">Sales by Day</h5>
+                        <hr className="mb-4" />
+                        
+                        <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+                          <Table hover size="sm" responsive>
+                            <thead className="sticky-top bg-white">
+                              <tr>
+                                <th>Date</th>
+                                <th className="text-end">Sales</th>
+                                <th className="text-end">Amount</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {salesSummary.summary.length > 0 ? (
+                                salesSummary.summary.map((item, index) => (
+                                  <tr key={index}>
+                                    <td>
+                                      {groupBy === 'day'
+                                        ? formatDate(item.date)
+                                        : groupBy === 'week'
+                                        ? `Week of ${formatDate(item.date)}`
+                                        : new Date(item.date).toLocaleString('default', { month: 'long', year: 'numeric' })}
+                                    </td>
+                                    <td className="text-end">{item.totalSales}</td>
+                                    <td className="text-end">Rs. {parseFloat(item.total).toFixed(2)}</td>
+                                  </tr>
+                                ))
+                              ) : (
+                                <tr>
+                                  <td colSpan={3} className="text-center">
+                                    No data available
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </Table>
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+              )}
               
-              <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 33.33%' } }}>
-                <Paper sx={{ p: 3 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Product Sales Details
-                  </Typography>
-                  <Divider sx={{ mb: 2 }} />
-                  
-                  <TableContainer sx={{ maxHeight: 400 }}>
-                    <Table size="small" stickyHeader>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Product</TableCell>
-                          <TableCell>Category</TableCell>
-                          <TableCell align="right">Quantity</TableCell>
-                          <TableCell align="right">Revenue</TableCell>
-                          <TableCell align="right">Profit</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
+              {/* Product Sales Tab */}
+              {activeTab === 'products' && (
+                <Row className="g-4">
+                  <Col lg={7}>
+                    <Card className="h-100">
+                      <Card.Body>
+                        <h5 className="card-title mb-3">Top {topProductsLimit} Products by Sales</h5>
+                        <hr className="mb-4" />
+                        
                         {productSales.length > 0 ? (
-                          productSales.map((product, index) => (
-                            <TableRow key={index}>
-                              <TableCell>{product.name}</TableCell>
-                              <TableCell>{product.category}</TableCell>
-                              <TableCell align="right">{product.quantitySold}</TableCell>
-                              <TableCell align="right">Rs. {product.totalRevenue}</TableCell>
-                              <TableCell align="right">
-                                Rs. {product.profit} ({product.profitMargin})
-                              </TableCell>
-                            </TableRow>
-                          ))
+                          <div style={{ height: 400 }}>
+                            <Bar
+                              data={productSalesChartData}
+                              options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                  legend: {
+                                    display: false,
+                                  },
+                                },
+                                scales: {
+                                  y: {
+                                    beginAtZero: true,
+                                    title: {
+                                      display: true,
+                                      text: 'Quantity Sold'
+                                    }
+                                  },
+                                  x: {
+                                    ticks: {
+                                      maxRotation: 45,
+                                      minRotation: 45
+                                    }
+                                  }
+                                },
+                              }}
+                            />
+                          </div>
                         ) : (
-                          <TableRow>
-                            <TableCell colSpan={5} align="center">
-                              No data available
-                            </TableCell>
-                          </TableRow>
+                          <div className="text-center d-flex justify-content-center align-items-center h-100">
+                            <p className="text-muted">
+                              No product sales data available for the selected period
+                            </p>
+                          </div>
                         )}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Paper>
-              </Box>
-            </Box>
-          </TabPanel>
-          
-          {/* Inventory Status Tab */}
-          <TabPanel value={activeTab} index={2}>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-              <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 50%' } }}>
-                <Paper sx={{ p: 3 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Inventory Summary
-                  </Typography>
-                  <Divider sx={{ mb: 2 }} />
+                      </Card.Body>
+                    </Card>
+                  </Col>
                   
-                  <Card sx={{ mb: 2 }}>
-                    <CardContent>
-                      <Typography variant="h4" align="center" color="primary" gutterBottom>
-                        {inventoryData.summary?.totalProducts || 0}
-                      </Typography>
-                      <Typography variant="body2" align="center" color="text.secondary">
-                        Total Products
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card sx={{ mb: 2 }}>
-                    <CardContent>
-                      <Typography variant="h4" align="center" color="primary" gutterBottom>
-                        {inventoryData.summary?.totalItems || 0}
-                      </Typography>
-                      <Typography variant="body2" align="center" color="text.secondary">
-                        Total Items in Stock
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card sx={{ mb: 2 }}>
-                    <CardContent>
-                      <Typography variant="h4" align="center" color="primary" gutterBottom>
-                        Rs. {parseFloat(inventoryData.summary?.totalValue || 0).toFixed(2)}
-                      </Typography>
-                      <Typography variant="body2" align="center" color="text.secondary">
-                        Total Inventory Value
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                  
-                  <Card sx={{ mb: 2 }}>
-                    <CardContent>
-                      <Typography variant="h4" align="center" color="error" gutterBottom>
-                        {inventoryData.summary?.lowStockItems || 0}
-                      </Typography>
-                      <Typography variant="body2" align="center" color="text.secondary">
-                        Low Stock Items
-                      </Typography>
-                    </CardContent>
-                  </Card>
-                  
-                  {inventoryData.inventory.length > 0 && (
-                    <Box sx={{ mt: 3, height: 300 }}>
-                      <Typography variant="subtitle1" gutterBottom>
-                        Category Distribution
-                      </Typography>
-                      <Pie
-                        data={getInventoryCategoryData()}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: {
-                              position: 'right',
-                            },
-                          },
-                        }}
-                      />
-                    </Box>
-                  )}
-                </Paper>
-              </Box>
+                  <Col lg={5}>
+                    <Card>
+                      <Card.Body>
+                        <h5 className="card-title mb-3">Product Sales Details</h5>
+                        <hr className="mb-4" />
+                        
+                        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
+                          <Table hover size="sm" responsive>
+                            <thead className="sticky-top bg-white">
+                              <tr>
+                                <th>Product</th>
+                                <th>Category</th>
+                                <th className="text-end">Quantity</th>
+                                <th className="text-end">Revenue</th>
+                                <th className="text-end">Profit</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {productSales.length > 0 ? (
+                                productSales.map((product, index) => (
+                                  <tr key={index}>
+                                    <td>{product.name}</td>
+                                    <td>{product.category}</td>
+                                    <td className="text-end">{product.quantitySold}</td>
+                                    <td className="text-end">Rs. {product.totalRevenue}</td>
+                                    <td className="text-end">
+                                      Rs. {product.profit} ({product.profitMargin})
+                                    </td>
+                                  </tr>
+                                ))
+                              ) : (
+                                <tr>
+                                  <td colSpan={5} className="text-center">
+                                    No data available
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </Table>
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+              )}
               
-              <Box sx={{ flex: { xs: '1 1 100%', md: '1 1 50%' } }}>
-                <Paper sx={{ p: 3 }}>
-                  <Typography variant="h6" gutterBottom>
-                    Inventory Details
-                  </Typography>
-                  <Divider sx={{ mb: 2 }} />
-                  
-                  <TableContainer sx={{ maxHeight: 600 }}>
-                    <Table size="small" stickyHeader>
-                      <TableHead>
-                        <TableRow>
-                          <TableCell>Product</TableCell>
-                          <TableCell>Barcode</TableCell>
-                          <TableCell>Category</TableCell>
-                          <TableCell align="right">Stock</TableCell>
-                          <TableCell align="right">Reorder Level</TableCell>
-                          <TableCell align="right">Value</TableCell>
-                          <TableCell>Status</TableCell>
-                        </TableRow>
-                      </TableHead>
-                      <TableBody>
-                        {inventoryData.inventory.length > 0 ? (
-                          inventoryData.inventory.map((item: any, index: number) => (
-                            <TableRow key={index}>
-                              <TableCell>{item.name}</TableCell>
-                              <TableCell>{item.barcode}</TableCell>
-                              <TableCell>{item.category}</TableCell>
-                              <TableCell align="right">{item.stockQuantity}</TableCell>
-                              <TableCell align="right">{item.reorderLevel}</TableCell>
-                              <TableCell align="right">Rs. {item.value}</TableCell>
-                              <TableCell>
-                                <Typography
-                                  variant="body2"
-                                  color={item.stockStatus === 'Low' ? 'error' : 'success.main'}
-                                >
-                                  {item.stockStatus}
-                                </Typography>
-                              </TableCell>
-                            </TableRow>
-                          ))
-                        ) : (
-                          <TableRow>
-                            <TableCell colSpan={7} align="center">
-                              No data available
-                            </TableCell>
-                          </TableRow>
+              {/* Inventory Status Tab */}
+              {activeTab === 'inventory' && (
+                <Row className="g-4">
+                  <Col lg={5}>
+                    <Card className="mb-4">
+                      <Card.Body>
+                        <h5 className="card-title mb-3">Inventory Summary</h5>
+                        <hr className="mb-4" />
+                        
+                        <Row className="g-3 mb-4">
+                          <Col sm={6}>
+                            <Card className="h-100 bg-light">
+                              <Card.Body className="text-center py-3">
+                                <h3 className="text-primary mb-1">
+                                  {inventoryData.summary?.totalProducts || 0}
+                                </h3>
+                                <p className="text-muted small mb-0">Total Products</p>
+                              </Card.Body>
+                            </Card>
+                          </Col>
+                          
+                          <Col sm={6}>
+                            <Card className="h-100 bg-light">
+                              <Card.Body className="text-center py-3">
+                                <h3 className="text-primary mb-1">
+                                  {inventoryData.summary?.totalItems || 0}
+                                </h3>
+                                <p className="text-muted small mb-0">Total Items in Stock</p>
+                              </Card.Body>
+                            </Card>
+                          </Col>
+                          
+                          <Col sm={6}>
+                            <Card className="h-100 bg-light">
+                              <Card.Body className="text-center py-3">
+                                <h3 className="text-primary mb-1">
+                                  Rs. {parseFloat(inventoryData.summary?.totalValue || 0).toFixed(2)}
+                                </h3>
+                                <p className="text-muted small mb-0">Total Inventory Value</p>
+                              </Card.Body>
+                            </Card>
+                          </Col>
+                          
+                          <Col sm={6}>
+                            <Card className="h-100 bg-light">
+                              <Card.Body className="text-center py-3">
+                                <h3 className="text-danger mb-1">
+                                  {inventoryData.summary?.lowStockItems || 0}
+                                </h3>
+                                <p className="text-muted small mb-0">Low Stock Items</p>
+                              </Card.Body>
+                            </Card>
+                          </Col>
+                        </Row>
+                        
+                        {inventoryData.inventory.length > 0 && (
+                          <div className="mt-4">
+                            <h6 className="mb-3">Category Distribution</h6>
+                            <div style={{ height: 300 }}>
+                              <Pie
+                                data={getInventoryCategoryData()}
+                                options={{
+                                  responsive: true,
+                                  maintainAspectRatio: false,
+                                  plugins: {
+                                    legend: {
+                                      position: 'right',
+                                      labels: {
+                                        boxWidth: 15,
+                                        font: { size: 11 }
+                                      }
+                                    },
+                                  },
+                                }}
+                              />
+                            </div>
+                          </div>
                         )}
-                      </TableBody>
-                    </Table>
-                  </TableContainer>
-                </Paper>
-              </Box>
-            </Box>
-          </TabPanel>
-        </>
-      )}
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                  
+                  <Col lg={7}>
+                    <Card>
+                      <Card.Body>
+                        <h5 className="card-title mb-3">Inventory Details</h5>
+                        <hr className="mb-4" />
+                        
+                        <div style={{ maxHeight: 600, overflowY: 'auto' }}>
+                          <Table hover size="sm" responsive>
+                            <thead className="sticky-top bg-white">
+                              <tr>
+                                <th>Product</th>
+                                <th>Barcode</th>
+                                <th>Category</th>
+                                <th className="text-end">Stock</th>
+                                <th className="text-end">Reorder Level</th>
+                                <th className="text-end">Value</th>
+                                <th>Status</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {inventoryData.inventory.length > 0 ? (
+                                inventoryData.inventory.map((item, index) => (
+                                  <tr key={index}>
+                                    <td>{item.name}</td>
+                                    <td>{item.barcode}</td>
+                                    <td>{item.category}</td>
+                                    <td className="text-end">{item.stockQuantity}</td>
+                                    <td className="text-end">{item.reorderLevel}</td>
+                                    <td className="text-end">Rs. {item.value}</td>
+                                    <td>
+                                      <span className={`badge ${item.stockStatus === 'Low' ? 'bg-danger' : 'bg-success'}`}>
+                                        {item.stockStatus}
+                                      </span>
+                                    </td>
+                                  </tr>
+                                ))
+                              ) : (
+                                <tr>
+                                  <td colSpan={7} className="text-center">
+                                    No data available
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </Table>
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+              )}
+            </>
+          )}
+        </Card.Body>
+      </Card>
       
       {/* Error and Success Messages */}
-      <Snackbar
-        open={!!error}
-        autoHideDuration={6000}
-        onClose={() => setError(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setError(null)} severity="error">
-          {error}
-        </Alert>
-      </Snackbar>
-      
-      <Snackbar
-        open={!!successMessage}
-        autoHideDuration={6000}
-        onClose={() => setSuccessMessage(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setSuccessMessage(null)} severity="success">
-          {successMessage}
-        </Alert>
-      </Snackbar>
-    </Box>
+      <ToastContainer position="bottom-center" className="p-3">
+        {error && (
+          <Toast 
+            onClose={() => setError(null)} 
+            show={!!error} 
+            delay={6000} 
+            autohide 
+            bg="danger"
+          >
+            <Toast.Header closeButton>
+              <strong className="me-auto">Error</strong>
+            </Toast.Header>
+            <Toast.Body className="text-white">{error}</Toast.Body>
+          </Toast>
+        )}
+        
+        {successMessage && (
+          <Toast 
+            onClose={() => setSuccessMessage(null)} 
+            show={!!successMessage} 
+            delay={6000} 
+            autohide 
+            bg="success"
+          >
+            <Toast.Header closeButton>
+              <strong className="me-auto">Success</strong>
+            </Toast.Header>
+            <Toast.Body className="text-white">{successMessage}</Toast.Body>
+          </Toast>
+        )}
+      </ToastContainer>
+    </Container>
   );
 };
 
-export default Reports; 
+export default Reports;

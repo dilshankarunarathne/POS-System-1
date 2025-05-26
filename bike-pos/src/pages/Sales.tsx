@@ -1,52 +1,27 @@
+import React, { useEffect, useState } from 'react';
 import {
-  CheckCircle as CheckCircleIcon,
-  Close as CloseIcon,
-  FilterList as FilterListIcon,
-  Print as PrintIcon,
-  Refresh as RefreshIcon,
-  Search as SearchIcon,
-  ShoppingBag as ShoppingBagIcon,
-} from '@mui/icons-material';
-import {
-  Alert,
-  Box,
+  Badge,
   Button,
   Card,
-  CardContent,
-  Chip,
-  CircularProgress,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Divider,
-  FormControl,
-  IconButton,
-  InputAdornment,
-  InputLabel,
-  List,
-  ListItem,
-  ListItemText,
-  MenuItem,
-  Paper,
-  Select,
-  Snackbar,
+  Col,
+  Container,
+  Form,
+  InputGroup,
+  Modal,
+  Row,
+  Spinner,
   Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TablePagination,
-  TableRow,
-  TextField,
-  Toolbar,
-  Tooltip,
-  Typography
-} from '@mui/material';
-import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
-import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
-import React, { useEffect, useState } from 'react';
+  Toast,
+  ToastContainer
+} from 'react-bootstrap';
+import {
+  ArrowRepeat,
+  Bag,
+  CheckCircleFill,
+  Funnel,
+  Printer,
+  Search
+} from 'react-bootstrap-icons';
 import { printApi, salesApi } from '../services/api';
 
 // Define Sales types
@@ -124,6 +99,21 @@ const Sales: React.FC = () => {
     if (!date) return undefined;
     return date.toISOString().split('T')[0];
   };
+
+  // Format date for HTML date input (YYYY-MM-DD)
+  const formatDateForInput = (date: Date | null) => {
+    if (!date) return '';
+    return date.toISOString().split('T')[0];
+  };
+  
+  // Convert string from date input to Date object
+  const handleDateChange = (dateString: string, setter: React.Dispatch<React.SetStateAction<Date | null>>) => {
+    if (!dateString) {
+      setter(null);
+      return;
+    }
+    setter(new Date(dateString));
+  };
   
   // Fetch sales from API
   const fetchSales = async () => {
@@ -151,13 +141,13 @@ const Sales: React.FC = () => {
   };
   
   // Handle page change
-  const handleChangePage = (event: unknown, newPage: number) => {
-    setPage(newPage);
+  const handleChangePage = (pageNumber: number) => {
+    setPage(pageNumber);
   };
   
   // Handle rows per page change
-  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
-    setRowsPerPage(parseInt(event.target.value, 10));
+  const handleChangeRowsPerPage = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    setRowsPerPage(parseInt(e.target.value, 10));
     setPage(0);
   };
   
@@ -257,527 +247,519 @@ const Sales: React.FC = () => {
     return method.replace('_', ' ').toUpperCase();
   };
   
-  // Get status chip color
-  const getStatusChipColor = (status: string) => {
+  // Get status badge variant
+  const getStatusBadgeVariant = (status: string) => {
     switch (status) {
       case 'completed':
         return 'success';
       case 'returned':
         return 'warning';
       case 'cancelled':
-        return 'error';
+        return 'danger';
       default:
-        return 'default';
+        return 'secondary';
     }
   };
   
+  // Calculate pagination
+  const totalPages = Math.ceil(totalSales / rowsPerPage);
+  const paginationItems = [];
+  
+  for (let i = 0; i < totalPages; i++) {
+    paginationItems.push(
+      <li key={i} className={`page-item ${page === i ? 'active' : ''}`}>
+        <button className="page-link" onClick={() => handleChangePage(i)}>
+          {i + 1}
+        </button>
+      </li>
+    );
+  }
+  
   return (
-    <Box>
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h4" gutterBottom>
-          Sales
-        </Typography>
-        
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<ShoppingBagIcon />}
-          onClick={() => window.location.href = '/pos'}
-        >
-          New Sale
-        </Button>
-      </Box>
+    <Container fluid className="px-4">
+      <Row className="mb-4 align-items-center">
+        <Col>
+          <h2 className="mb-0">Sales</h2>
+        </Col>
+        <Col xs="auto">
+          <Button 
+            variant="primary" 
+            href="/pos"
+            className="d-flex align-items-center"
+          >
+            <Bag className="me-2" /> New Sale
+          </Button>
+        </Col>
+      </Row>
       
       {/* Filters */}
-      <Paper sx={{ mb: 4, p: 2 }}>
-        <Toolbar sx={{ pl: { sm: 2 }, pr: { xs: 1, sm: 1 } }}>
-          <Typography
-            sx={{ flex: '1 1 100%' }}
-            variant="h6"
-            id="tableTitle"
-            component="div"
-          >
-            Filters
-          </Typography>
-          
-          <Tooltip title="Filter list">
-            <IconButton>
-              <FilterListIcon />
-            </IconButton>
-          </Tooltip>
-        </Toolbar>
-        
-        <LocalizationProvider dateAdapter={AdapterDateFns}>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
-            <Box sx={{ width: { xs: '100%', sm: '50%', md: '16.66%' } }}>
-              <DatePicker
-                label="Start Date"
-                value={startDate}
-                onChange={setStartDate}
-                slotProps={{ textField: { fullWidth: true, size: 'small' } }}
-              />
-            </Box>
+      <Card className="mb-4 shadow-sm">
+        <Card.Header className="bg-light d-flex justify-content-between align-items-center">
+          <h5 className="mb-0">Filters</h5>
+          <Funnel />
+        </Card.Header>
+        <Card.Body>
+          <Row className="g-3">
+            <Col xs={12} md={6} lg={2}>
+              <Form.Group>
+                <Form.Label>Start Date</Form.Label>
+                <Form.Control
+                  type="date"
+                  value={formatDateForInput(startDate)}
+                  onChange={(e) => handleDateChange(e.target.value, setStartDate)}
+                />
+              </Form.Group>
+            </Col>
             
-            <Box sx={{ width: { xs: '100%', sm: '50%', md: '16.66%' } }}>
-              <DatePicker
-                label="End Date"
-                value={endDate}
-                onChange={setEndDate}
-                slotProps={{ textField: { fullWidth: true, size: 'small' } }}
-              />
-            </Box>
+            <Col xs={12} md={6} lg={2}>
+              <Form.Group>
+                <Form.Label>End Date</Form.Label>
+                <Form.Control
+                  type="date"
+                  value={formatDateForInput(endDate)}
+                  onChange={(e) => handleDateChange(e.target.value, setEndDate)}
+                />
+              </Form.Group>
+            </Col>
             
-            <Box sx={{ width: { xs: '100%', sm: '50%', md: '16.66%' } }}>
-              <FormControl fullWidth size="small">
-                <InputLabel id="payment-method-filter-label">Payment Method</InputLabel>
-                <Select
-                  labelId="payment-method-filter-label"
-                  id="payment-method-filter"
-                  value={paymentMethodFilter}
-                  label="Payment Method"
-                  onChange={(e) => setPaymentMethodFilter(e.target.value)}
-                >
-                  <MenuItem value="">All Methods</MenuItem>
-                  <MenuItem value="cash">Cash</MenuItem>
-                  <MenuItem value="credit_card">Credit Card</MenuItem>
-                  <MenuItem value="debit_card">Debit Card</MenuItem>
-                  <MenuItem value="mobile_payment">Mobile Payment</MenuItem>
-                  <MenuItem value="other">Other</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
+            <Col xs={12} md={6} lg={2}>
+              <Form.Select
+                value={paymentMethodFilter}
+                onChange={(e) => setPaymentMethodFilter(e.target.value)}
+              >
+                <option value="">All Payment Methods</option>
+                <option value="cash">Cash</option>
+                <option value="credit_card">Credit Card</option>
+                <option value="debit_card">Debit Card</option>
+                <option value="mobile_payment">Mobile Payment</option>
+                <option value="other">Other</option>
+              </Form.Select>
+            </Col>
             
-            <Box sx={{ width: { xs: '100%', sm: '50%', md: '16.66%' } }}>
-              <FormControl fullWidth size="small">
-                <InputLabel id="status-filter-label">Status</InputLabel>
-                <Select
-                  labelId="status-filter-label"
-                  id="status-filter"
-                  value={statusFilter}
-                  label="Status"
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                >
-                  <MenuItem value="">All Statuses</MenuItem>
-                  <MenuItem value="completed">Completed</MenuItem>
-                  <MenuItem value="returned">Returned</MenuItem>
-                  <MenuItem value="cancelled">Cancelled</MenuItem>
-                </Select>
-              </FormControl>
-            </Box>
+            <Col xs={12} md={6} lg={2}>
+              <Form.Select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="">All Statuses</option>
+                <option value="completed">Completed</option>
+                <option value="returned">Returned</option>
+                <option value="cancelled">Cancelled</option>
+              </Form.Select>
+            </Col>
             
-            <Box sx={{ width: { xs: '100%', sm: '50%', md: '16.66%' } }}>
-              <TextField
-                fullWidth
-                label="Search Invoice #"
-                variant="outlined"
-                size="small"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                InputProps={{
-                  startAdornment: (
-                    <InputAdornment position="start">
-                      <SearchIcon />
-                    </InputAdornment>
-                  ),
-                }}
-              />
-            </Box>
+            <Col xs={12} md={6} lg={2}>
+              <InputGroup>
+                <InputGroup.Text>
+                  <Search size={16} />
+                </InputGroup.Text>
+                <Form.Control
+                  placeholder="Search Invoice #"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </InputGroup>
+            </Col>
             
-            <Box sx={{ width: { xs: '100%', sm: '50%', md: '16.66%' } }}>
+            <Col xs={12} md={6} lg={2}>
               <Button
-                fullWidth
-                variant="outlined"
-                startIcon={<RefreshIcon />}
+                variant="outline-secondary"
+                className="w-100 d-flex align-items-center justify-content-center"
                 onClick={handleResetFilters}
               >
-                Reset Filters
+                <ArrowRepeat className="me-2" /> Reset
               </Button>
-            </Box>
-          </Box>
-        </LocalizationProvider>
-      </Paper>
+            </Col>
+          </Row>
+        </Card.Body>
+      </Card>
       
       {/* Sales Table */}
-      <Paper>
-        <TableContainer>
-          <Table sx={{ minWidth: 650 }} aria-label="sales table">
-            <TableHead>
-              <TableRow>
-                <TableCell>Invoice #</TableCell>
-                <TableCell>Date</TableCell>
-                <TableCell>Customer</TableCell>
-                <TableCell>Payment Method</TableCell>
-                <TableCell>Amount</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
+      <Card className="shadow-sm">
+        <Card.Body className="p-0">
+          <div className="table-responsive">
+            <Table hover>
+              <thead className="table-light">
+                <tr>
+                  <th>Invoice #</th>
+                  <th>Date</th>
+                  <th>Customer</th>
+                  <th>Payment Method</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-4">
+                      <Spinner animation="border" variant="primary" />
+                    </td>
+                  </tr>
+                ) : sales.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-4">
+                      No sales found
+                    </td>
+                  </tr>
+                ) : (
+                  sales.map((sale) => (
+                    <tr 
+                      key={sale.id} 
+                      onClick={() => handleOpenDetailDialog(sale.id)}
+                      style={{ cursor: 'pointer' }}
+                    >
+                      <td>{sale.invoiceNumber}</td>
+                      <td>{formatDate(sale.date)}</td>
+                      <td>{sale.customerName || 'Walk-in Customer'}</td>
+                      <td>{formatPaymentMethod(sale.paymentMethod)}</td>
+                      <td>Rs. {sale.total.toFixed(2)}</td>
+                      <td>
+                        <Badge bg={getStatusBadgeVariant(sale.status)}>
+                          {sale.status.toUpperCase()}
+                        </Badge>
+                      </td>
+                      <td>
+                        <Button
+                          variant="outline-primary"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handlePrintReceipt(sale.id);
+                          }}
+                        >
+                          <Printer size={16} />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </Table>
+          </div>
+          
+          {/* Pagination */}
+          <div className="d-flex justify-content-between align-items-center p-3 border-top">
+            <div>
+              <Form.Select
+                style={{ width: 'auto' }}
+                value={rowsPerPage}
+                onChange={handleChangeRowsPerPage}
+              >
+                {[5, 10, 25, 50].map(size => (
+                  <option key={size} value={size}>
+                    {size} rows
+                  </option>
+                ))}
+              </Form.Select>
+            </div>
             
-            <TableBody>
-              {loading ? (
-                <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
-                    <CircularProgress />
-                  </TableCell>
-                </TableRow>
-              ) : sales.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={7} align="center" sx={{ py: 3 }}>
-                    No sales found
-                  </TableCell>
-                </TableRow>
-              ) : (
-                sales.map((sale) => (
-                  <TableRow key={sale.id} hover onClick={() => handleOpenDetailDialog(sale.id)} sx={{ cursor: 'pointer' }}>
-                    <TableCell>{sale.invoiceNumber}</TableCell>
-                    <TableCell>{formatDate(sale.date)}</TableCell>
-                    <TableCell>{sale.customerName || 'Walk-in Customer'}</TableCell>
-                    <TableCell>{formatPaymentMethod(sale.paymentMethod)}</TableCell>
-                    <TableCell>Rs. {sale.total.toFixed(2)}</TableCell>
-                    <TableCell>
-                      <Chip
-                        label={sale.status.toUpperCase()}
-                        color={getStatusChipColor(sale.status)}
-                        size="small"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <IconButton
-                        size="small"
-                        color="primary"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handlePrintReceipt(sale.id);
-                        }}
-                      >
-                        <PrintIcon />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </TableContainer>
-        
-        <TablePagination
-          rowsPerPageOptions={[5, 10, 25, 50]}
-          component="div"
-          count={totalSales}
-          rowsPerPage={rowsPerPage}
-          page={page}
-          onPageChange={handleChangePage}
-          onRowsPerPageChange={handleChangeRowsPerPage}
-        />
-      </Paper>
+            <nav>
+              <ul className="pagination mb-0">
+                <li className={`page-item ${page === 0 ? 'disabled' : ''}`}>
+                  <button 
+                    className="page-link" 
+                    onClick={() => handleChangePage(page - 1)}
+                    disabled={page === 0}
+                  >
+                    Previous
+                  </button>
+                </li>
+                {paginationItems}
+                <li className={`page-item ${page === totalPages - 1 ? 'disabled' : ''}`}>
+                  <button 
+                    className="page-link" 
+                    onClick={() => handleChangePage(page + 1)}
+                    disabled={page === totalPages - 1}
+                  >
+                    Next
+                  </button>
+                </li>
+              </ul>
+            </nav>
+          </div>
+        </Card.Body>
+      </Card>
       
-      {/* Sale Detail Dialog */}
-      <Dialog
-        open={detailDialogOpen}
-        onClose={handleCloseDetailDialog}
-        fullWidth
-        maxWidth="md"
+      {/* Sale Detail Modal */}
+      <Modal 
+        show={detailDialogOpen} 
+        onHide={handleCloseDetailDialog}
+        size="lg"
       >
-        <DialogTitle>
-          Sale Details - {selectedSale?.invoiceNumber}
-          <IconButton
-            aria-label="close"
-            onClick={handleCloseDetailDialog}
-            sx={{ position: 'absolute', right: 8, top: 8 }}
-          >
-            <CloseIcon />
-          </IconButton>
-        </DialogTitle>
+        <Modal.Header closeButton>
+          <Modal.Title>
+            Sale Details - {selectedSale?.invoiceNumber}
+          </Modal.Title>
+        </Modal.Header>
         
-        <DialogContent>
+        <Modal.Body className="p-4">
           {selectedSale && (
-            <Box>
-              <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2 }}>
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="subtitle1" gutterBottom>
-                    Sale Information
-                  </Typography>
-                  
-                  <Card variant="outlined" sx={{ mb: 2 }}>
-                    <CardContent>
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-                        <Box sx={{ width: 'calc(50% - 8px)' }}>
-                          <Typography variant="body2" color="text.secondary">
-                            Invoice Number
-                          </Typography>
-                          <Typography variant="body1">
-                            {selectedSale.invoiceNumber}
-                          </Typography>
-                        </Box>
+            <>
+              <Row className="mb-4">
+                <Col md={6} className="mb-4 mb-md-0">
+                  <h5 className="mb-3">Sale Information</h5>
+                  <Card>
+                    <Card.Body>
+                      <Row className="g-3">
+                        <Col xs={6}>
+                          <p className="text-muted mb-1">Invoice Number</p>
+                          <p className="mb-0">{selectedSale.invoiceNumber}</p>
+                        </Col>
                         
-                        <Box sx={{ width: 'calc(50% - 8px)' }}>
-                          <Typography variant="body2" color="text.secondary">
-                            Date & Time
-                          </Typography>
-                          <Typography variant="body1">
-                            {formatDate(selectedSale.date)}
-                          </Typography>
-                        </Box>
+                        <Col xs={6}>
+                          <p className="text-muted mb-1">Date & Time</p>
+                          <p className="mb-0">{formatDate(selectedSale.date)}</p>
+                        </Col>
                         
-                        <Box sx={{ width: 'calc(50% - 8px)' }}>
-                          <Typography variant="body2" color="text.secondary">
-                            Cashier
-                          </Typography>
-                          <Typography variant="body1">
-                            {selectedSale.cashier.username}
-                          </Typography>
-                        </Box>
+                        <Col xs={6}>
+                          <p className="text-muted mb-1">Cashier</p>
+                          <p className="mb-0">{selectedSale.cashier.username}</p>
+                        </Col>
                         
-                        <Box sx={{ width: 'calc(50% - 8px)' }}>
-                          <Typography variant="body2" color="text.secondary">
-                            Status
-                          </Typography>
-                          <Chip
-                            label={selectedSale.status.toUpperCase()}
-                            color={getStatusChipColor(selectedSale.status)}
-                            size="small"
-                          />
-                        </Box>
+                        <Col xs={6}>
+                          <p className="text-muted mb-1">Status</p>
+                          <Badge bg={getStatusBadgeVariant(selectedSale.status)}>
+                            {selectedSale.status.toUpperCase()}
+                          </Badge>
+                        </Col>
                         
-                        <Box sx={{ width: 'calc(50% - 8px)' }}>
-                          <Typography variant="body2" color="text.secondary">
-                            Payment Method
-                          </Typography>
-                          <Typography variant="body1">
-                            {formatPaymentMethod(selectedSale.paymentMethod)}
-                          </Typography>
-                        </Box>
+                        <Col xs={6}>
+                          <p className="text-muted mb-1">Payment Method</p>
+                          <p className="mb-0">{formatPaymentMethod(selectedSale.paymentMethod)}</p>
+                        </Col>
                         
-                        <Box sx={{ width: 'calc(50% - 8px)' }}>
-                          <Typography variant="body2" color="text.secondary">
-                            Customer
-                          </Typography>
-                          <Typography variant="body1">
-                            {selectedSale.customerName || 'Walk-in Customer'}
-                          </Typography>
-                        </Box>
+                        <Col xs={6}>
+                          <p className="text-muted mb-1">Customer</p>
+                          <p className="mb-0">{selectedSale.customerName || 'Walk-in Customer'}</p>
+                        </Col>
                         
                         {selectedSale.customerPhone && (
-                          <Box sx={{ width: '100%' }}>
-                            <Typography variant="body2" color="text.secondary">
-                              Customer Phone
-                            </Typography>
-                            <Typography variant="body1">
-                              {selectedSale.customerPhone}
-                            </Typography>
-                          </Box>
+                          <Col xs={12}>
+                            <p className="text-muted mb-1">Customer Phone</p>
+                            <p className="mb-0">{selectedSale.customerPhone}</p>
+                          </Col>
                         )}
                         
                         {selectedSale.notes && (
-                          <Box sx={{ width: '100%' }}>
-                            <Typography variant="body2" color="text.secondary">
-                              Notes
-                            </Typography>
-                            <Typography variant="body1">
-                              {selectedSale.notes}
-                            </Typography>
-                          </Box>
+                          <Col xs={12}>
+                            <p className="text-muted mb-1">Notes</p>
+                            <p className="mb-0">{selectedSale.notes}</p>
+                          </Col>
                         )}
-                      </Box>
-                    </CardContent>
+                      </Row>
+                    </Card.Body>
                   </Card>
-                </Box>
+                </Col>
                 
-                <Box sx={{ flex: 1 }}>
-                  <Typography variant="subtitle1" gutterBottom>
-                    Sale Summary
-                  </Typography>
-                  
-                  <Card variant="outlined">
-                    <CardContent>
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                        <Typography variant="body1">Subtotal:</Typography>
-                        <Typography variant="body1">Rs. {selectedSale.subtotal.toFixed(2)}</Typography>
-                      </Box>
+                <Col md={6}>
+                  <h5 className="mb-3">Sale Summary</h5>
+                  <Card>
+                    <Card.Body>
+                      <div className="d-flex justify-content-between mb-2">
+                        <p className="mb-0">Subtotal:</p>
+                        <p className="mb-0">Rs. {selectedSale.subtotal.toFixed(2)}</p>
+                      </div>
                       
                       {selectedSale.discount > 0 && (
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                          <Typography variant="body1">Discount:</Typography>
-                          <Typography variant="body1">Rs. {selectedSale.discount.toFixed(2)}</Typography>
-                        </Box>
+                        <div className="d-flex justify-content-between mb-2">
+                          <p className="mb-0">Discount:</p>
+                          <p className="mb-0">Rs. {selectedSale.discount.toFixed(2)}</p>
+                        </div>
                       )}
                       
                       {selectedSale.tax > 0 && (
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-                          <Typography variant="body1">Tax:</Typography>
-                          <Typography variant="body1">Rs. {selectedSale.tax.toFixed(2)}</Typography>
-                        </Box>
+                        <div className="d-flex justify-content-between mb-2">
+                          <p className="mb-0">Tax:</p>
+                          <p className="mb-0">Rs. {selectedSale.tax.toFixed(2)}</p>
+                        </div>
                       )}
                       
-                      <Divider sx={{ my: 1 }} />
+                      <hr className="my-2" />
                       
-                      <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <Typography variant="h6">Total:</Typography>
-                        <Typography variant="h6">Rs. {selectedSale.total.toFixed(2)}</Typography>
-                      </Box>
-                    </CardContent>
+                      <div className="d-flex justify-content-between">
+                        <h5 className="mb-0">Total:</h5>
+                        <h5 className="mb-0">Rs. {selectedSale.total.toFixed(2)}</h5>
+                      </div>
+                    </Card.Body>
                   </Card>
                   
-                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between' }}>
-                    <Button
-                      variant="outlined"
-                      startIcon={<PrintIcon />}
+                  <div className="d-flex mt-3 justify-content-between">
+                    <Button 
+                      variant="outline-primary" 
+                      className="d-flex align-items-center"
                       onClick={() => handlePrintReceipt(selectedSale.id)}
                     >
-                      Print Receipt
+                      <Printer className="me-2" /> Print Receipt
                     </Button>
                     
                     {selectedSale.status === 'completed' && (
-                      <Button
-                        variant="outlined"
-                        color="warning"
+                      <Button 
+                        variant="outline-warning"
                         onClick={handleOpenReturnDialog}
                       >
                         Return Sale
                       </Button>
                     )}
-                  </Box>
-                </Box>
-              </Box>
+                  </div>
+                </Col>
+              </Row>
               
-              <Box sx={{ mt: 3 }}>
-                <Typography variant="subtitle1" gutterBottom>
-                  Sale Items
-                </Typography>
-                
-                <TableContainer component={Paper} variant="outlined">
-                  <Table size="small">
-                    <TableHead>
-                      <TableRow>
-                        <TableCell>Product</TableCell>
-                        <TableCell align="right">Price</TableCell>
-                        <TableCell align="right">Quantity</TableCell>
-                        <TableCell align="right">Discount</TableCell>
-                        <TableCell align="right">Subtotal</TableCell>
-                      </TableRow>
-                    </TableHead>
+              <h5 className="mb-3">Sale Items</h5>
+              <Card>
+                <div className="table-responsive">
+                  <Table hover size="sm" className="mb-0">
+                    <thead className="table-light">
+                      <tr>
+                        <th>Product</th>
+                        <th className="text-end">Price</th>
+                        <th className="text-end">Quantity</th>
+                        <th className="text-end">Discount</th>
+                        <th className="text-end">Subtotal</th>
+                      </tr>
+                    </thead>
                     
-                    <TableBody>
+                    <tbody>
                       {selectedSale.SaleItems?.map((item) => (
-                        <TableRow key={item.id}>
-                          <TableCell>
-                            <Typography variant="body2">{item.Product.name}</Typography>
-                            <Typography variant="caption" color="text.secondary">
-                              {item.Product.barcode}
-                            </Typography>
-                          </TableCell>
-                          <TableCell align="right">Rs. {item.unitPrice.toFixed(2)}</TableCell>
-                          <TableCell align="right">{item.quantity}</TableCell>
-                          <TableCell align="right">
+                        <tr key={item.id}>
+                          <td>
+                            <p className="mb-0">{item.Product.name}</p>
+                            <small className="text-muted">{item.Product.barcode}</small>
+                          </td>
+                          <td className="text-end">Rs. {item.unitPrice.toFixed(2)}</td>
+                          <td className="text-end">{item.quantity}</td>
+                          <td className="text-end">
                             {item.discount > 0 ? `Rs. ${item.discount.toFixed(2)}` : '-'}
-                          </TableCell>
-                          <TableCell align="right">Rs. {item.subtotal.toFixed(2)}</TableCell>
-                        </TableRow>
+                          </td>
+                          <td className="text-end">Rs. {item.subtotal.toFixed(2)}</td>
+                        </tr>
                       ))}
-                    </TableBody>
+                    </tbody>
                   </Table>
-                </TableContainer>
-              </Box>
-            </Box>
+                </div>
+              </Card>
+            </>
           )}
-        </DialogContent>
-      </Dialog>
+        </Modal.Body>
+      </Modal>
       
       {/* Return Dialog */}
-      <Dialog
-        open={returnDialogOpen}
-        onClose={handleCloseReturnDialog}
-      >
-        <DialogTitle>Return Sale</DialogTitle>
-        <DialogContent>
-          <Typography gutterBottom>
-            Are you sure you want to return this sale? This will:
-          </Typography>
+      <Modal show={returnDialogOpen} onHide={handleCloseReturnDialog}>
+        <Modal.Header closeButton>
+          <Modal.Title>Return Sale</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>Are you sure you want to return this sale? This will:</p>
           
-          <List dense>
-            <ListItem>
-              <ListItemText primary="• Mark the sale as returned" />
-            </ListItem>
-            <ListItem>
-              <ListItemText primary="• Add all sold items back to inventory" />
-            </ListItem>
-            <ListItem>
-              <ListItemText primary="• This action cannot be undone" />
-            </ListItem>
-          </List>
+          <ul className="ps-4">
+            <li>Mark the sale as returned</li>
+            <li>Add all sold items back to inventory</li>
+            <li>This action cannot be undone</li>
+          </ul>
           
-          <TextField
-            margin="dense"
-            label="Return Reason"
-            fullWidth
-            variant="outlined"
-            multiline
-            rows={3}
-            value={returnReason}
-            onChange={(e) => setReturnReason(e.target.value)}
-            required
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseReturnDialog}>Cancel</Button>
-          <Button
-            onClick={handleProcessReturn}
-            color="warning"
-            variant="contained"
-            disabled={processingReturn || !returnReason.trim()}
-            startIcon={processingReturn ? <CircularProgress size={20} /> : <CheckCircleIcon />}
-          >
-            {processingReturn ? 'Processing...' : 'Confirm Return'}
+          <Form.Group className="mt-3">
+            <Form.Label>Return Reason <span className="text-danger">*</span></Form.Label>
+            <Form.Control
+              as="textarea"
+              rows={3}
+              value={returnReason}
+              onChange={(e) => setReturnReason(e.target.value)}
+              required
+            />
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleCloseReturnDialog}>
+            Cancel
           </Button>
-        </DialogActions>
-      </Dialog>
+          <Button
+            variant="warning"
+            disabled={processingReturn || !returnReason.trim()}
+            onClick={handleProcessReturn}
+            className="d-flex align-items-center"
+          >
+            {processingReturn ? (
+              <>
+                <Spinner
+                  as="span"
+                  animation="border"
+                  size="sm"
+                  role="status"
+                  aria-hidden="true"
+                  className="me-2"
+                />
+                Processing...
+              </>
+            ) : (
+              <>
+                <CheckCircleFill className="me-2" /> Confirm Return
+              </>
+            )}
+          </Button>
+        </Modal.Footer>
+      </Modal>
       
       {/* Receipt Dialog */}
-      <Dialog
-        open={receiptDialogOpen}
-        onClose={() => setReceiptDialogOpen(false)}
+      <Modal
+        show={receiptDialogOpen}
+        onHide={() => setReceiptDialogOpen(false)}
       >
-        <DialogTitle>Receipt</DialogTitle>
-        <DialogContent>
-          <Box sx={{ display: 'flex', justifyContent: 'center', my: 2 }}>
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<PrintIcon />}
-              onClick={() => window.open(`http://localhost:5000${receiptUrl}`, '_blank')}
-            >
-              Open Receipt PDF
-            </Button>
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setReceiptDialogOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
+        <Modal.Header closeButton>
+          <Modal.Title>Receipt</Modal.Title>
+        </Modal.Header>
+        <Modal.Body className="text-center py-4">
+          <Button
+            variant="primary"
+            className="d-flex align-items-center mx-auto"
+            onClick={() => window.open(`http://localhost:5000${receiptUrl}`, '_blank')}
+          >
+            <Printer className="me-2" /> Open Receipt PDF
+          </Button>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setReceiptDialogOpen(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
       
-      {/* Error and Success Messages */}
-      <Snackbar
-        open={!!error}
-        autoHideDuration={6000}
-        onClose={() => setError(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setError(null)} severity="error">
-          {error}
-        </Alert>
-      </Snackbar>
-      
-      <Snackbar
-        open={!!successMessage}
-        autoHideDuration={6000}
-        onClose={() => setSuccessMessage(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setSuccessMessage(null)} severity="success">
-          {successMessage}
-        </Alert>
-      </Snackbar>
-    </Box>
+      {/* Toast notifications */}
+      <ToastContainer position="bottom-end" className="p-3">
+        {error && (
+          <Toast 
+            onClose={() => setError(null)} 
+            show={!!error} 
+            delay={6000} 
+            autohide 
+            bg="danger"
+            className="text-white"
+          >
+            <Toast.Header>
+              <strong className="me-auto">Error</strong>
+            </Toast.Header>
+            <Toast.Body>{error}</Toast.Body>
+          </Toast>
+        )}
+        
+        {successMessage && (
+          <Toast 
+            onClose={() => setSuccessMessage(null)} 
+            show={!!successMessage} 
+            delay={3000} 
+            autohide
+            bg="success"
+            className="text-white"
+          >
+            <Toast.Header>
+              <strong className="me-auto">Success</strong>
+            </Toast.Header>
+            <Toast.Body>{successMessage}</Toast.Body>
+          </Toast>
+        )}
+      </ToastContainer>
+    </Container>
   );
 };
 

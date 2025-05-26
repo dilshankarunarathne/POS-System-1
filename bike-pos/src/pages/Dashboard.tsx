@@ -1,30 +1,4 @@
 import {
-  ArrowForward as ArrowForwardIcon,
-  CalendarToday as CalendarIcon,
-  Inventory as ProductsIcon,
-  ShoppingCart,
-  TrendingUp as TrendingUpIcon,
-  Warning as WarningIcon,
-} from '@mui/icons-material';
-
-import {
-  Alert,
-  Avatar,
-  Box,
-  Button,
-  Card,
-  CardActions,
-  CardContent,
-  CircularProgress,
-  Divider,
-  List,
-  ListItem,
-  ListItemAvatar,
-  ListItemText,
-  Paper,
-  Typography
-} from '@mui/material';
-import {
   ArcElement,
   BarElement,
   CategoryScale,
@@ -37,6 +11,26 @@ import {
   Tooltip
 } from 'chart.js';
 import React, { useEffect, useState } from 'react';
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Col,
+  Container,
+  ProgressBar,
+  Row,
+  Spinner,
+  Table
+} from 'react-bootstrap';
+import {
+  Award,
+  BoxSeam,
+  Calendar,
+  Cart,
+  CurrencyDollar,
+  GraphUp
+} from 'react-bootstrap-icons';
 import { Bar, Line } from 'react-chartjs-2';
 import { useNavigate } from 'react-router-dom';
 import { productsApi, reportsApi } from '../services/api';
@@ -170,343 +164,382 @@ const Dashboard: React.FC = () => {
   };
   
   return (
-    <Box>
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h4" gutterBottom>
-          Dashboard
-        </Typography>
-        
-        <Box>
+    <Container fluid className="dashboard-container py-4 px-3 px-md-4">
+      <Row className="mb-4 align-items-center">
+        <Col>
+          <h4 className="fw-bold mb-0">Dashboard</h4>
+          <p className="text-muted mb-0">Overview of your store performance</p>
+        </Col>
+        <Col xs="auto">
           <Button 
-            variant="contained" 
-            color="primary" 
-            startIcon={<ShoppingCart />}
-            sx={{ mr: 2 }}
+            variant="primary" 
+            size="lg"
+            className="d-flex align-items-center shadow-sm"
             onClick={() => navigate('/pos')}
           >
-            New Sale
+            <Cart className="me-2" /> New Sale
           </Button>
-        </Box>
-      </Box>
+        </Col>
+      </Row>
       
       {loading ? (
-        <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-          <CircularProgress />
-        </Box>
+        <div className="text-center py-5">
+          <Spinner animation="border" variant="primary" />
+          <p className="mt-3 text-muted">Loading dashboard data...</p>
+        </div>
       ) : error ? (
-        <Alert severity="error" sx={{ mb: 4 }}>
-          {error}
+        <Alert variant="danger" className="mb-4 shadow-sm">
+          <Alert.Heading>Error Loading Data</Alert.Heading>
+          <p className="mb-0">{error}</p>
         </Alert>
       ) : (
         <>
           {/* Quick Stats */}
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 4 }}>
+          <Row className="g-4 mb-4">
             {/* Stat Card 1 */}
-            <Box sx={{ flex: '1 1 250px', minWidth: '250px' }}>
-              <Paper
-                elevation={2}
-                sx={{
-                  p: 2,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  bgcolor: 'primary.light',
-                  color: 'white',
-                  height: '100%',
-                }}
-              >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography variant="h6" gutterBottom>
-                      Total Sales
-                    </Typography>
-                    <Typography variant="h4">
-                      Rs. {salesData.totals?.total || '0.00'}
-                    </Typography>
-                  </Box>
-                  <Avatar sx={{ bgcolor: 'primary.dark' }}>
-                    <ShoppingCart />
-                  </Avatar>
-                </Box>
-                <Typography variant="body2" sx={{ mt: 2 }}>
-                  Last 7 days
-                </Typography>
-              </Paper>
-            </Box>
+            <Col lg={3} md={6} sm={6} xs={12}>
+              <Card className="h-100 shadow-sm border-0 stat-card">
+                <Card.Body className="p-3">
+                  <div className="d-flex justify-content-between">
+                    <div>
+                      <Card.Title as="h6" className="text-muted mb-1">Total Sales</Card.Title>
+                      <h3 className="mb-0 fw-bold">Rs. {salesData.totals?.total || '0.00'}</h3>
+                      <Badge bg="success" className="mt-2">Last 7 days</Badge>
+                    </div>
+                    <div className="rounded-circle d-flex align-items-center justify-content-center stat-icon-bg primary-icon">
+                      <CurrencyDollar size={22} />
+                    </div>
+                  </div>
+                  {salesData.summary.length > 1 && 
+                    <div className="mt-3">
+                      <small className="text-success">
+                        <GraphUp className="me-1" /> 
+                        {((salesData.summary[salesData.summary.length-1]?.total / 
+                          salesData.summary[salesData.summary.length-2]?.total - 1) * 100).toFixed(1)}% vs previous day
+                      </small>
+                    </div>
+                  }
+                </Card.Body>
+              </Card>
+            </Col>
             
             {/* Stat Card 2 */}
-            <Box sx={{ flex: '1 1 250px', minWidth: '250px' }}>
-              <Paper
-                elevation={2}
-                sx={{
-                  p: 2,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  bgcolor: 'success.light',
-                  color: 'white',
-                  height: '100%',
-                }}
-              >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography variant="h6" gutterBottom>
-                      Transactions
-                    </Typography>
-                    <Typography variant="h4">
-                      {salesData.totals?.totalSales || 0}
-                    </Typography>
-                  </Box>
-                  <Avatar sx={{ bgcolor: 'success.dark' }}>
-                    <CalendarIcon />
-                  </Avatar>
-                </Box>
-                <Typography variant="body2" sx={{ mt: 2 }}>
-                  Last 7 days
-                </Typography>
-              </Paper>
-            </Box>
+            <Col lg={3} md={6} sm={6} xs={12}>
+              <Card className="h-100 shadow-sm border-0 stat-card">
+                <Card.Body className="p-3">
+                  <div className="d-flex justify-content-between">
+                    <div>
+                      <Card.Title as="h6" className="text-muted mb-1">Transactions</Card.Title>
+                      <h3 className="mb-0 fw-bold">{salesData.totals?.totalSales || 0}</h3>
+                      <Badge bg="info" className="mt-2">Last 7 days</Badge>
+                    </div>
+                    <div className="rounded-circle d-flex align-items-center justify-content-center stat-icon-bg success-icon">
+                      <Calendar size={22} />
+                    </div>
+                  </div>
+                  <div className="mt-3">
+                    <small className="text-muted">
+                      Average: {salesData.totals?.totalSales ? 
+                        Math.round(salesData.totals.totalSales / 7) : 0} per day
+                    </small>
+                  </div>
+                </Card.Body>
+              </Card>
+            </Col>
             
             {/* Stat Card 3 */}
-            <Box sx={{ flex: '1 1 250px', minWidth: '250px' }}>
-              <Paper
-                elevation={2}
-                sx={{
-                  p: 2,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  bgcolor: 'warning.light',
-                  color: 'white',
-                  height: '100%',
-                }}
-              >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography variant="h6" gutterBottom>
-                      Low Stock
-                    </Typography>
-                    <Typography variant="h4">
-                      {lowStockProducts.length}
-                    </Typography>
-                  </Box>
-                  <Avatar sx={{ bgcolor: 'warning.dark' }}>
-                    <WarningIcon />
-                  </Avatar>
-                </Box>
-                <Typography variant="body2" sx={{ mt: 2 }}>
-                  Items below reorder level
-                </Typography>
-              </Paper>
-            </Box>
+            <Col lg={3} md={6} sm={6} xs={12}>
+              <Card className="h-100 shadow-sm border-0 stat-card">
+                <Card.Body className="p-3">
+                  <div className="d-flex justify-content-between">
+                    <div>
+                      <Card.Title as="h6" className="text-muted mb-1">Avg Sale Value</Card.Title>
+                      <h3 className="mb-0 fw-bold">
+                        Rs. {salesData.totals?.totalSales && salesData.totals.total ? 
+                          (salesData.totals.total / salesData.totals.totalSales).toFixed(2) : '0.00'}
+                      </h3>
+                      <Badge bg="warning" className="mt-2">Last 7 days</Badge>
+                    </div>
+                    <div className="rounded-circle d-flex align-items-center justify-content-center stat-icon-bg warning-icon">
+                      <Award size={22} />
+                    </div>
+                  </div>
+                </Card.Body>
+              </Card>
+            </Col>
             
             {/* Stat Card 4 */}
-            <Box sx={{ flex: '1 1 250px', minWidth: '250px' }}>
-              <Paper
-                elevation={2}
-                sx={{
-                  p: 2,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  bgcolor: 'secondary.light',
-                  color: 'white',
-                  height: '100%',
-                }}
-              >
-                <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <Box>
-                    <Typography variant="h6" gutterBottom>
-                      Revenue Trend
-                    </Typography>
-                    <Typography variant="h4">
-                      {salesData.summary.length > 1 ? 
-                        (salesData.summary[salesData.summary.length - 1]?.total > 
-                         salesData.summary[salesData.summary.length - 2]?.total 
-                           ? '↑' : '↓') 
-                        : '-'}
-                    </Typography>
-                  </Box>
-                  <Avatar sx={{ bgcolor: 'secondary.dark' }}>
-                    <TrendingUpIcon />
-                  </Avatar>
-                </Box>
-                <Typography variant="body2" sx={{ mt: 2 }}>
-                  Compared to previous day
-                </Typography>
-              </Paper>
-            </Box>
-          </Box>
+            <Col lg={3} md={6} sm={6} xs={12}>
+              <Card className="h-100 shadow-sm border-0 stat-card">
+                <Card.Body className="p-3">
+                  <div className="d-flex justify-content-between">
+                    <div>
+                      <Card.Title as="h6" className="text-muted mb-1">Low Stock Items</Card.Title>
+                      <h3 className="mb-0 fw-bold">{lowStockProducts.length}</h3>
+                      <Badge bg="danger" className="mt-2">Needs attention</Badge>
+                    </div>
+                    <div className="rounded-circle d-flex align-items-center justify-content-center stat-icon-bg danger-icon">
+                      <BoxSeam size={22} />
+                    </div>
+                  </div>
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
           
           {/* Charts */}
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, mb: 3 }}>
+          <Row className="mb-4 g-4">
             {/* Sales Trend Chart */}
-            <Box sx={{ flex: '3 1 500px' }}>
-              <Paper sx={{ p: 3, height: '100%' }}>
-                <Typography variant="h6" gutterBottom>
-                  Sales Trend
-                </Typography>
-                <Divider sx={{ mb: 2 }} />
-                
-                {salesData.summary.length > 0 ? (
-                  <Box sx={{ height: 300 }}>
-                    <Line
-                      data={salesChartData}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                          legend: {
-                            position: 'top' as const,
+            <Col lg={8} md={12}>
+              <Card className="h-100 shadow-sm border-0">
+                <Card.Body className="p-4">
+                  <Card.Title as="h5" className="mb-3">Sales Trend</Card.Title>
+                  
+                  {salesData.summary.length > 0 ? (
+                    <div style={{ height: '350px' }}>
+                      <Line
+                        data={salesChartData}
+                        options={{
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: {
+                              position: 'top',
+                            },
+                            title: {
+                              display: false,
+                            },
+                            tooltip: {
+                              backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                              displayColors: false,
+                              callbacks: {
+                                label: function(context) {
+                                  return `Rs. ${context.raw}`;
+                                }
+                              }
+                            }
                           },
-                          title: {
-                            display: false,
+                          scales: {
+                            y: {
+                              beginAtZero: true,
+                              grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                              }
+                            },
+                            x: {
+                              grid: {
+                                color: 'rgba(0, 0, 0, 0)'
+                              }
+                            }
                           },
-                        },
-                        scales: {
-                          y: {
-                            beginAtZero: true,
-                          },
-                        },
-                      }}
-                    />
-                  </Box>
-                ) : (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 300 }}>
-                    <Typography variant="body1" color="text.secondary">
-                      No sales data available
-                    </Typography>
-                  </Box>
-                )}
-              </Paper>
-            </Box>
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-center py-5">
+                      <p className="text-muted">No sales data available for the selected period</p>
+                    </div>
+                  )}
+                </Card.Body>
+              </Card>
+            </Col>
             
             {/* Top Selling Products Chart */}
-            <Box sx={{ flex: '1 1 300px' }}>
-              <Paper sx={{ p: 3, height: '100%' }}>
-                <Typography variant="h6" gutterBottom>
-                  Top Selling Products
-                </Typography>
-                <Divider sx={{ mb: 2 }} />
-                
-                {topProducts && Array.isArray(topProducts) && topProducts.length > 0 ? (
-                  <Box sx={{ height: 300 }}>
-                    <Bar
-                      data={categoryChartData}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                          legend: {
-                            display: false,
+            <Col lg={4} md={12}>
+              <Card className="h-100 shadow-sm border-0">
+                <Card.Body className="p-4">
+                  <Card.Title as="h5" className="mb-3">Top Selling Products</Card.Title>
+                  
+                  {topProducts.length > 0 ? (
+                    <div style={{ height: '350px' }}>
+                      <Bar
+                        data={categoryChartData}
+                        options={{
+                          indexAxis: 'y',
+                          responsive: true,
+                          maintainAspectRatio: false,
+                          plugins: {
+                            legend: {
+                              display: false,
+                            },
                           },
-                        },
-                        scales: {
-                          y: {
-                            beginAtZero: true,
+                          scales: {
+                            x: {
+                              beginAtZero: true,
+                              grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                              }
+                            },
+                            y: {
+                              grid: {
+                                display: false
+                              }
+                            }
                           },
-                        },
-                      }}
-                    />
-                  </Box>
-                ) : (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: 300 }}>
-                    <Typography variant="body1" color="text.secondary">
-                      No product data available
-                    </Typography>
-                  </Box>
-                )}
-              </Paper>
-            </Box>
-          </Box>
+                        }}
+                      />
+                    </div>
+                  ) : (
+                    <div className="text-center py-5">
+                      <p className="text-muted">No product sales data available</p>
+                    </div>
+                  )}
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
           
-          {/* Lower Cards */}
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
-            {/* Low Stock Items Card */}
-            <Box sx={{ flex: '1 1 400px' }}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Low Stock Items
-                  </Typography>
-                  <Divider sx={{ mb: 2 }} />
+          {/* Additional Dashboard Content */}
+          <Row className="g-4">
+            {/* Low Stock Products */}
+            <Col lg={6} md={12}>
+              <Card className="h-100 shadow-sm border-0">
+                <Card.Body className="p-4">
+                  <Card.Title as="h5" className="mb-3">Low Stock Alert</Card.Title>
                   
                   {lowStockProducts.length > 0 ? (
-                    <List sx={{ maxHeight: 300, overflow: 'auto' }}>
-                      {lowStockProducts.map((product) => (
-                        <ListItem
-                          key={product.id}
-                          secondaryAction={
-                            <Typography variant="body2" color="error">
-                              {product.stockQuantity} / {product.reorderLevel}
-                            </Typography>
-                          }
-                        >
-                          <ListItemAvatar>
-                            <Avatar sx={{ bgcolor: 'warning.light' }}>
-                              <ProductsIcon />
-                            </Avatar>
-                          </ListItemAvatar>
-                          <ListItemText
-                            primary={product.name}
-                            secondary={product.Category ? product.Category.name : 'Uncategorized'}
-                          />
-                        </ListItem>
-                      ))}
-                    </List>
+                    <div className="table-responsive">
+                      <Table hover className="mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th>Product</th>
+                            <th>Category</th>
+                            <th>Stock</th>
+                            <th>Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {lowStockProducts.map((product) => (
+                            <tr key={product.id}>
+                              <td>{product.name}</td>
+                              <td>{product.category}</td>
+                              <td>{product.stock}</td>
+                              <td>
+                                <ProgressBar 
+                                  now={product.stock / product.stockThreshold * 100} 
+                                  variant={product.stock <= product.stockThreshold / 2 ? "danger" : "warning"}
+                                  style={{ height: "8px" }}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </Table>
+                    </div>
                   ) : (
-                    <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                      <Typography variant="body1" color="text.secondary">
-                        No low stock items
-                      </Typography>
-                    </Box>
+                    <div className="text-center py-5">
+                      <p className="text-muted">No low stock products</p>
+                    </div>
                   )}
-                </CardContent>
-                <CardActions>
-                  <Button
-                    size="small"
-                    endIcon={<ArrowForwardIcon />}
-                    onClick={() => navigate('/products')}
+                </Card.Body>
+                <Card.Footer className="bg-white border-0 pt-0">
+                  <Button 
+                    variant="outline-primary" 
+                    size="sm"
+                    onClick={() => navigate('/inventory')}
                   >
-                    View All Products
+                    View All Inventory
                   </Button>
-                </CardActions>
+                </Card.Footer>
               </Card>
-            </Box>
+            </Col>
             
-            {/* Recent Sales Card */}
-            <Box sx={{ flex: '1 1 400px' }}>
-              <Card>
-                <CardContent>
-                  <Typography variant="h6" gutterBottom>
-                    Recent Sales
-                  </Typography>
-                  <Divider sx={{ mb: 2 }} />
+            {/* Recent Sales */}
+            <Col lg={6} md={12}>
+              <Card className="h-100 shadow-sm border-0">
+                <Card.Body className="p-4">
+                  <Card.Title as="h5" className="mb-3">Recent Sales</Card.Title>
                   
-                  <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      startIcon={<ShoppingCart />}
-                      onClick={() => navigate('/pos')}
-                      fullWidth
-                      sx={{ py: 1.5 }}
-                    >
-                      Start New Sale
-                    </Button>
-                  </Box>
-                </CardContent>
-                <CardActions>
-                  <Button
-                    size="small"
-                    endIcon={<ArrowForwardIcon />}
+                  {salesData.summary.length > 0 ? (
+                    <div className="table-responsive">
+                      <Table hover className="mb-0">
+                        <thead className="table-light">
+                          <tr>
+                            <th>Date</th>
+                            <th>Sales</th>
+                            <th>Items Sold</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {[...salesData.summary]
+                            .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+                            .slice(0, 5)
+                            .map((day, idx) => (
+                              <tr key={idx}>
+                                <td>{new Date(day.date).toLocaleDateString('en-US', { 
+                                  weekday: 'short', month: 'short', day: 'numeric' 
+                                })}</td>
+                                <td>Rs. {day.total}</td>
+                                <td>{day.itemCount || 0}</td>
+                              </tr>
+                            ))}
+                        </tbody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <div className="text-center py-5">
+                      <p className="text-muted">No recent sales data</p>
+                    </div>
+                  )}
+                </Card.Body>
+                <Card.Footer className="bg-white border-0 pt-0">
+                  <Button 
+                    variant="outline-primary" 
+                    size="sm"
                     onClick={() => navigate('/sales')}
                   >
                     View All Sales
                   </Button>
-                </CardActions>
+                </Card.Footer>
               </Card>
-            </Box>
-          </Box>
+            </Col>
+          </Row>
         </>
       )}
-    </Box>
+
+      {/* Add CSS for stat card icons */}
+      <style>{`
+        .dashboard-container {
+          background-color: #f8f9fa;
+          max-width: 100%;
+          width: 100%;
+        }
+        
+        .stat-card {
+          transition: transform 0.2s, box-shadow 0.2s;
+        }
+        
+        .stat-card:hover {
+          transform: translateY(-5px);
+          box-shadow: 0 0.5rem 1rem rgba(0,0,0,0.15) !important;
+        }
+        
+        .stat-icon-bg {
+          width: 48px;
+          height: 48px;
+        }
+        
+        .primary-icon {
+          background-color: rgba(13, 110, 253, 0.1);
+          color: #0d6efd;
+        }
+        
+        .success-icon {
+          background-color: rgba(25, 135, 84, 0.1);
+          color: #198754;
+        }
+        
+        .warning-icon {
+          background-color: rgba(255, 193, 7, 0.1);
+          color: #ffc107;
+        }
+        
+        .danger-icon {
+          background-color: rgba(220, 53, 69, 0.1);
+          color: #dc3545;
+        }
+      `}</style>
+    </Container>
   );
 };
 

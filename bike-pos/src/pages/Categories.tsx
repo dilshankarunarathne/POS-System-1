@@ -1,30 +1,22 @@
-import {
-    Add as AddIcon,
-    Delete as DeleteIcon,
-    Edit as EditIcon,
-} from '@mui/icons-material';
-import {
-    Alert,
-    Box,
-    Button,
-    CircularProgress,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    IconButton,
-    Paper,
-    Snackbar,
-    Table,
-    TableBody,
-    TableCell,
-    TableContainer,
-    TableHead,
-    TableRow,
-    TextField,
-    Typography,
-} from '@mui/material';
 import React, { useEffect, useState } from 'react';
+import {
+  Button,
+  Card,
+  Col,
+  Container,
+  Form,
+  Modal,
+  Row,
+  Spinner,
+  Table,
+  Toast,
+  ToastContainer
+} from 'react-bootstrap';
+import {
+  PlusLg as AddIcon,
+  Trash as DeleteIcon,
+  PencilSquare as EditIcon
+} from 'react-bootstrap-icons';
 import { categoriesApi } from '../services/api';
 
 interface Category {
@@ -147,166 +139,174 @@ const Categories: React.FC = () => {
   };
   
   return (
-    <Box>
-      <Box sx={{ mb: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Typography variant="h4" gutterBottom>
-          Categories
-        </Typography>
-        
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={() => handleOpenDialog()}
-        >
-          Add Category
-        </Button>
-      </Box>
+    <Container fluid>
+      <Row className="mb-4 align-items-center">
+        <Col>
+          <h4 className="mb-0">Categories</h4>
+        </Col>
+        <Col xs="auto">
+          <Button 
+            variant="primary" 
+            className="d-flex align-items-center" 
+            onClick={() => handleOpenDialog()}
+          >
+            <AddIcon className="me-2" /> Add Category
+          </Button>
+        </Col>
+      </Row>
       
-      <Paper>
-        <TableContainer>
-          <Table sx={{ minWidth: 650 }} aria-label="categories table">
-            <TableHead>
-              <TableRow>
-                <TableCell>Name</TableCell>
-                <TableCell>Description</TableCell>
-                <TableCell>Products</TableCell>
-                <TableCell>Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            
-            <TableBody>
+      <Card className="shadow-sm">
+        <Card.Body className="p-0">
+          <Table responsive hover className="mb-0">
+            <thead className="table-light">
+              <tr>
+                <th>Name</th>
+                <th>Description</th>
+                <th>Products</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
               {loading ? (
-                <TableRow>
-                  <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
-                    <CircularProgress />
-                  </TableCell>
-                </TableRow>
+                <tr>
+                  <td colSpan={4} className="text-center py-4">
+                    <Spinner animation="border" variant="primary" />
+                  </td>
+                </tr>
               ) : categories.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={4} align="center" sx={{ py: 3 }}>
+                <tr>
+                  <td colSpan={4} className="text-center py-4">
                     No categories found
-                  </TableCell>
-                </TableRow>
+                  </td>
+                </tr>
               ) : (
                 categories.map((category) => (
-                  <TableRow key={category.id}>
-                    <TableCell>{category.name}</TableCell>
-                    <TableCell>{category.description || '—'}</TableCell>
-                    <TableCell>
-                      {/* We could add product count here if the API supports it */}
-                      —
-                    </TableCell>
-                    <TableCell>
-                      <IconButton
-                        size="small"
-                        color="primary"
+                  <tr key={category.id}>
+                    <td>{category.name}</td>
+                    <td>{category.description || '—'}</td>
+                    <td>—</td>
+                    <td>
+                      <Button 
+                        variant="outline-primary" 
+                        size="sm" 
+                        className="me-2"
                         onClick={() => handleOpenDialog(category)}
                       >
-                        <EditIcon />
-                      </IconButton>
-                      
-                      <IconButton
-                        size="small"
-                        color="error"
+                        <EditIcon size={16} />
+                      </Button>
+                      <Button 
+                        variant="outline-danger" 
+                        size="sm"
                         onClick={() => handleOpenDeleteDialog(category)}
                       >
-                        <DeleteIcon />
-                      </IconButton>
-                    </TableCell>
-                  </TableRow>
+                        <DeleteIcon size={16} />
+                      </Button>
+                    </td>
+                  </tr>
                 ))
               )}
-            </TableBody>
+            </tbody>
           </Table>
-        </TableContainer>
-      </Paper>
+        </Card.Body>
+      </Card>
       
-      {/* Add/Edit Category Dialog */}
-      <Dialog open={dialogOpen} onClose={handleCloseDialog}>
-        <DialogTitle>
-          {selectedCategory ? 'Edit Category' : 'Add Category'}
-        </DialogTitle>
-        <DialogContent>
-          <Box component="form" sx={{ pt: 1 }}>
-            <TextField
-              autoFocus
-              margin="dense"
-              name="name"
-              label="Category Name"
-              type="text"
-              fullWidth
-              variant="outlined"
-              value={categoryForm.name}
-              onChange={handleFormChange}
-              required
-            />
+      {/* Add/Edit Category Modal */}
+      <Modal show={dialogOpen} onHide={handleCloseDialog}>
+        <Modal.Header closeButton>
+          <Modal.Title>
+            {selectedCategory ? 'Edit Category' : 'Add Category'}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form>
+            <Form.Group controlId="categoryName" className="mb-3">
+              <Form.Label>Category Name <span className="text-danger">*</span></Form.Label>
+              <Form.Control
+                type="text"
+                name="name"
+                value={categoryForm.name}
+                onChange={(e) => setCategoryForm({...categoryForm, name: e.target.value})}
+                required
+              />
+            </Form.Group>
             
-            <TextField
-              margin="dense"
-              name="description"
-              label="Description"
-              type="text"
-              fullWidth
-              variant="outlined"
-              value={categoryForm.description}
-              onChange={handleFormChange}
-              multiline
-              rows={3}
-            />
-          </Box>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDialog}>Cancel</Button>
-          <Button onClick={handleSaveCategory} variant="contained" color="primary">
+            <Form.Group controlId="categoryDescription">
+              <Form.Label>Description</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={3}
+                name="description"
+                value={categoryForm.description}
+                onChange={(e) => setCategoryForm({...categoryForm, description: e.target.value})}
+              />
+            </Form.Group>
+          </Form>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleCloseDialog}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={handleSaveCategory}>
             Save
           </Button>
-        </DialogActions>
-      </Dialog>
+        </Modal.Footer>
+      </Modal>
       
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={deleteDialogOpen} onClose={handleCloseDeleteDialog}>
-        <DialogTitle>Delete Category</DialogTitle>
-        <DialogContent>
-          <Typography>
-            Are you sure you want to delete the category: <strong>{selectedCategory?.name}</strong>?
-          </Typography>
-          <Typography variant="body2" color="error" sx={{ mt: 2 }}>
-            This may affect products assigned to this category.
-          </Typography>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDeleteDialog}>Cancel</Button>
-          <Button onClick={handleDeleteCategory} color="error" variant="contained">
+      {/* Delete Confirmation Modal */}
+      <Modal show={deleteDialogOpen} onHide={handleCloseDeleteDialog}>
+        <Modal.Header closeButton>
+          <Modal.Title>Delete Category</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <p>Are you sure you want to delete the category: <strong>{selectedCategory?.name}</strong>?</p>
+          <p className="text-danger">This may affect products assigned to this category.</p>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleCloseDeleteDialog}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={handleDeleteCategory}>
             Delete
           </Button>
-        </DialogActions>
-      </Dialog>
+        </Modal.Footer>
+      </Modal>
       
-      {/* Error and Success Messages */}
-      <Snackbar
-        open={!!error}
-        autoHideDuration={6000}
-        onClose={() => setError(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setError(null)} severity="error">
-          {error}
-        </Alert>
-      </Snackbar>
-      
-      <Snackbar
-        open={!!successMessage}
-        autoHideDuration={6000}
-        onClose={() => setSuccessMessage(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setSuccessMessage(null)} severity="success">
-          {successMessage}
-        </Alert>
-      </Snackbar>
-    </Box>
+      {/* Toast notifications */}
+      <ToastContainer position="bottom-end" className="p-3">
+        {error && (
+          <Toast 
+            onClose={() => setError(null)} 
+            show={!!error} 
+            delay={6000} 
+            autohide 
+            bg="danger"
+            className="text-white"
+          >
+            <Toast.Header>
+              <strong className="me-auto">Error</strong>
+            </Toast.Header>
+            <Toast.Body>{error}</Toast.Body>
+          </Toast>
+        )}
+        
+        {successMessage && (
+          <Toast 
+            onClose={() => setSuccessMessage(null)} 
+            show={!!successMessage} 
+            delay={3000} 
+            autohide
+            bg="success"
+            className="text-white"
+          >
+            <Toast.Header>
+              <strong className="me-auto">Success</strong>
+            </Toast.Header>
+            <Toast.Body>{successMessage}</Toast.Body>
+          </Toast>
+        )}
+      </ToastContainer>
+    </Container>
   );
 };
 
-export default Categories; 
+export default Categories;

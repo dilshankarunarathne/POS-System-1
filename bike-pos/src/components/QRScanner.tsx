@@ -1,6 +1,6 @@
-import { Alert, Box, Typography } from '@mui/material';
 import { Html5Qrcode } from 'html5-qrcode';
 import React, { useEffect, useRef, useState } from 'react';
+import { Alert, Container } from 'react-bootstrap';
 
 interface QRScannerProps {
   onScanSuccess: (productData: any) => void;
@@ -313,7 +313,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
   }, []); // Empty dependency array means this runs once on mount
 
   return (
-    <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+    <Container className="d-flex flex-column align-items-center p-0">
       <div 
         id="qr-reader" 
         style={{ 
@@ -324,22 +324,22 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
         }}
       ></div>
       
-      <Typography variant="body2" sx={{ mt: 2, textAlign: 'center' }}>
+      <p className="text-center mt-2">
         Position the QR code within the frame to scan
-      </Typography>
+      </p>
       
       {errorMessage && (
-        <Alert severity="error" sx={{ mt: 2, width: '100%', maxWidth: '500px' }}>
+        <Alert variant="danger" className="mt-2 w-100" style={{ maxWidth: '500px' }}>
           {errorMessage}
         </Alert>
       )}
       
       {scanning && (
-        <Typography variant="caption" color="textSecondary" sx={{ mt: 1, textAlign: 'center' }}>
+        <p className="text-muted text-center mt-1 small">
           Camera active. If scanning fails, try adjusting lighting or camera angle.
-        </Typography>
+        </p>
       )}
-    </Box>
+    </Container>
   );
 };
 

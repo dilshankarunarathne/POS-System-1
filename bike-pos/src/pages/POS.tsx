@@ -18,15 +18,13 @@ import {
 import {
   BsDash,
   BsPlus,
-  BsPrinter,
   BsSearch,
   BsTrash,
   BsX
 } from 'react-icons/bs';
 import QRScanner from '../components/QRScanner';
-import ReceiptPreview from '../components/ReceiptPreview';
 import { useAuth } from '../contexts/AuthContext';
-import { printApi, productsApi } from '../services/api';
+import { productsApi } from '../services/api';
 
 // Define Product type
 interface Product {
@@ -299,31 +297,47 @@ const POS: React.FC = () => {
     }
   };
 
+  
+
   // Add product to cart
   const addToCart = (product: Product) => {
+    console.log('addToCart called for:', product.name);
+    
+    // Use a function that receives the latest state to ensure we're working with the most current data
     setCartItems(prevItems => {
+      console.log('Previous cart items:', prevItems.length);
+      
       // Check if product is already in cart
       const existingItemIndex = prevItems.findIndex(
         item => item.product.id === product.id
       );
       
       if (existingItemIndex >= 0) {
+        // Get the most up-to-date item from the current state
+        const currentItem = prevItems[existingItemIndex];
+        console.log('Product exists, current quantity:', currentItem.quantity);
+        
         // Update quantity if already in cart
         const updatedItems = [...prevItems];
-        const item = updatedItems[existingItemIndex];
         
         // Check if we have enough stock
-        if (item.quantity >= product.stockQuantity) {
+        if (currentItem.quantity >= product.stockQuantity) {
           setError('Cannot add more of this product. Stock limit reached.');
           return prevItems;
         }
         
         // Only increment by 1
-        item.quantity = item.quantity + 1;
-        item.subtotal = item.quantity * product.price;
+        const newQuantity = currentItem.quantity + 1;
+        updatedItems[existingItemIndex] = {
+          ...currentItem,
+          quantity: newQuantity,
+          subtotal: newQuantity * product.price
+        };
         
+        console.log('New quantity:', newQuantity);
         return updatedItems;
       } else {
+        console.log('Adding new product to cart');
         // Add new item to cart
         return [
           ...prevItems,
@@ -449,8 +463,8 @@ const POS: React.FC = () => {
       
       // Handle successful sale
       if (response.data) {
-        // Set receipt data for preview
-        setReceiptData({
+        // Set receipt data for direct printing
+        const receiptDataForPrint: ReceiptData = {
           id: response.data.id,
           invoiceNumber: response.data.invoiceNumber || `INV-${Date.now()}`,
           date: new Date().toLocaleString(),
@@ -468,11 +482,10 @@ const POS: React.FC = () => {
           tax: cartTax,
           total: cartTotal,
           paymentMethod: paymentMethod
-        });
+        };
         
-        // Close checkout dialog and open receipt dialog
+        // Close checkout dialog
         setCheckoutDialogOpen(false);
-        setReceiptDialogOpen(true);
         
         // Reset cart and related data
         setCartItems([]);
@@ -482,6 +495,9 @@ const POS: React.FC = () => {
         setPaymentMethod('cash');
         
         setSuccessMessage('Sale completed successfully!');
+        
+        // Directly print receipt without showing the receipt dialog
+        directPrintReceipt(receiptDataForPrint);
       }
     } catch (err) {
       console.error('Error processing sale:', err);
@@ -491,113 +507,167 @@ const POS: React.FC = () => {
     }
   };
   
-  // Handle direct print to thermal printer
-  const handlePrintReceipt = async () => {
-    if (!receiptData) return;
-    
+  // Direct print receipt function (bypasses the receipt preview dialog)
+  const directPrintReceipt = async (receiptToPrint: ReceiptData) => {
     try {
       setPrintingReceipt(true);
+
+      // Create a hidden iframe for printing
+      const printIframe = document.createElement('iframe');
+      printIframe.style.position = 'fixed';
+      printIframe.style.right = '0';
+      printIframe.style.bottom = '0';
+      printIframe.style.width = '0';
+      printIframe.style.height = '0';
+      printIframe.style.border = 'none';
+      document.body.appendChild(printIframe);
       
-      // First approach: Direct browser printing using window.print()
-      // This works with properly configured thermal printers
-      if (receiptPreviewRef.current) {
-        const printWindow = window.open('', '_blank');
-        if (!printWindow) {
-          throw new Error('Could not open print window. Please allow pop-ups for this site.');
-        }
-        
-        // Create the print content with styles optimized for thermal printing
-        printWindow.document.write(`
-          <html>
-            <head>
-              <title>Print Receipt</title>
-              <style>
-                @page { 
-                  size: 80mm auto;  /* Standard thermal paper width */
-                  margin: 0mm; 
-                }
-                body { 
-                  font-family: monospace; 
-                  font-size: 12px; 
-                  width: 76mm; 
-                  margin: 2mm;
-                  -webkit-print-color-adjust: exact;
-                  print-color-adjust: exact;
-                }
-                .text-center { text-align: center; }
-                .mt-2 { margin-top: 8px; }
-                .mb-2 { margin-bottom: 8px; }
-                .pb-2 { padding-bottom: 8px; }
-                .fw-bold { font-weight: bold; }
-                hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
-                table { width: 100%; border-collapse: collapse; }
-                th, td { text-align: left; padding: 2px 0; }
-                .amount { text-align: right; }
-              </style>
-            </head>
-            <body>
-              ${receiptPreviewRef.current.innerHTML}
-            </body>
-          </html>
-        `);
-        
-        // Wait for content to load then print
-        printWindow.document.close();
-        printWindow.focus();
-        
-        // Use a slight delay to ensure content is loaded
-        setTimeout(() => {
-          printWindow.print();
-          printWindow.close();
-          setPrintingReceipt(false);
-        }, 500);
+      // Generate receipt HTML content
+      const receiptHtml = `
+        <html>
+          <head>
+            <title>Print Receipt</title>
+            <style>
+              @page { 
+                size: 80mm auto;  /* Standard thermal paper width */
+                margin: 0mm; 
+              }
+              body { 
+                font-family: monospace; 
+                font-size: 12px; 
+                width: 76mm; 
+                margin: 2mm;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              .text-center { text-align: center; }
+              hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
+              table { width: 100%; border-collapse: collapse; }
+            </style>
+          </head>
+          <body>
+            <div class="receipt" style="font-family: monospace; font-size: 12px; width: 76mm; margin: 2mm;">
+              <div class="text-center" style="text-align: center;">
+                <h3 style="margin: 4px 0;">RECEIPT</h3>
+                <p style="margin: 4px 0;">${receiptToPrint.date}</p>
+                <p style="margin: 4px 0;">Invoice: ${receiptToPrint.invoiceNumber}</p>
+              </div>
+              
+              <hr style="border: none; border-top: 1px dashed #000; margin: 8px 0;" />
+              
+              <div>
+                <p style="margin: 2px 0;">Customer: ${receiptToPrint.customer}</p>
+                <p style="margin: 2px 0;">Cashier: ${receiptToPrint.cashier}</p>
+              </div>
+              
+              <hr style="border: none; border-top: 1px dashed #000; margin: 8px 0;" />
+              
+              <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                  <tr>
+                    <th style="text-align: left; padding: 2px;">Item</th>
+                    <th style="text-align: center; padding: 2px;">Qty</th>
+                    <th style="text-align: right; padding: 2px;">Price</th>
+                    <th style="text-align: right; padding: 2px;">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${receiptToPrint.items.map(item => `
+                    <tr>
+                      <td style="text-align: left; padding: 2px;">${item.name}</td>
+                      <td style="text-align: center; padding: 2px;">${item.quantity}</td>
+                      <td style="text-align: right; padding: 2px;">Rs. ${item.price.toFixed(2)}</td>
+                      <td style="text-align: right; padding: 2px;">Rs. ${item.total.toFixed(2)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+              
+              <hr style="border: none; border-top: 1px dashed #000; margin: 8px 0;" />
+              
+              <div style="width: 100%;">
+                <div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                  <span>Subtotal:</span>
+                  <span>Rs. ${receiptToPrint.subtotal.toFixed(2)}</span>
+                </div>
+                ${receiptToPrint.discount > 0 ? `
+                  <div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                    <span>Discount:</span>
+                    <span>Rs. ${receiptToPrint.discount.toFixed(2)}</span>
+                  </div>
+                ` : ''}
+                ${receiptToPrint.tax > 0 ? `
+                  <div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                    <span>Tax:</span>
+                    <span>Rs. ${receiptToPrint.tax.toFixed(2)}</span>
+                  </div>
+                ` : ''}
+                <div style="display: flex; justify-content: space-between; margin: 6px 0; font-weight: bold;">
+                  <span>Total:</span>
+                  <span>Rs. ${receiptToPrint.total.toFixed(2)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                  <span>Payment Method:</span>
+                  <span>${receiptToPrint.paymentMethod.replace('_', ' ').toUpperCase()}</span>
+                </div>
+              </div>
+              
+              <hr style="border: none; border-top: 1px dashed #000; margin: 8px 0;" />
+              
+              <div class="text-center" style="text-align: center; margin-top: 10px;">
+                <p style="margin: 2px 0;">Thank you for your purchase!</p>
+                <p style="margin: 2px 0;">Please visit again</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+      
+      // Get iframe's document and write content
+      const iframeDoc = printIframe.contentDocument || printIframe.contentWindow?.document;
+      if (iframeDoc) {
+        iframeDoc.open();
+        iframeDoc.write(receiptHtml);
+        iframeDoc.close();
+
+        // Trigger print once content is loaded
+        const onIframeLoad = () => {
+          try {
+            // Remove event listener
+            printIframe.removeEventListener('load', onIframeLoad);
+            
+            // Print the iframe contents
+            printIframe.contentWindow?.focus();
+            printIframe.contentWindow?.print();
+            
+            // Set a timeout to remove the iframe after printing
+            setTimeout(() => {
+              document.body.removeChild(printIframe);
+              setPrintingReceipt(false);
+            }, 500);
+          } catch (err) {
+            console.error('Error during iframe print:', err);
+            document.body.removeChild(printIframe);
+            setPrintingReceipt(false);
+          }
+        };
+
+        // Add load event listener
+        printIframe.addEventListener('load', onIframeLoad);
+      } else {
+        throw new Error('Could not access iframe document');
       }
-      
-      // Second approach: Send to server for direct thermal printing
-      // This is a backup in case browser printing doesn't work
-      await printApi.printReceiptToThermal(receiptData.id);
-      
     } catch (err) {
       console.error('Error printing receipt:', err);
-      setError('Failed to print receipt. Please try again or use the download option.');
-    } finally {
+      setError('Failed to print receipt. Please try again.');
       setPrintingReceipt(false);
     }
   };
   
-  // Handle key press in receipt dialog
-  const handleReceiptKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !printingReceipt) {
-      handlePrintReceipt();
-    }
-  };
+  // We can keep the handlePrintReceipt function for any manual receipt printing needs,
+  // but we won't be using receiptDialogOpen in the main flow anymore
   
-  // Download receipt as PDF
-  const handleDownloadReceipt = async () => {
-    if (!receiptData?.id) return;
-    
-    try {
-      setPrintingReceipt(true);
-      
-      // Get receipt PDF from server
-      const response = await printApi.getReceiptPdf(receiptData.id);
-      
-      // Create download link
-      const url = window.URL.createObjectURL(new Blob([response.data]));
-      const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `receipt-${receiptData.invoiceNumber}.pdf`);
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      
-    } catch (err) {
-      console.error('Error downloading receipt:', err);
-      setError('Failed to download receipt. Please try again.');
-    } finally {
-      setPrintingReceipt(false);
-    }
-  };
+  // Remove or comment out the handleReceiptKeyPress function as we're not showing the dialog
 
   // Render product grid
   const renderProductGrid = () => {
@@ -644,24 +714,23 @@ const POS: React.FC = () => {
                       </Badge>
                     </td>
                     <td className="text-center">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        disabled={product.stockQuantity <= 0}
-                        onClick={(e) => {
-                          // Stop event propagation to prevent any parent handlers
-                          e.stopPropagation();
-                          if (product.stockQuantity > 0) {
-                            // Create a simple copy of the product to avoid reference issues
-                            const productCopy = {...product};
-                            addToCart(productCopy);
-                          } else {
-                            setError('Product is out of stock.');
-                          }
-                        }}
-                      >
-                        <>{BsPlus({ size: 16, className: "me-1" })}</>Add
-                      </Button>
+                    <Button
+  variant="primary"
+  size="sm"
+  disabled={product.stockQuantity <= 0}
+  onClick={(e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.nativeEvent.stopImmediatePropagation(); // Add this line
+    if (product.stockQuantity > 0) {
+      addToCart(product);
+    } else {
+      setError('Product is out of stock.');
+    }
+  }}
+>
+  <>{BsPlus({ size: 16, className: "me-1" })}</>Add
+</Button>
                     </td>
                   </tr>
                 ))}
@@ -957,56 +1026,20 @@ const POS: React.FC = () => {
         </Col>
       </Row>
 
-      {/* Receipt Preview Modal */}
+      {/* Replace or modify the Receipt Preview Modal to be hidden by default 
+         We'll keep it in the code but just not display it in the normal flow */}
       <Modal 
-        show={receiptDialogOpen} 
-        onHide={() => setReceiptDialogOpen(false)}
+        show={false} // Always hidden by setting to false
+        onHide={() => {}} 
         size="lg"
         centered
-        onKeyPress={handleReceiptKeyPress}
-        tabIndex={0}
       >
         <Modal.Header closeButton>
           <Modal.Title>Receipt Preview</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          {receiptData && (
-            <div className="d-flex justify-content-center">
-              <div className="receipt-preview" style={{ width: '80mm', backgroundColor: '#fff', padding: '10px' }}>
-                <ReceiptPreview ref={receiptPreviewRef} receipt={receiptData} />
-              </div>
-            </div>
-          )}
-          <div className="text-center mt-3 text-muted">
-            <p>Press <strong>Enter</strong> to print receipt or use buttons below</p>
-          </div>
+          {/* Receipt preview content removed as we're bypassing this step */}
         </Modal.Body>
-        <Modal.Footer className="justify-content-between">
-          <Button variant="secondary" onClick={() => setReceiptDialogOpen(false)}>
-            Close
-          </Button>
-          <div>
-            <Button 
-              variant="success" 
-              className="me-2" 
-              onClick={handlePrintReceipt} 
-              disabled={printingReceipt}
-            >
-              {printingReceipt ? (
-                <><Spinner animation="border" size="sm" className="me-2" /> Printing...</>
-              ) : (
-                <>{BsPrinter({ className: "me-2" })} Print Receipt</>
-              )}
-            </Button>
-            <Button 
-              variant="primary" 
-              onClick={handleDownloadReceipt}
-              disabled={printingReceipt}
-            >
-              Download PDF
-            </Button>
-          </div>
-        </Modal.Footer>
       </Modal>
       
       {/* Checkout Modal */}

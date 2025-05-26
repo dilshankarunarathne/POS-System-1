@@ -160,7 +160,7 @@ const Layout = () => {
                   Sign Out
                 </Dropdown.Item>
               </Dropdown.Menu>
-            </Dropdown>
+            </Dropdown> 
           </div>
         </Container>
       </Navbar>
@@ -210,7 +210,7 @@ const Layout = () => {
 
       {/* Enhanced Main Content */}
       <main className="main-content">
-        <Container fluid className="content-container p-0">
+        <Container fluid className="content-container p-3 p-md-4">
           {/* Mobile Page Header */}
           {isMobile && (
             <div className="mobile-header mb-3 pb-3 border-bottom">
@@ -301,8 +301,9 @@ const Layout = () => {
         }
 
         .main-content {
-          margin-top: 60px;
-          min-height: calc(100vh - 60px);
+          margin-top: 70px; /* Increased from 60px to ensure content isn't hidden */
+          padding-top: 15px; /* Added padding to create space for content */
+          min-height: calc(100vh - 70px);
           background: #f8f9fa;
           width: 100%;
         }
@@ -313,15 +314,19 @@ const Layout = () => {
         }
 
         @media (min-width: 768px) {
+          .main-content {
+            margin-top: 75px; /* More space on larger screens */
+            padding-top: 20px;
+          }
           .content-container {
-            padding-top: 2rem;
+            padding-top: 1rem;
             padding-bottom: 2rem;
           }
         }
 
         @media (min-width: 1200px) {
           .content-container {
-            padding-top: 2.5rem;
+            padding-top: 1.5rem;
             padding-bottom: 2.5rem;
           }
         }
@@ -341,8 +346,8 @@ const Layout = () => {
         .mobile-header {
           background: white;
           margin: 0 0 1.5rem 0;
-          padding: 1.5rem;
-          box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+          padding: 0 0 1rem 0; /* Adjusted padding to prevent overlap */
+          border-bottom: 1px solid rgba(0, 0, 0, 0.1);
         }
 
         @media (min-width: 768px) {

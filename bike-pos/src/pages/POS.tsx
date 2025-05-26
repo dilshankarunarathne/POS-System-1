@@ -122,6 +122,9 @@ const POS: React.FC = () => {
   // Focus references
   const barcodeInputRef = useRef<HTMLInputElement>(null);
   
+  // Add a reference for the complete sale button
+  const completeSaleButtonRef = useRef<HTMLButtonElement>(null);
+  
   // Load products on mount
   useEffect(() => {
     const fetchProducts = async () => {
@@ -418,6 +421,34 @@ const POS: React.FC = () => {
     // Open checkout dialog
     setCheckoutDialogOpen(true);
   };
+  
+  // Add useEffect to handle keyboard events for the checkout dialog
+  useEffect(() => {
+    if (checkoutDialogOpen && !processingSale) {
+      // Focus the complete sale button when the dialog opens
+      setTimeout(() => {
+        if (completeSaleButtonRef.current) {
+          completeSaleButtonRef.current.focus();
+        }
+      }, 100);
+      
+      // Add event listener for Enter key
+      const handleEnterKey = (event: KeyboardEvent) => {
+        if (event.key === 'Enter' && !processingSale) {
+          event.preventDefault();
+          processSale();
+        }
+      };
+      
+      // Add the event listener
+      window.addEventListener('keydown', handleEnterKey);
+      
+      // Clean up
+      return () => {
+        window.removeEventListener('keydown', handleEnterKey);
+      };
+    }
+  }, [checkoutDialogOpen, processingSale]);
   
   // Process the sale after checkout confirmation
   const processSale = async () => {
@@ -1143,6 +1174,7 @@ const POS: React.FC = () => {
             variant="primary" 
             onClick={processSale}
             disabled={processingSale}
+            ref={completeSaleButtonRef}
           >
             {processingSale ? (
               <><Spinner animation="border" size="sm" className="me-2" /> Processing...</>

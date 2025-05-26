@@ -58,8 +58,8 @@ function App() {
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="pos" element={<POS />} />
             <Route path="products" element={<Products />} />
-            <Route path="categories" element={<Categories />} />
-            <Route path="suppliers" element={<Suppliers />} />
+            {/* <Route path="categories" element={<Categories />} />
+            <Route path="suppliers" element={<Suppliers />} /> */}
             <Route path="sales" element={<Sales />} />
             <Route path="reports" element={
               <ProtectedRoute role="manager">

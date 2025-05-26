@@ -22,7 +22,7 @@ import {
   Printer,
   Search
 } from 'react-bootstrap-icons';
-import { printApi, salesApi } from '../services/api';
+import { salesApi } from '../services/api';
 
 // Define Sales types
 interface SaleItem {
@@ -72,11 +72,32 @@ interface Sale {
   createdAt: string;
 }
 
+// Define Receipt data structure (add after the Sale interface)
+interface ReceiptData {
+  id: string | number;
+  invoiceNumber: string;
+  date: string;
+  customer: string;
+  cashier: string;
+  items: Array<{
+    name: string;
+    quantity: number;
+    price: number;
+    total: number;
+  }>;
+  subtotal: number;
+  discount: number;
+  tax: number;
+  total: number;
+  paymentMethod: string;
+}
+
 const Sales: React.FC = () => {
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [printingReceipt, setPrintingReceipt] = useState(false); // Add this state
   
   // Pagination state
   const [page, setPage] = useState(0);
@@ -254,19 +275,215 @@ const Sales: React.FC = () => {
     }
   };
   
-  // Generate and print receipt
+  // Add this direct print receipt function
+  const directPrintReceipt = async (sale: Sale) => {
+    try {
+      setPrintingReceipt(true);
+
+      // Create a hidden iframe for printing
+      const printIframe = document.createElement('iframe');
+      printIframe.style.position = 'fixed';
+      printIframe.style.right = '0';
+      printIframe.style.bottom = '0';
+      printIframe.style.width = '0';
+      printIframe.style.height = '0';
+      printIframe.style.border = 'none';
+      document.body.appendChild(printIframe);
+      
+      // Format items for receipt
+      const receiptItems = sale.SaleItems?.map(item => {
+        const productName = item.product?.name || item.Product?.name || 'Unknown Product';
+        const unitPrice = item.price || item.unitPrice || 0;
+        const subtotal = item.subtotal || (unitPrice * item.quantity);
+        
+        return {
+          name: productName,
+          quantity: item.quantity,
+          price: unitPrice,
+          total: subtotal - (item.discount || 0)
+        };
+      }) || [];
+      
+      // Generate receipt HTML content
+      const receiptHtml = `
+        <html>
+          <head>
+            <title>Print Receipt</title>
+            <style>
+              @page { 
+                size: 80mm auto;  /* Standard thermal paper width */
+                margin: 0mm; 
+              }
+              body { 
+                font-family: monospace; 
+                font-size: 12px; 
+                width: 76mm; 
+                margin: 2mm;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              .text-center { text-align: center; }
+              hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
+              table { width: 100%; border-collapse: collapse; }
+            </style>
+          </head>
+          <body>
+            <div class="receipt" style="font-family: monospace; font-size: 12px; width: 76mm; margin: 2mm;">
+              <div class="text-center" style="text-align: center;">
+                <h3 style="margin: 4px 0;">RECEIPT</h3>
+                <p style="margin: 4px 0;">${new Date(sale.date).toLocaleString()}</p>
+                <p style="margin: 4px 0;">Invoice: ${sale.invoiceNumber}</p>
+              </div>
+              
+              <hr style="border: none; border-top: 1px dashed #000; margin: 8px 0;" />
+              
+              <div>
+                <p style="margin: 2px 0;">Customer: ${sale.customerName || 'Walk-in Customer'}</p>
+                <p style="margin: 2px 0;">Cashier: ${sale.cashier?.username || sale.user?.username || sale.user?.name || 'Unknown'}</p>
+              </div>
+              
+              <hr style="border: none; border-top: 1px dashed #000; margin: 8px 0;" />
+              
+              <table style="width: 100%; border-collapse: collapse;">
+                <thead>
+                  <tr>
+                    <th style="text-align: left; padding: 2px;">Item</th>
+                    <th style="text-align: center; padding: 2px;">Qty</th>
+                    <th style="text-align: right; padding: 2px;">Price</th>
+                    <th style="text-align: right; padding: 2px;">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${receiptItems.map(item => `
+                    <tr>
+                      <td style="text-align: left; padding: 2px;">${item.name}</td>
+                      <td style="text-align: center; padding: 2px;">${item.quantity}</td>
+                      <td style="text-align: right; padding: 2px;">Rs. ${item.price.toFixed(2)}</td>
+                      <td style="text-align: right; padding: 2px;">Rs. ${item.total.toFixed(2)}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+              
+              <hr style="border: none; border-top: 1px dashed #000; margin: 8px 0;" />
+              
+              <div style="width: 100%;">
+                <div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                  <span>Subtotal:</span>
+                  <span>Rs. ${sale.subtotal.toFixed(2)}</span>
+                </div>
+                ${sale.discount > 0 ? `
+                  <div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                    <span>Discount:</span>
+                    <span>Rs. ${sale.discount.toFixed(2)}</span>
+                  </div>
+                ` : ''}
+                ${sale.tax > 0 ? `
+                  <div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                    <span>Tax:</span>
+                    <span>Rs. ${sale.tax.toFixed(2)}</span>
+                  </div>
+                ` : ''}
+                <div style="display: flex; justify-content: space-between; margin: 6px 0; font-weight: bold;">
+                  <span>Total:</span>
+                  <span>Rs. ${sale.total.toFixed(2)}</span>
+                </div>
+                <div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                  <span>Payment Method:</span>
+                  <span>${sale.paymentMethod.replace('_', ' ').toUpperCase()}</span>
+                </div>
+              </div>
+              
+              <hr style="border: none; border-top: 1px dashed #000; margin: 8px 0;" />
+              
+              <div class="text-center" style="text-align: center; margin-top: 10px;">
+                <p style="margin: 2px 0;">Thank you for your purchase!</p>
+                <p style="margin: 2px 0;">Please visit again</p>
+              </div>
+            </div>
+          </body>
+        </html>
+      `;
+      
+      // Get iframe's document and write content
+      const iframeDoc = printIframe.contentDocument || printIframe.contentWindow?.document;
+      if (iframeDoc) {
+        iframeDoc.open();
+        iframeDoc.write(receiptHtml);
+        iframeDoc.close();
+
+        // Trigger print once content is loaded
+        const onIframeLoad = () => {
+          try {
+            // Remove event listener
+            printIframe.removeEventListener('load', onIframeLoad);
+            
+            // Print the iframe contents
+            printIframe.contentWindow?.focus();
+            printIframe.contentWindow?.print();
+            
+            // Set a timeout to remove the iframe after printing
+            setTimeout(() => {
+              document.body.removeChild(printIframe);
+              setPrintingReceipt(false);
+            }, 500);
+          } catch (err) {
+            console.error('Error during iframe print:', err);
+            document.body.removeChild(printIframe);
+            setPrintingReceipt(false);
+          }
+        };
+
+        // Add load event listener
+        printIframe.addEventListener('load', onIframeLoad);
+      } else {
+        throw new Error('Could not access iframe document');
+      }
+    } catch (err) {
+      console.error('Error printing receipt:', err);
+      setError('Failed to print receipt. Please try again.');
+      setPrintingReceipt(false);
+    }
+  };
+  
+  // Replace the existing handlePrintReceipt function with this updated version
   const handlePrintReceipt = async (saleId: string) => {
     try {
-      const response = await printApi.printReceipt(saleId);
+      setPrintingReceipt(true);
       
-      setReceiptUrl(response.data.downloadUrl);
-      setReceiptDialogOpen(true);
+      // Fetch the complete sale data if we don't already have it
+      let saleForPrinting: Sale;
+      
+      if (selectedSale && selectedSale.id === saleId) {
+        saleForPrinting = selectedSale;
+      } else {
+        const response = await salesApi.getById(saleId);
+        saleForPrinting = response.data;
+      }
+      
+      // Print the receipt directly without showing the dialog
+      directPrintReceipt(saleForPrinting);
       
     } catch (err) {
       console.error('Error generating receipt:', err);
       setError('Failed to generate receipt');
+      setPrintingReceipt(false);
     }
   };
+  
+  // Generate and print receipt
+  // const handlePrintReceipt = async (saleId: string) => {
+  //   try {
+  //     const response = await printApi.printReceipt(saleId);
+      
+  //     setReceiptUrl(response.data.downloadUrl);
+  //     setReceiptDialogOpen(true);
+      
+  //   } catch (err) {
+  //     console.error('Error generating receipt:', err);
+  //     setError('Failed to generate receipt');
+  //   }
+  // };
   
   // Format date for display
   const formatDate = (dateString: string) => {
@@ -471,8 +688,13 @@ const Sales: React.FC = () => {
                               handlePrintReceipt(sale.id);
                             }
                           }}
+                          disabled={printingReceipt}
                         >
-                          <Printer size={16} />
+                          {printingReceipt ? (
+                            <Spinner animation="border" size="sm" />
+                          ) : (
+                            <Printer size={16} />
+                          )}
                         </Button>
                       </td>
                     </tr>

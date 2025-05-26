@@ -24,8 +24,8 @@ const menuItems = [
   { name: 'Dashboard', icon: <House size={18} />, path: '/dashboard' },
   { name: 'Point of Sale', icon: <Cart size={18} />, path: '/pos' },
   { name: 'Products', icon: <BoxSeam size={18} />, path: '/products' },
-  { name: 'Categories', icon: <Diagram3 size={18} />, path: '/categories' },
-  { name: 'Suppliers', icon: <Truck size={18} />, path: '/suppliers' },
+  // { name: 'Categories', icon: <Diagram3 size={18} />, path: '/categories' },
+  // { name: 'Suppliers', icon: <Truck size={18} />, path: '/suppliers' },
   { name: 'Sales', icon: <Receipt size={18} />, path: '/sales' },
   { name: 'Reports', icon: <BarChart size={18} />, path: '/reports' },
 ];
@@ -108,7 +108,11 @@ const Layout = () => {
             </LinkContainer>
           </div>
 
-          {/* Desktop Navigation */}
+         
+
+          {/* Right side controls */}
+          <div className="d-flex align-items-center">
+             {/* Desktop Navigation */}
           {!isMobile && (
             <Nav className="mx-auto d-none d-lg-flex">
               {menuItems.map((item) => {
@@ -129,10 +133,6 @@ const Layout = () => {
               })}
             </Nav>
           )}
-
-          {/* Right side controls */}
-          <div className="d-flex align-items-center">
-            
 
             {/* User Dropdown */}
             <Dropdown align="end">

@@ -503,7 +503,7 @@ const Products: React.FC = () => {
                   <th style={{ width: '80px' }}></th>
                   <th>Name</th>
                   <th>Barcode</th>
-                  <th>Category</th>
+                  <th>Description</th>
                   <th>Price</th>
                   <th>Stock</th>
                   <th>Actions</th>
@@ -546,7 +546,7 @@ const Products: React.FC = () => {
                         
                         <td>{product.name}</td>
                         <td>{product.barcode}</td>
-                        <td>{product.category ? product.category.name : 'Uncategorized'}</td>
+                        <td>{product.description || 'No description'}</td>
                         <td>Rs. {(product.price || 0).toFixed(2)}</td>
                         
                         <td>
@@ -743,7 +743,7 @@ const Products: React.FC = () => {
                   </Form.Text>
                 </Form.Group>
                 
-                <Row>
+                {/* <Row>
                   <Col>
                     <Form.Group className="mb-3">
                       <Form.Label>Category</Form.Label>
@@ -764,7 +764,7 @@ const Products: React.FC = () => {
                       />
                     </Form.Group>
                   </Col>
-                </Row>
+                </Row> */}
               </Col>
               
               <Col md={6}>

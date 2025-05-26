@@ -213,11 +213,32 @@ const getAllSales = async (req, res) => {
       .skip((Number(page) - 1) * Number(limit))
       .limit(Number(limit));
     
+    // Transform MongoDB documents with consistent structure
+    const transformedSales = sales.map(sale => {
+      const saleObj = sale.toObject();
+      saleObj.id = saleObj._id; // Add id field for frontend compatibility
+      
+      // Add cashier info from user if available
+      if (saleObj.user && !saleObj.cashier) {
+        saleObj.cashier = {
+          id: saleObj.user._id,
+          username: saleObj.user.username || saleObj.user.name || 'Unknown'
+        };
+      }
+      
+      // Make sure sale date is correctly set
+      if (!saleObj.date) {
+        saleObj.date = saleObj.createdAt;
+      }
+      
+      return saleObj;
+    });
+    
     // Get total count for pagination
     const totalSales = await Sale.countDocuments(filter);
     
     res.status(200).json({
-      sales,
+      sales: transformedSales,
       totalPages: Math.ceil(totalSales / Number(limit)),
       currentPage: Number(page),
       totalSales
@@ -244,15 +265,68 @@ const getSaleById = async (req, res) => {
     }
     
     const sale = await Sale.findById(saleId)
+      .populate({
+        path: 'items.product',
+        select: 'name price sku barcode'
+      })
       .populate('customer')
-      .populate('user', 'name username')
-      .populate('items.product');
+      .populate('user', 'name username');
     
     if (!sale) {
       return res.status(404).json({ message: 'Sale not found' });
     }
     
-    res.status(200).json(sale);
+    // Transform MongoDB document with consistent structure
+    const saleObj = sale.toObject();
+    saleObj.id = saleObj._id; // Add id field for frontend compatibility
+    
+    // Add cashier info from user if available
+    if (saleObj.user && !saleObj.cashier) {
+      saleObj.cashier = {
+        id: saleObj.user._id,
+        username: saleObj.user.username || saleObj.user.name || 'Unknown'
+      };
+    }
+    
+    // Make sure sale date is correctly set
+    if (!saleObj.date) {
+      saleObj.date = saleObj.createdAt;
+    }
+    
+    // Ensure each item has the calculated subtotal
+    if (saleObj.items && Array.isArray(saleObj.items)) {
+      saleObj.items = saleObj.items.map(item => {
+        // Add unique identifier for each item
+        item.id = item._id;
+        // Calculate subtotal if not already present
+        if (!item.subtotal) {
+          item.subtotal = item.price * item.quantity;
+        }
+        // Make sure product information is consistent
+        if (item.product) {
+          item.product.id = item._id;
+        }
+        return item;
+      });
+      
+      // Add legacy SaleItems field for frontend compatibility
+      saleObj.SaleItems = saleObj.items.map(item => ({
+        id: item._id.toString(),
+        productId: item.product?._id.toString(),
+        quantity: item.quantity,
+        unitPrice: item.price,
+        price: item.price,
+        discount: item.discount || 0,
+        subtotal: item.price * item.quantity,
+        Product: {
+          id: item.product?._id.toString(),
+          name: item.product?.name || 'Unknown',
+          barcode: item.product?.barcode || item.product?.sku || ''
+        }
+      }));
+    }
+    
+    res.status(200).json(saleObj);
   } catch (error) {
     console.error('Error fetching sale:', error);
     res.status(500).json({ message: 'Server error fetching sale details' });

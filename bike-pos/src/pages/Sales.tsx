@@ -26,21 +26,29 @@ import { printApi, salesApi } from '../services/api';
 
 // Define Sales types
 interface SaleItem {
-  id: number;
-  productId: number;
-  quantity: number;
-  unitPrice: number;
-  discount: number;
-  subtotal: number;
-  Product: {
-    id: number;
+  id?: string;
+  _id?: string;
+  product: {
+    _id: string;
     name: string;
-    barcode: string;
+    barcode?: string;
+    sku?: string;
+  };
+  quantity: number;
+  price: number;
+  discount: number;
+  subtotal?: number;
+  unitPrice?: number;
+  Product?: {
+    id?: string;
+    name: string;
+    barcode?: string;
   };
 }
 
 interface Sale {
-  id: number;
+  id: string; // Changed from number to string
+  _id?: string; // Added to handle MongoDB _id
   invoiceNumber: string;
   date: string;
   subtotal: number;
@@ -52,8 +60,12 @@ interface Sale {
   customerPhone: string | null;
   notes: string | null;
   status: 'completed' | 'returned' | 'cancelled';
-  cashier: {
-    id: number;
+  cashier?: {  // Mark cashier as optional
+    id: string;
+    username: string;
+  };
+  user?: {  // Add user property as an alternative
+    name: string;
     username: string;
   };
   SaleItems?: SaleItem[];
@@ -161,25 +173,37 @@ const Sales: React.FC = () => {
   };
   
   // Open sale detail dialog
-  const handleOpenDetailDialog = async (saleId: number) => {
+  const handleOpenDetailDialog = async (saleId: string) => {
     try {
-      if (!saleId || isNaN(saleId)) {
-        setError('Invalid sale ID');
+      // Ensure saleId is a valid string
+      if (!saleId || typeof saleId !== 'string' || saleId.trim() === '') {
+        console.error('Invalid sale ID detected:', saleId);
+        setError(`Invalid sale ID: ${saleId}`);
         return;
       }
       
       setLoading(true);
+      console.log('Fetching details for sale ID:', saleId, 'Type:', typeof saleId);
       const response = await salesApi.getById(saleId);
       
+      console.log('API response:', response);
+      
       if (!response.data) {
+        console.error('No data received for sale ID:', saleId);
         throw new Error('Sale data not found');
+      }
+      
+      // Check if we have a valid ID in the response
+      if (!response.data.id && response.data._id) {
+        console.log('Converting _id to id for frontend compatibility');
+        response.data.id = response.data._id;
       }
       
       setSelectedSale(response.data);
       setDetailDialogOpen(true);
     } catch (err) {
       console.error('Error fetching sale details:', err);
-      setError('Failed to load sale details');
+      setError(`Failed to load sale details: ${err instanceof Error ? err.message : 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
@@ -231,7 +255,7 @@ const Sales: React.FC = () => {
   };
   
   // Generate and print receipt
-  const handlePrintReceipt = async (saleId: number) => {
+  const handlePrintReceipt = async (saleId: string) => {
     try {
       const response = await printApi.printReceipt(saleId);
       
@@ -416,7 +440,15 @@ const Sales: React.FC = () => {
                   sales.map((sale) => (
                     <tr 
                       key={sale.id} 
-                      onClick={() => handleOpenDetailDialog(sale.id)}
+                      onClick={() => {
+                        console.log('Row clicked with sale ID:', sale.id);
+                        if (sale && sale.id) {
+                          handleOpenDetailDialog(sale.id);
+                        } else {
+                          console.error('Sale ID is undefined');
+                          setError('Cannot view details: Sale ID is undefined');
+                        }
+                      }}
                       style={{ cursor: 'pointer' }}
                     >
                       <td>{sale.invoiceNumber}</td>
@@ -435,7 +467,9 @@ const Sales: React.FC = () => {
                           size="sm"
                           onClick={(e) => {
                             e.stopPropagation();
-                            handlePrintReceipt(sale.id);
+                            if (sale.id) {
+                              handlePrintReceipt(sale.id);
+                            }
                           }}
                         >
                           <Printer size={16} />
@@ -524,7 +558,12 @@ const Sales: React.FC = () => {
                         
                         <Col xs={6}>
                           <p className="text-muted mb-1">Cashier</p>
-                          <p className="mb-0">{selectedSale.cashier.username}</p>
+                          <p className="mb-0">
+                            {selectedSale.cashier?.username || 
+                             selectedSale.user?.username || 
+                             selectedSale.user?.name || 
+                             'Unknown'}
+                          </p>
                         </Col>
                         
                         <Col xs={6}>
@@ -630,20 +669,30 @@ const Sales: React.FC = () => {
                     </thead>
                     
                     <tbody>
-                      {selectedSale.SaleItems?.map((item) => (
-                        <tr key={item.id}>
-                          <td>
-                            <p className="mb-0">{item.Product.name}</p>
-                            <small className="text-muted">{item.Product.barcode}</small>
-                          </td>
-                          <td className="text-end">Rs. {item.unitPrice.toFixed(2)}</td>
-                          <td className="text-end">{item.quantity}</td>
-                          <td className="text-end">
-                            {item.discount > 0 ? `Rs. ${item.discount.toFixed(2)}` : '-'}
-                          </td>
-                          <td className="text-end">Rs. {item.subtotal.toFixed(2)}</td>
+                      {selectedSale.SaleItems?.map((item: SaleItem, index) => {
+                        const subtotal = item.subtotal || (item.price * item.quantity);
+                        const productName = item.product?.name || item.Product?.name || 'Unknown Product';
+                        const productBarcode = item.product?.barcode || item.Product?.barcode || item.product?.sku || '';
+                        
+                        return (
+                          <tr key={item.id || item._id || index}>
+                            <td>
+                              <p className="mb-0">{productName}</p>
+                              <small className="text-muted">{productBarcode}</small>
+                            </td>
+                            <td className="text-end">Rs. {item.price.toFixed(2)}</td>
+                            <td className="text-end">{item.quantity}</td>
+                            <td className="text-end">
+                              {item.discount > 0 ? `Rs. ${item.discount.toFixed(2)}` : '-'}
+                            </td>
+                            <td className="text-end">Rs. {subtotal.toFixed(2)}</td>
+                          </tr>
+                        );
+                      }) || (
+                        <tr>
+                          <td colSpan={5} className="text-center">No items found</td>
                         </tr>
-                      ))}
+                      )}
                     </tbody>
                   </Table>
                 </div>

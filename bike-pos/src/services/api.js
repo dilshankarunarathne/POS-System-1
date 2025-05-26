@@ -92,7 +92,7 @@ export const categoriesApi = {
 export const salesApi = {
   getAll: (params) => api.get('/sales', { params }),
   getById: (id) => api.get(`/sales/${id}`),
-  create: (data) => api.post('/sales', data),
+  create: (data) => api.post('/sales', data), // This matches the controller route
   updateStatus: (id, data) => api.patch(`/sales/${id}/status`, data),
 };
 

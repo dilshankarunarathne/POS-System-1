@@ -163,12 +163,20 @@ const Sales: React.FC = () => {
   // Open sale detail dialog
   const handleOpenDetailDialog = async (saleId: number) => {
     try {
-      setLoading(true);
+      if (!saleId || isNaN(saleId)) {
+        setError('Invalid sale ID');
+        return;
+      }
       
+      setLoading(true);
       const response = await salesApi.getById(saleId);
+      
+      if (!response.data) {
+        throw new Error('Sale data not found');
+      }
+      
       setSelectedSale(response.data);
       setDetailDialogOpen(true);
-      
     } catch (err) {
       console.error('Error fetching sale details:', err);
       setError('Failed to load sale details');

@@ -4,6 +4,7 @@ const SaleItem = require('../models/SaleItem');
 const Product = require('../models/Product');
 const User = require('../models/User');
 const Customer = require('../models/Customer');
+const printController = require('./printController');
 
 // Generate invoice number
 const generateInvoiceNumber = async () => {
@@ -34,6 +35,8 @@ const createSale = async (req, res) => {
   try {
     const {
       customer,
+      customerName,
+      customerPhone,
       items,
       subtotal,
       discount = 0,
@@ -52,10 +55,37 @@ const createSale = async (req, res) => {
     // Generate invoice number
     const invoiceNumber = await generateInvoiceNumber();
     
+    // Create customer if customerName is provided but no customer ID
+    let customerId = customer;
+    if (!customerId && customerName) {
+      try {
+        // Check if customer already exists with this phone number
+        let existingCustomer = null;
+        if (customerPhone) {
+          existingCustomer = await Customer.findOne({ phone: customerPhone });
+        }
+        
+        if (existingCustomer) {
+          customerId = existingCustomer._id;
+        } else {
+          // Create new customer
+          const newCustomer = await Customer.create({
+            name: customerName,
+            phone: customerPhone,
+            createdAt: new Date()
+          });
+          customerId = newCustomer._id;
+        }
+      } catch (customerErr) {
+        console.error('Could not create customer:', customerErr);
+        // Continue without customer if creation fails
+      }
+    }
+    
     // Create new sale
     const sale = new Sale({
       invoiceNumber,
-      customer,
+      customer: customerId,
       items: [],
       subtotal,
       discount,
@@ -70,12 +100,12 @@ const createSale = async (req, res) => {
     // Process items and update product stock
     for (const item of items) {
       // Check if product exists and has enough stock
-      const product = await Product.findById(item.product).session(session);
+      const product = await Product.findById(item.product || item.productId).session(session);
       
       if (!product) {
         await session.abortTransaction();
         session.endSession();
-        return res.status(404).json({ message: `Product with ID ${item.product} not found` });
+        return res.status(404).json({ message: `Product with ID ${item.product || item.productId} not found` });
       }
       
       if (product.quantity < item.quantity) {
@@ -201,7 +231,19 @@ const getAllSales = async (req, res) => {
 // Get a single sale by ID with all details
 const getSaleById = async (req, res) => {
   try {
-    const sale = await Sale.findById(req.params.id)
+    const saleId = req.params.id;
+    
+    // Check if ID exists
+    if (!saleId) {
+      return res.status(400).json({ message: 'Sale ID is required' });
+    }
+    
+    // Check if ID is valid
+    if (!mongoose.Types.ObjectId.isValid(saleId)) {
+      return res.status(400).json({ message: 'Invalid sale ID format' });
+    }
+    
+    const sale = await Sale.findById(saleId)
       .populate('customer')
       .populate('user', 'name username')
       .populate('items.product');
@@ -213,7 +255,7 @@ const getSaleById = async (req, res) => {
     res.status(200).json(sale);
   } catch (error) {
     console.error('Error fetching sale:', error);
-    res.status(500).json({ message: 'Server error fetching sale' });
+    res.status(500).json({ message: 'Server error fetching sale details' });
   }
 };
 
@@ -289,9 +331,54 @@ const updateSaleStatus = async (req, res) => {
   }
 };
 
+// Get sales report
+const getSalesReport = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    const query = {};
+    if (startDate && endDate) {
+      query.createdAt = {
+        $gte: new Date(startDate),
+        $lte: new Date(endDate)
+      };
+    }
+    
+    const sales = await Sale.find(query)
+      .populate('customer', 'name')
+      .populate('user', 'name')
+      .sort({ createdAt: -1 });
+      
+    const totalSales = sales.reduce((sum, sale) => sum + sale.total, 0);
+    const totalItems = sales.reduce((sum, sale) => {
+      return sum + sale.items.reduce((itemSum, item) => itemSum + item.quantity, 0);
+    }, 0);
+    
+    res.json({
+      sales,
+      summary: {
+        totalSales,
+        totalItems,
+        count: sales.length
+      }
+    });
+  } catch (error) {
+    console.error('Error generating sales report:', error);
+    res.status(500).json({ message: 'Server error generating sales report' });
+  }
+};
+
+// Generate receipt
+const generateReceipt = async (req, res) => {
+  // Forward to the printController
+  return printController.generateReceipt(req, res);
+};
+
 module.exports = {
   createSale,
   getAllSales,
   getSaleById,
-  updateSaleStatus
+  updateSaleStatus,
+  getSalesReport,
+  generateReceipt
 };

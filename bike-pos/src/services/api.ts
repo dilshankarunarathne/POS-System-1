@@ -75,13 +75,22 @@ interface Supplier {
 interface Sale {
   id?: number;
   customerId?: number;
-  items: Array<{productId: number; quantity: number; price: number}>;
+  items: Array<{
+    productId?: number;
+    product?: number;
+    quantity: number; 
+    price: number;
+    discount?: number;
+  }>;
   subtotal: number;
   tax?: number;
   discount?: number;
   total: number;
   paymentMethod: string;
   notes?: string;
+  customerName?: string;
+  customerPhone?: string;
+  user?: number;
 }
 
 // Auth API
@@ -172,13 +181,45 @@ export const salesApi = {
     status?: string;
   }) => api.get('/sales', { params }),
   
-  getById: (id: number) => 
-    api.get(`/sales/${id}`),
+  getById: (id: string | number) => {
+    // Enhanced validation - check for undefined, null, empty string
+    if (id === undefined || id === null || id === '') {
+      console.error('Invalid sale ID provided to salesApi.getById:', id);
+      return Promise.reject(new Error('Sale ID is required and cannot be empty'));
+    }
+    
+    // Convert numeric IDs to string
+    const saleId = id.toString();
+    
+    return api.get(`/sales/${saleId}`)
+      .catch(error => {
+        console.error('Error fetching sale details:', error);
+        if (error.response && error.response.status === 404) {
+          throw new Error('Sale not found');
+        } else if (error.response && error.response.status === 400) {
+          throw new Error('Invalid sale ID format provided');
+        }
+        throw new Error(`Failed to load sale: ${error.response?.data?.message || error.message}`);
+      });
+  },
   
-  create: (saleData: Sale) => 
-    api.post('/sales', saleData),
+  create: (saleData: Sale) => {
+    // Ensure the API understands MongoDB's _id format
+    if (saleData.items) {
+      saleData.items = saleData.items.map(item => ({
+        ...item,
+        product: item.productId || item.product
+      }));
+    }
+    
+    return api.post('/sales', saleData)
+      .catch(error => {
+        console.error('Error creating sale:', error);
+        throw new Error(`Failed to create sale: ${error.response?.data?.message || error.message}`);
+      });
+  },
   
-  updateStatus: (id: number, statusData: { status: string; reason?: string }) =>
+  updateStatus: (id: number | string, statusData: { status: string; reason?: string }) =>
     api.patch(`/sales/${id}/status`, statusData),
 };
 

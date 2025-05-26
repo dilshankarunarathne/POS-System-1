@@ -4,6 +4,7 @@ const { authenticate, authorize } = require('../middleware/auth');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const logger = require('./middleware/loggerMiddleware');
 
 const router = express.Router();
 
@@ -39,6 +40,9 @@ const upload = multer({
     }
   }
 });
+
+// Add logger middleware before your routes
+app.use(logger);
 
 // Routes - IMPORTANT: Order matters for route matching!
 // Put more specific routes before generic ones

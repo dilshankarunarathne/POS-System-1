@@ -153,8 +153,8 @@ const generateReceipt = async (req, res) => {
     
     // Add receipt header - optimized for thermal printer width
     doc.fontSize(12).text('SALES RECEIPT', { align: 'center' });
-    doc.fontSize(9).text('Bike Shop', { align: 'center' });
-    doc.fontSize(8).text('123 Bike Street, City', { align: 'center' });
+    doc.fontSize(9).text('POS System Shop', { align: 'center' });
+    doc.fontSize(8).text('123 Main Street, City', { align: 'center' });
     doc.fontSize(8).text('Tel: 123-456-7890', { align: 'center' });
     
     // Add divider

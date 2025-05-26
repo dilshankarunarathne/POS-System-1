@@ -13,6 +13,7 @@ const Category = require('../models/Category');
 const User = require('../models/User');
 const Customer = require('../models/Customer');
 const Sale = require('../models/Sale');
+const Shop = require('../models/Shop');
 
 // Sample data paths (you can provide JSON files with initial data)
 const SAMPLE_DATA_DIR = path.join(__dirname, '../data');
@@ -173,7 +174,40 @@ const migrateCustomers = async () => {
   }
 };
 
-const migrateSales = async (productMap, customerMap, userMap) => {
+const migrateShops = async () => {
+  console.log('Migrating shops...');
+  try {
+    const shops = loadSampleData('shops.json');
+    
+    const shopMap = {};
+    
+    // Insert shops into MongoDB
+    for (const shop of shops) {
+      const newShop = new Shop({
+        name: shop.name,
+        address: shop.address,
+        phone: shop.phone,
+        email: shop.email,
+        owner: shop.owner_id, // Assuming this maps to a user ID
+        logo: shop.logo,
+        active: shop.active !== false,
+        createdAt: shop.created_at || new Date()
+      });
+      
+      const savedShop = await newShop.save();
+      shopMap[shop.id] = savedShop._id;
+    }
+    
+    fs.writeFileSync(path.join(__dirname, 'shopMap.json'), JSON.stringify(shopMap));
+    console.log(`Migrated ${shops.length} shops`);
+    return shopMap;
+  } catch (error) {
+    console.error('Error migrating shops:', error);
+    throw error;
+  }
+};
+
+const migrateSales = async (productMap, customerMap, userMap, shopMap = {}) => {
   console.log('Migrating sales...');
   try {
     const sales = loadSampleData('sales.json');
@@ -188,6 +222,9 @@ const migrateSales = async (productMap, customerMap, userMap) => {
       salesItemsMap[item.sale_id].push(item);
     }
     
+    // Create a map to track old sale IDs to new MongoDB ObjectIds
+    const saleMap = {};
+    
     // Insert sales into MongoDB
     for (const sale of sales) {
       const items = (salesItemsMap[sale.id] || []).map(item => ({
@@ -198,6 +235,7 @@ const migrateSales = async (productMap, customerMap, userMap) => {
       }));
       
       const newSale = new Sale({
+        invoiceNumber: sale.invoice_number || `INV-${Date.now()}-${Math.floor(Math.random() * 1000).toString().padStart(4, '0')}`,
         customer: customerMap[sale.customer_id],
         items,
         subtotal: sale.subtotal,
@@ -206,14 +244,20 @@ const migrateSales = async (productMap, customerMap, userMap) => {
         total: sale.total,
         paymentMethod: sale.payment_method,
         user: userMap[sale.user_id],
+        shop: shopMap[sale.shop_id],
+        status: sale.status || 'completed',
         createdAt: sale.created_at || new Date(),
         notes: sale.notes
       });
       
-      await newSale.save();
+      const savedSale = await newSale.save();
+      saleMap[sale.id] = savedSale._id;
     }
     
+    // Save the mapping for later use
+    fs.writeFileSync(path.join(__dirname, 'saleMap.json'), JSON.stringify(saleMap));
     console.log(`Migrated ${sales.length} sales`);
+    return saleMap;
   } catch (error) {
     console.error('Error migrating sales:', error);
     throw error;
@@ -238,7 +282,8 @@ const migrateAllData = async () => {
       Product.deleteMany({}),
       User.deleteMany({}),
       Customer.deleteMany({}),
-      Sale.deleteMany({})
+      Sale.deleteMany({}),
+      Shop.deleteMany({})
     ]);
     
     // Migrate data
@@ -246,7 +291,8 @@ const migrateAllData = async () => {
     const productMap = await migrateProducts(categoryMap);
     const userMap = await migrateUsers();
     const customerMap = await migrateCustomers();
-    await migrateSales(productMap, customerMap, userMap);
+    const shopMap = await migrateShops();
+    await migrateSales(productMap, customerMap, userMap, shopMap);
     
     console.log('Data migration completed successfully');
   } catch (error) {

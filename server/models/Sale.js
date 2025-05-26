@@ -49,6 +49,10 @@ const SaleSchema = new mongoose.Schema({
     required: true,
     enum: ['cash', 'credit', 'debit', 'other']
   },
+  paymentDetails: {
+    // Additional payment details like card last 4 digits, transaction ID, etc.
+    type: Object
+  },
   user: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',
@@ -77,6 +81,10 @@ const SaleSchema = new mongoose.Schema({
   },
   notes: {
     type: String
+  },
+  shop: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Shop'
   }
 });
 
@@ -97,5 +105,89 @@ SaleSchema.methods.getReceiptData = function() {
     notes: this.notes
   };
 };
+
+// Calculate totals before saving
+SaleSchema.pre('save', async function(next) {
+  // Generate invoice number if not provided
+  if (!this.invoiceNumber) {
+    try {
+      const today = new Date();
+      const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+      
+      // Get the last invoice number for today
+      const lastSale = await this.constructor.findOne({
+        invoiceNumber: new RegExp(`^INV-${dateStr}-`)
+      }).sort({ createdAt: -1 });
+      
+      let nextNumber = 1;
+      if (lastSale && lastSale.invoiceNumber) {
+        const parts = lastSale.invoiceNumber.split('-');
+        if (parts.length >= 3) {
+          nextNumber = parseInt(parts[2]) + 1;
+        }
+      }
+      
+      this.invoiceNumber = `INV-${dateStr}-${nextNumber.toString().padStart(4, '0')}`;
+    } catch (error) {
+      return next(error);
+    }
+  }
+  
+  // Calculate totals if not already calculated
+  if (this.isNew || this.isModified('items')) {
+    // Calculate subtotal from items if not specified
+    if (!this.subtotal || this.isModified('items')) {
+      this.subtotal = this.items.reduce((sum, item) => {
+        return sum + (item.price * item.quantity);
+      }, 0);
+    }
+    
+    // Calculate item discounts
+    const itemDiscounts = this.items.reduce((sum, item) => {
+      return sum + (item.discount || 0);
+    }, 0);
+    
+    // Set total discount (item discounts + additional discount)
+    if (!this.discount) this.discount = 0;
+    
+    // Set tax if not specified
+    if (!this.tax) this.tax = 0;
+    
+    // Calculate total
+    this.total = this.subtotal - this.discount - itemDiscounts + this.tax;
+  }
+  
+  next();
+});
+
+// Pre-save middleware to generate invoice number if not provided
+SaleSchema.pre('save', async function(next) {
+  if (!this.invoiceNumber && !this.isModified('invoiceNumber')) {
+    try {
+      const today = new Date();
+      const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+      
+      // Get the last invoice number for today
+      const lastSale = await this.constructor.findOne({
+        invoiceNumber: new RegExp(`^INV-${dateStr}-`)
+      }).sort({ createdAt: -1 });
+      
+      let nextNumber = 1;
+      if (lastSale && lastSale.invoiceNumber) {
+        const parts = lastSale.invoiceNumber.split('-');
+        if (parts.length >= 3) {
+          nextNumber = parseInt(parts[2]) + 1;
+        }
+      }
+      
+      this.invoiceNumber = `INV-${dateStr}-${nextNumber.toString().padStart(4, '0')}`;
+      next();
+    } catch (error) {
+      next(error);
+    }
+  } else {
+    next();
+  }
+});
 
 module.exports = mongoose.model('Sale', SaleSchema);

@@ -773,7 +773,7 @@ const POS: React.FC = () => {
         ) : (
           cartItems.map((item, index) => (
             <ListGroup.Item key={item.product.id} className="py-3">
-              <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-2">
+                <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-2">
                 <div>
                   <h6 className="mb-1">{item.product.name}</h6>
                   <small className="text-muted">Rs. {item.product.price.toFixed(2)} x {item.quantity}</small>

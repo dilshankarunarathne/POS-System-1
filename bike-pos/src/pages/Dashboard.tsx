@@ -52,9 +52,21 @@ const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [salesData, setSalesData] = useState<any>({ summary: [], totals: {} });
+  const [salesData, setSalesData] = useState<any>({ 
+    summary: [], 
+    totals: {
+      total: 0,
+      subtotal: 0,
+      tax: 0,
+      discount: 0,
+      totalSales: 0,
+      totalItems: 0,
+      averageSale: 0
+    } 
+  });
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
   const [topProducts, setTopProducts] = useState<any[]>([]);
+  const [dailySales, setDailySales] = useState<any[]>([]);
   
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -71,48 +83,90 @@ const Dashboard: React.FC = () => {
         const startDateStr = startDate.toISOString().split('T')[0];
         const endDateStr = endDate.toISOString().split('T')[0];
         
-        // Fetch sales data
+        // Fetch sales summary data
         const salesResponse = await reportsApi.getSalesSummary({
           startDate: startDateStr,
-          endDate: endDateStr,
-          groupBy: 'day',
+          endDate: endDateStr
         });
         
-        // Ensure we have proper data structure, set defaults if needed
+        // Fetch daily sales data
+        const dailyResponse = await reportsApi.getSalesSummary({
+          startDate: startDateStr,
+          endDate: endDateStr,
+          groupBy: "day"
+        });
+        
+        if (Array.isArray(dailyResponse.data)) {
+          setDailySales(dailyResponse.data);
+        } else {
+          console.warn('Daily sales data is not an array:', dailyResponse.data);
+          setDailySales([]);
+        }
+        
+        // Process sales data
         const salesResponseData = salesResponse.data || {};
         setSalesData({
           summary: Array.isArray(salesResponseData.summary) ? salesResponseData.summary : [],
-          totals: salesResponseData.totals || {}
+          totals: salesResponseData.totals || {
+            total: 0,
+            subtotal: 0,
+            tax: 0,
+            discount: 0,
+            totalSales: 0,
+            totalItems: 0,
+            averageSale: 0
+          }
         });
         
         // Fetch low stock products
-        const lowStockResponse = await productsApi.getAll({
-          lowStock: true,
-          limit: 5,
-        });
+        const lowStockResponse = await productsApi.getAll({ limit: 100 });
         
-        setLowStockProducts(Array.isArray(lowStockResponse.data?.products) ? 
-          lowStockResponse.data.products : []);
+        // Filter products with low stock
+        const lowStockData = lowStockResponse.data?.products?.filter(
+          (product: any) => product.quantity <= (product.lowStockThreshold || 10)
+        ).slice(0, 5) || [];
+        setLowStockProducts(Array.isArray(lowStockData) ? 
+          lowStockData.map(product => ({
+            id: product._id,
+            name: product.name,
+            category: product.category?.name || 'Uncategorized',
+            stock: product.quantity,
+            stockThreshold: product.lowStockThreshold || 10,
+          })) : []);
         
         // Fetch top selling products
         const topProductsResponse = await reportsApi.getProductSalesReport({
           startDate: startDateStr,
-          endDate: endDateStr,
-          limit: 5,
+          endDate: endDateStr
         });
         
-        // Explicitly ensure topProducts is an array
-        const topProductsData = topProductsResponse.data;
-        setTopProducts(Array.isArray(topProductsData) ? topProductsData : []);
+        const topProductsData = topProductsResponse.data?.products || [];
+        if (Array.isArray(topProductsData)) {
+          // Map the data to match our expected structure
+          setTopProducts(topProductsData.slice(0, 5).map(product => ({
+            id: product._id,
+            name: product.productName || 'Unknown Product',
+            quantitySold: product.totalQuantity || 0,
+            revenue: product.totalRevenue || 0
+          })));
+        } else {
+          console.warn('Top products data is not an array');
+          setTopProducts([]);
+        }
         
-        // Log data for debugging
-        console.log('Top products data:', topProductsData, 'Type:', typeof topProductsData);
-        
-      } catch (err) {
+      } catch (err: any) {
         console.error('Failed to fetch dashboard data:', err);
-        setError('Failed to load dashboard data. Please try again later.');
+        setError('Failed to load dashboard data. ' + (err.message || 'Please try again later.'));
         // Set empty default values to prevent map errors
-        setSalesData({ summary: [], totals: {} });
+        setSalesData({ summary: [], totals: {
+          total: 0,
+          subtotal: 0,
+          tax: 0,
+          discount: 0,
+          totalSales: 0,
+          totalItems: 0,
+          averageSale: 0
+        } });
         setLowStockProducts([]);
         setTopProducts([]);
       } finally {
@@ -123,34 +177,91 @@ const Dashboard: React.FC = () => {
     fetchDashboardData();
   }, []);
   
-  // Prepare data for sales chart - add safety checks
+  // Prepare data for sales chart
   const salesChartData = {
-    labels: Array.isArray(salesData.summary) ? 
-      salesData.summary.map((item: any) => {
-        const date = new Date(item.date);
-        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-      }) : [],
+    labels: dailySales.map(day => {
+      const date = new Date(day.date);
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }),
     datasets: [
       {
-        label: 'Sales',
-        data: Array.isArray(salesData.summary) ? 
-          salesData.summary.map((item: any) => item.total) : [],
+        label: 'Revenue',
+        data: dailySales.map(day => day.revenue),
         borderColor: 'rgba(75, 192, 192, 1)',
         backgroundColor: 'rgba(75, 192, 192, 0.2)',
         tension: 0.4,
       },
+      {
+        label: 'Transactions',
+        data: dailySales.map(day => day.transactions),
+        borderColor: 'rgba(255, 159, 64, 1)',
+        backgroundColor: 'rgba(255, 159, 64, 0.2)',
+        tension: 0.4,
+        yAxisID: 'y1',
+      }
     ],
   };
   
-  // Prepare data for product category chart - add strict array checks
+  // Options for sales chart with dual Y axis
+  const salesChartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: {
+        beginAtZero: true,
+        position: 'left' as const,
+        title: {
+          display: true,
+          text: 'Revenue'
+        },
+        grid: {
+          color: 'rgba(0, 0, 0, 0.05)'
+        }
+      },
+      y1: {
+        beginAtZero: true,
+        position: 'right' as const,
+        title: {
+          display: true,
+          text: 'Transactions'
+        },
+        grid: {
+          display: false
+        }
+      },
+      x: {
+        grid: {
+          color: 'rgba(0, 0, 0, 0)'
+        }
+      }
+    },
+    plugins: {
+      tooltip: {
+        callbacks: {
+          label: function(context: any) {
+            let label = context.dataset.label || '';
+            if (label) {
+              label += ': ';
+            }
+            if (context.parsed.y !== null) {
+              label += context.dataset.label === 'Revenue' 
+                ? `Rs. ${context.parsed.y}` 
+                : context.parsed.y;
+            }
+            return label;
+          }
+        }
+      }
+    }
+  };
+  
+  // Prepare data for product category chart
   const categoryChartData = {
-    labels: Array.isArray(topProducts) ? 
-      topProducts.map(product => product.name) : [],
+    labels: topProducts.map(product => product.name),
     datasets: [
       {
         label: 'Units Sold',
-        data: Array.isArray(topProducts) ? 
-          topProducts.map(product => product.quantitySold) : [],
+        data: topProducts.map(product => product.quantitySold),
         backgroundColor: [
           'rgba(255, 99, 132, 0.6)',
           'rgba(54, 162, 235, 0.6)',
@@ -196,26 +307,30 @@ const Dashboard: React.FC = () => {
         <>
           {/* Quick Stats */}
           <Row className="g-4 mb-4">
-            {/* Stat Card 1 */}
+            {/* Total Sales Revenue */}
             <Col lg={3} md={6} sm={6} xs={12}>
               <Card className="h-100 shadow-sm border-0 stat-card">
                 <Card.Body className="p-3">
                   <div className="d-flex justify-content-between">
                     <div>
-                      <Card.Title as="h6" className="text-muted mb-1">Total Sales</Card.Title>
-                      <h3 className="mb-0 fw-bold">Rs. {salesData.totals?.total || '0.00'}</h3>
+                      <Card.Title as="h6" className="text-muted mb-1">Total Revenue</Card.Title>
+                      <h3 className="mb-0 fw-bold">Rs. {salesData.totals?.total?.toLocaleString() || '0.00'}</h3>
                       <Badge bg="success" className="mt-2">Last 7 days</Badge>
                     </div>
                     <div className="rounded-circle d-flex align-items-center justify-content-center stat-icon-bg primary-icon">
                       <CurrencyDollar size={22} />
                     </div>
                   </div>
-                  {salesData.summary.length > 1 && 
+                  {dailySales.length > 1 && 
                     <div className="mt-3">
-                      <small className="text-success">
+                      <small className={
+                        dailySales[dailySales.length-1]?.revenue > dailySales[dailySales.length-2]?.revenue 
+                          ? "text-success" : "text-danger"
+                      }>
                         <GraphUp className="me-1" /> 
-                        {((salesData.summary[salesData.summary.length-1]?.total / 
-                          salesData.summary[salesData.summary.length-2]?.total - 1) * 100).toFixed(1)}% vs previous day
+                        {dailySales[dailySales.length-2]?.revenue > 0 
+                          ? (((dailySales[dailySales.length-1]?.revenue / dailySales[dailySales.length-2]?.revenue) - 1) * 100).toFixed(1)
+                          : '0'}% vs previous day
                       </small>
                     </div>
                   }
@@ -223,14 +338,14 @@ const Dashboard: React.FC = () => {
               </Card>
             </Col>
             
-            {/* Stat Card 2 */}
+            {/* Total Transactions */}
             <Col lg={3} md={6} sm={6} xs={12}>
               <Card className="h-100 shadow-sm border-0 stat-card">
                 <Card.Body className="p-3">
                   <div className="d-flex justify-content-between">
                     <div>
                       <Card.Title as="h6" className="text-muted mb-1">Transactions</Card.Title>
-                      <h3 className="mb-0 fw-bold">{salesData.totals?.totalSales || 0}</h3>
+                      <h3 className="mb-0 fw-bold">{salesData.totals?.totalSales?.toLocaleString() || 0}</h3>
                       <Badge bg="info" className="mt-2">Last 7 days</Badge>
                     </div>
                     <div className="rounded-circle d-flex align-items-center justify-content-center stat-icon-bg success-icon">
@@ -239,15 +354,14 @@ const Dashboard: React.FC = () => {
                   </div>
                   <div className="mt-3">
                     <small className="text-muted">
-                      Average: {salesData.totals?.totalSales ? 
-                        Math.round(salesData.totals.totalSales / 7) : 0} per day
+                      Average: {Math.round(salesData.totals?.totalSales / 7) || 0} per day
                     </small>
                   </div>
                 </Card.Body>
               </Card>
             </Col>
             
-            {/* Stat Card 3 */}
+            {/* Average Sale Value */}
             <Col lg={3} md={6} sm={6} xs={12}>
               <Card className="h-100 shadow-sm border-0 stat-card">
                 <Card.Body className="p-3">
@@ -255,8 +369,7 @@ const Dashboard: React.FC = () => {
                     <div>
                       <Card.Title as="h6" className="text-muted mb-1">Avg Sale Value</Card.Title>
                       <h3 className="mb-0 fw-bold">
-                        Rs. {salesData.totals?.totalSales && salesData.totals.total ? 
-                          (salesData.totals.total / salesData.totals.totalSales).toFixed(2) : '0.00'}
+                        Rs. {salesData.totals?.averageSale?.toLocaleString() || '0.00'}
                       </h3>
                       <Badge bg="warning" className="mt-2">Last 7 days</Badge>
                     </div>
@@ -268,7 +381,7 @@ const Dashboard: React.FC = () => {
               </Card>
             </Col>
             
-            {/* Stat Card 4 */}
+            {/* Low Stock Items */}
             <Col lg={3} md={6} sm={6} xs={12}>
               <Card className="h-100 shadow-sm border-0 stat-card">
                 <Card.Body className="p-3">
@@ -295,44 +408,11 @@ const Dashboard: React.FC = () => {
                 <Card.Body className="p-4">
                   <Card.Title as="h5" className="mb-3">Sales Trend</Card.Title>
                   
-                  {salesData.summary.length > 0 ? (
+                  {dailySales.length > 0 ? (
                     <div style={{ height: '350px' }}>
                       <Line
                         data={salesChartData}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: {
-                              position: 'top',
-                            },
-                            title: {
-                              display: false,
-                            },
-                            tooltip: {
-                              backgroundColor: 'rgba(0, 0, 0, 0.8)',
-                              displayColors: false,
-                              callbacks: {
-                                label: function(context) {
-                                  return `Rs. ${context.raw}`;
-                                }
-                              }
-                            }
-                          },
-                          scales: {
-                            y: {
-                              beginAtZero: true,
-                              grid: {
-                                color: 'rgba(0, 0, 0, 0.05)'
-                              }
-                            },
-                            x: {
-                              grid: {
-                                color: 'rgba(0, 0, 0, 0)'
-                              }
-                            }
-                          },
-                        }}
+                        options={salesChartOptions}
                       />
                     </div>
                   ) : (
@@ -362,6 +442,17 @@ const Dashboard: React.FC = () => {
                             legend: {
                               display: false,
                             },
+                            tooltip: {
+                              callbacks: {
+                                label: function(context) {
+                                  return `Sold: ${context.raw} units`;
+                                },
+                                afterLabel: function(context) {
+                                  const product = topProducts[context.dataIndex];
+                                  return `Revenue: Rs. ${product.revenue.toLocaleString()}`;
+                                }
+                              }
+                            }
                           },
                           scales: {
                             x: {
@@ -448,20 +539,21 @@ const Dashboard: React.FC = () => {
             <Col lg={6} md={12}>
               <Card className="h-100 shadow-sm border-0">
                 <Card.Body className="p-4">
-                  <Card.Title as="h5" className="mb-3">Recent Sales</Card.Title>
+                  <Card.Title as="h5" className="mb-3">Recent Sales Summary</Card.Title>
                   
-                  {salesData.summary.length > 0 ? (
+                  {dailySales.length > 0 ? (
                     <div className="table-responsive">
                       <Table hover className="mb-0">
                         <thead className="table-light">
                           <tr>
                             <th>Date</th>
                             <th>Sales</th>
+                            <th>Revenue</th>
                             <th>Items Sold</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {[...salesData.summary]
+                          {[...dailySales]
                             .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
                             .slice(0, 5)
                             .map((day, idx) => (
@@ -469,8 +561,9 @@ const Dashboard: React.FC = () => {
                                 <td>{new Date(day.date).toLocaleDateString('en-US', { 
                                   weekday: 'short', month: 'short', day: 'numeric' 
                                 })}</td>
-                                <td>Rs. {day.total}</td>
-                                <td>{day.itemCount || 0}</td>
+                                <td>{day.transactions}</td>
+                                <td>Rs. {day.revenue.toLocaleString()}</td>
+                                <td>{day.items}</td>
                               </tr>
                             ))}
                         </tbody>

@@ -227,26 +227,43 @@ const migrateSales = async (productMap, customerMap, userMap, shopMap = {}) => {
     
     // Insert sales into MongoDB
     for (const sale of sales) {
-      const items = (salesItemsMap[sale.id] || []).map(item => ({
-        product: productMap[item.product_id],
-        quantity: item.quantity,
-        price: item.price,
-        discount: item.discount || 0
-      }));
+      const items = (salesItemsMap[sale.id] || []).map(item => {
+        const itemPrice = parseFloat(item.price) || 0;
+        const itemQuantity = parseInt(item.quantity) || 1;
+        const itemDiscount = parseFloat(item.discount) || 0;
+        
+        return {
+          product: productMap[item.product_id],
+          quantity: itemQuantity,
+          price: itemPrice,
+          discount: itemDiscount,
+          // Add calculated subtotal for each item
+          subtotal: (itemPrice * itemQuantity) - itemDiscount
+        };
+      });
+      
+      // Calculate correct subtotal from items
+      const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const itemDiscounts = items.reduce((sum, item) => sum + (item.discount || 0), 0);
+      const tax = parseFloat(sale.tax) || 0;
+      const discount = parseFloat(sale.discount) || 0;
+      const total = subtotal + tax - discount - itemDiscounts;
+      
+      const saleDate = sale.created_at ? new Date(sale.created_at) : new Date();
       
       const newSale = new Sale({
-        invoiceNumber: sale.invoice_number || `INV-${Date.now()}-${Math.floor(Math.random() * 1000).toString().padStart(4, '0')}`,
+        invoiceNumber: sale.invoice_number || `INV-${saleDate.toISOString().slice(0,10).replace(/-/g,'')}-${Math.floor(Math.random() * 1000).toString().padStart(4, '0')}`,
         customer: customerMap[sale.customer_id],
         items,
-        subtotal: sale.subtotal,
-        tax: sale.tax || 0,
-        discount: sale.discount || 0,
-        total: sale.total,
-        paymentMethod: sale.payment_method,
+        subtotal,
+        tax,
+        discount,
+        total,
+        paymentMethod: sale.payment_method || 'cash',
         user: userMap[sale.user_id],
         shop: shopMap[sale.shop_id],
         status: sale.status || 'completed',
-        createdAt: sale.created_at || new Date(),
+        createdAt: saleDate,
         notes: sale.notes
       });
       

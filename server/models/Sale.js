@@ -153,7 +153,7 @@ SaleSchema.pre('save', async function(next) {
     // Set tax if not specified
     if (!this.tax) this.tax = 0;
     
-    // Calculate total
+    // Calculate total - ensuring correct calculation subtracting both discounts
     this.total = this.subtotal - this.discount - itemDiscounts + this.tax;
   }
   

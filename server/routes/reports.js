@@ -9,5 +9,6 @@ router.get('/sales/summary', authenticate, authorize('admin', 'manager'), report
 router.get('/sales/products', authenticate, authorize('admin', 'manager'), reportController.getProductSalesReport);
 router.get('/inventory', authenticate, authorize('admin', 'manager'), reportController.getInventoryStatusReport);
 router.get('/sales/pdf', authenticate, authorize('admin', 'manager'), reportController.generateSalesReport);
+router.get('/sales/daily', authenticate, authorize('admin', 'manager'), reportController.getDailySales);
 
-module.exports = router; 
+module.exports = router;

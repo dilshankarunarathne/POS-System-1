@@ -1,12 +1,18 @@
 import axios from 'axios';
 
-// Create axios instance with base URL
+// Configure base API settings
+const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
+// Create axios instance with default config
 const api = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:5000/api',
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json'
+  }
 });
 
-// Add request interceptor to add auth token
-api.interceptors.request.use((config) => {
+// Add auth token to requests
+api.interceptors.request.use(config => {
   const token = localStorage.getItem('token');
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
@@ -32,51 +38,84 @@ api.interceptors.response.use(
   }
 );
 
-// Create axios instance
-const axiosInstance = axios.create({
-  baseURL: process.env.REACT_APP_API_URL || 'http://localhost:3001/api',
-  headers: {
-    'Content-Type': 'application/json'
+// API endpoints for reports 
+export const reportsApi = {
+  // Get sales summary data for dashboard
+  getSalesSummary: (params = {}) => {
+    return api.get('/reports/sales/summary', { params });
+  },
+  
+  // Get product sales report data
+  getProductSalesReport: (params = {}) => {
+    return api.get('/reports/sales/products', { params });
+  },
+  
+  // Get inventory status report
+  getInventoryReport: (params = {}) => {
+    return api.get('/reports/inventory', { params });
+  },
+
+  // Get daily sales data
+  getDailySales: (params = {}) => {
+    return api.get('/reports/sales/daily', { params });
   }
-});
+};
+
+// API endpoints for products
+export const productsApi = {
+  // Get all products with optional filtering
+  getAll: (params = {}) => {
+    return api.get('/products', { params });
+  },
+  
+  // Get product by ID
+  getById: (id) => {
+    return api.get(`/products/${id}`);
+  },
+  
+  // Create product
+  create: (productData) => {
+    return api.post('/products', productData);
+  },
+  
+  // Update product
+  update: (id, productData) => {
+    return api.put(`/products/${id}`, productData);
+  },
+  
+  // Delete product
+  delete: (id) => {
+    return api.delete(`/products/${id}`);
+  },
+  
+  // Get low stock products
+  getLowStock: (limit = 10) => {
+    return api.get('/products', { params: { lowStock: true, limit } });
+  }
+};
+
+// API endpoints for sales
+export const salesApi = {
+  // Get all sales with optional filtering
+  getAll: (params = {}) => {
+    return api.get('/sales', { params });
+  },
+  
+  // Get sale by ID
+  getById: (id) => {
+    return api.get(`/sales/${id}`);
+  },
+  
+  // Create new sale
+  create: (saleData) => {
+    return api.post('/sales', saleData);
+  }
+};
 
 // Auth API
 export const authApi = {
   login: (data) => api.post('/auth/login', data),
   getProfile: () => api.get('/auth/me'),
-};
-
-// Products API
-export const productsApi = {
-  getAll: (params) => api.get('/products', { params }),
-  getById: (id) => api.get(`/products/${id}`),
-  create: (data) => api.post('/products', data),
-  update: (id, data) => api.put(`/products/${id}`, data),
-  delete: (id) => api.delete(`/products/${id}`),
-
-  // Get product by barcode
-  getByBarcode: async (barcode) => {
-    try {
-      const response = await api.get(`/products/barcode/${barcode}`);
-      return response.data;
-    } catch (error) {
-      console.error('Error fetching product by barcode:', error);
-      if (error.code === 'ECONNABORTED') {
-        throw new Error('Connection timeout. Server might be unavailable.');
-      }
-      if (error.code === 'ERR_NETWORK' || error.message.includes('Network Error')) {
-        throw new Error('Network error. Please check server connection.');
-      }
-      if (error.response) {
-        // The server responded with an error status
-        if (error.response.status === 404) {
-          throw new Error(`Product with barcode ${barcode} not found`);
-        }
-        throw new Error(`Server error (${error.response.status}): ${error.response.data?.message || 'Unknown error'}`);
-      }
-      throw error;
-    }
-  },
 };
 
 // Categories API
@@ -86,22 +125,6 @@ export const categoriesApi = {
   create: (data) => api.post('/categories', data),
   update: (id, data) => api.put(`/categories/${id}`, data),
   delete: (id) => api.delete(`/categories/${id}`),
-};
-
-// Sales API
-export const salesApi = {
-  getAll: (params) => api.get('/sales', { params }),
-  getById: (id) => api.get(`/sales/${id}`),
-  create: (data) => api.post('/sales', data), // This matches the controller route
-  updateStatus: (id, data) => api.patch(`/sales/${id}/status`, data),
-};
-
-// Reports API
-export const reportsApi = {
-  getSalesSummary: (params) => api.get('/reports/sales/summary', { params }),
-  getProductSalesReport: (params) => api.get('/reports/sales/products', { params }),
-  getInventoryStatusReport: (params) => api.get('/reports/inventory', { params }),
-  generateSalesReport: (params) => api.get('/reports/sales/pdf', { params }),
 };
 
 // Suppliers API (Missing in original file)

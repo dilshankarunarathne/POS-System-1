@@ -5,7 +5,7 @@ const mongoose = require('mongoose');
 // Get sales summary report
 const getSalesSummary = async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, groupBy = 'day' } = req.query;
 
     // Default to last 30 days if no dates provided
     const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -14,36 +14,178 @@ const getSalesSummary = async (req, res) => {
     // Set end date to end of day
     end.setHours(23, 59, 59, 999);
 
-    // Query sales within date range
-    const sales = await Sale.find({
-      createdAt: { $gte: start, $lte: end }
-    });
+    // Format for aggregation
+    start.setHours(0, 0, 0, 0);
 
-    // Calculate summary statistics
-    const totalSales = sales.length;
-    const revenue = sales.reduce((sum, sale) => sum + sale.total, 0);
-    const avgSale = totalSales > 0 ? revenue / totalSales : 0;
-    
-    // Group by payment method
-    const paymentMethods = {};
-    sales.forEach(sale => {
-      if (!paymentMethods[sale.paymentMethod]) {
-        paymentMethods[sale.paymentMethod] = 0;
+    // Aggregate sales by day
+    const dailySalesAggregation = await Sale.aggregate([
+      {
+        $match: { 
+          createdAt: { $gte: start, $lte: end },
+          status: { $ne: 'cancelled' } // Exclude cancelled sales
+        }
+      },
+      {
+        $addFields: {
+          // Create date field with just the date part for grouping
+          saleDate: { 
+            $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } 
+          }
+        }
+      },
+      {
+        $group: {
+          _id: "$saleDate",
+          total: { $sum: "$total" },
+          salesCount: { $sum: 1 },
+          itemCount: { $sum: { $size: "$items" } }
+        }
+      },
+      {
+        $sort: { _id: 1 } // Sort by date
+      },
+      {
+        $project: {
+          _id: 0,
+          date: "$_id",
+          total: { $round: ["$total", 2] },
+          salesCount: 1,
+          itemCount: 1
+        }
       }
-      paymentMethods[sale.paymentMethod] += sale.total;
-    });
+    ]);
+
+    // Get total sales within period
+    const totalStats = await Sale.aggregate([
+      {
+        $match: { 
+          createdAt: { $gte: start, $lte: end },
+          status: { $ne: 'cancelled' }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$total" },
+          subtotal: { $sum: "$subtotal" },
+          tax: { $sum: "$tax" },
+          discount: { $sum: "$discount" },
+          totalSales: { $sum: 1 },
+          totalItems: { $sum: { $size: "$items" } }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          total: { $round: ["$total", 2] },
+          subtotal: { $round: ["$subtotal", 2] },
+          tax: { $round: ["$tax", 2] },
+          discount: { $round: ["$discount", 2] },
+          totalSales: 1,
+          totalItems: 1,
+          averageSale: { $round: [{ $divide: ["$total", "$totalSales"] }, 2] }
+        }
+      }
+    ]);
+    
+    // Group by payment methods
+    const paymentMethodStats = await Sale.aggregate([
+      {
+        $match: { 
+          createdAt: { $gte: start, $lte: end },
+          status: { $ne: 'cancelled' }
+        }
+      },
+      {
+        $group: {
+          _id: "$paymentMethod",
+          total: { $sum: "$total" },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          method: "$_id",
+          total: { $round: ["$total", 2] },
+          count: 1
+        }
+      }
+    ]);
 
     res.status(200).json({
       startDate: start,
       endDate: end,
-      totalSales,
-      revenue,
-      avgSale,
-      paymentMethods
+      summary: dailySalesAggregation,
+      totals: totalStats.length > 0 ? totalStats[0] : {
+        total: 0,
+        subtotal: 0,
+        tax: 0,
+        discount: 0,
+        totalSales: 0,
+        totalItems: 0,
+        averageSale: 0
+      },
+      paymentMethods: paymentMethodStats
     });
   } catch (error) {
     console.error('Error generating sales summary:', error);
-    res.status(500).json({ message: 'Server error generating report' });
+    res.status(500).json({ message: 'Server error generating report', error: error.message });
+  }
+};
+
+// Get daily sales data
+const getDailySales = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+
+    // Default to last 7 days if no dates provided
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const end = endDate ? new Date(endDate) : new Date();
+    
+    // Set end date to end of day
+    end.setHours(23, 59, 59, 999);
+    start.setHours(0, 0, 0, 0);
+
+    // Aggregate daily sales
+    const dailySales = await Sale.aggregate([
+      {
+        $match: { 
+          createdAt: { $gte: start, $lte: end },
+          status: { $ne: 'cancelled' }
+        }
+      },
+      {
+        $addFields: {
+          day: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }
+        }
+      },
+      {
+        $group: {
+          _id: "$day",
+          revenue: { $sum: "$total" },
+          transactions: { $sum: 1 },
+          items: { $sum: { $size: "$items" } }
+        }
+      },
+      {
+        $sort: { _id: 1 }
+      },
+      {
+        $project: {
+          date: "$_id",
+          revenue: { $round: ["$revenue", 2] },
+          transactions: 1,
+          items: 1,
+          _id: 0
+        }
+      }
+    ]);
+
+    res.status(200).json(dailySales);
+  } catch (error) {
+    console.error('Error getting daily sales data:', error);
+    res.status(500).json({ message: 'Server error getting daily sales', error: error.message });
   }
 };
 
@@ -172,5 +314,6 @@ module.exports = {
   getSalesSummary,
   getProductSalesReport,
   getInventoryStatusReport,
-  generateSalesReport
+  generateSalesReport,
+  getDailySales
 };

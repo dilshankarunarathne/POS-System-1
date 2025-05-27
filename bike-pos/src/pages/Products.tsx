@@ -17,6 +17,9 @@ import {
 import { categoriesApi, printApi, productsApi, suppliersApi } from '../services/api';
 // Fix icon imports
 import {
+  FaFileDownload,
+  FaFileExcel,
+  FaFileUpload,
   FaFilter,
   FaPencilAlt,
   FaPlus,
@@ -24,6 +27,8 @@ import {
   FaSearch,
   FaTrash
 } from 'react-icons/fa';
+// Import xlsx library for Excel file processing
+import * as XLSX from 'xlsx';
 
 const Products: React.FC = () => {
   // State for products data
@@ -35,6 +40,13 @@ const Products: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   // Add loading state for print operation
   const [printLoading, setPrintLoading] = useState(false);
+  
+  // New states for bulk import
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importFile, setImportFile] = useState<File | null>(null);
+  const [importLoading, setImportLoading] = useState(false);
+  const [importData, setImportData] = useState<any[]>([]);
+  const [importPreview, setImportPreview] = useState(false);
   
   // State for pagination
   const [page, setPage] = useState(0);
@@ -407,6 +419,163 @@ const Products: React.FC = () => {
     return items;
   };
 
+  // Function to download Excel template
+  const downloadTemplate = () => {
+    // Create a template with columns
+    const template = [
+      {
+        name: 'Sample Product',
+        description: 'Product description',
+        barcode: '', // Leave empty for auto-generation
+        price: 1000,
+        costPrice: 800,
+        stockQuantity: 10,
+        reorderLevel: 5,
+        categoryName: 'Category Name', // Can use either name or ID
+        supplierName: 'Supplier Name', // Can use either name or ID
+      }
+    ];
+
+    // Create workbook and worksheet
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.json_to_sheet(template);
+
+    // Add column widths for better readability
+    const wscols = [
+      { wch: 20 }, // name
+      { wch: 30 }, // description
+      { wch: 15 }, // barcode
+      { wch: 10 }, // price
+      { wch: 10 }, // costPrice
+      { wch: 10 }, // stockQuantity
+      { wch: 10 }, // reorderLevel
+      { wch: 15 }, // categoryName
+      { wch: 15 }, // supplierName
+    ];
+    ws['!cols'] = wscols;
+
+    // Add the worksheet to the workbook
+    XLSX.utils.book_append_sheet(wb, ws, 'Products Template');
+
+    // Generate Excel file and download
+    XLSX.writeFile(wb, 'product_import_template.xlsx');
+  };
+
+  // Function to handle file selection
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      setImportFile(files[0]);
+      // Reset preview when new file is selected
+      setImportPreview(false);
+      setImportData([]);
+    }
+  };
+
+  // Function to parse Excel file
+  const parseExcelFile = () => {
+    if (!importFile) return;
+
+    setImportLoading(true);
+    
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = e.target?.result;
+        const workbook = XLSX.read(data, { type: 'array' });
+        
+        // Get first worksheet
+        const worksheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[worksheetName];
+        
+        // Convert to JSON
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+        
+        // Validate data structure
+        if (jsonData.length === 0) {
+          setError('The Excel file is empty or has no valid data');
+          setImportLoading(false);
+          return;
+        }
+        
+        // Check required fields
+        const requiredFields = ['name', 'price', 'stockQuantity'];
+        const firstRow = jsonData[0] as any;
+        
+        const missingFields = requiredFields.filter(field => !(field in firstRow));
+        if (missingFields.length > 0) {
+          setError(`Missing required fields: ${missingFields.join(', ')}`);
+          setImportLoading(false);
+          return;
+        }
+
+        setImportData(jsonData);
+        setImportPreview(true);
+        setImportLoading(false);
+      } catch (error) {
+        console.error('Error parsing Excel file:', error);
+        setError('Failed to parse Excel file. Please make sure it\'s a valid Excel file.');
+        setImportLoading(false);
+      }
+    };
+    
+    reader.readAsArrayBuffer(importFile);
+  };
+
+  // Function to submit imported data
+  const submitImportData = async () => {
+    if (importData.length === 0) return;
+    
+    setImportLoading(true);
+    
+    try {
+      // Create an array to track successful and failed imports
+      let successCount = 0;
+      let failedCount = 0;
+      
+      // Process each product
+      for (const product of importData) {
+        try {
+          const formDataToSend = new FormData();
+          
+          // Add all fields from product object to formData
+          Object.keys(product).forEach(key => {
+            if (product[key] !== undefined && product[key] !== null && product[key] !== '') {
+              formDataToSend.append(key, product[key].toString());
+            }
+          });
+          
+          await productsApi.create(formDataToSend);
+          successCount++;
+        } catch (err) {
+          console.error('Error importing product:', product, err);
+          failedCount++;
+        }
+      }
+      
+      // Show result message
+      setSuccessMessage(`Import completed: ${successCount} products added successfully, ${failedCount} failed`);
+      setImportModalOpen(false);
+      fetchProducts();
+    } catch (err) {
+      console.error('Import process error:', err);
+      setError('Failed to complete the import process');
+    } finally {
+      setImportLoading(false);
+      setImportFile(null);
+      setImportData([]);
+      setImportPreview(false);
+    }
+  };
+  
+  // Reset import modal state
+  const handleCloseImportModal = () => {
+    setImportModalOpen(false);
+    setImportFile(null);
+    setImportData([]);
+    setImportPreview(false);
+  };
+
   return (
     <Container fluid className="py-4">
       {/* Header */}
@@ -418,6 +587,10 @@ const Products: React.FC = () => {
         <Col xs="auto" className="d-flex gap-2">
           <Button variant="primary" onClick={() => handleOpenProductForm()}>
             <>{FaPlus({ className: "me-1" })}</> Add Product
+          </Button>
+          
+          <Button variant="success" onClick={() => setImportModalOpen(true)}>
+            <>{FaFileExcel({ className: "me-1" })}</> Import Products
           </Button>
           
           {selectedProductIds.length > 0 && (
@@ -844,6 +1017,151 @@ const Products: React.FC = () => {
             </Button>
           </Modal.Footer>
         </form>
+      </Modal>
+      
+      {/* Import Products Modal */}
+      <Modal 
+        show={importModalOpen} 
+        onHide={handleCloseImportModal}
+        size="lg"
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Import Products from Excel</Modal.Title>
+        </Modal.Header>
+        
+        <Modal.Body>
+          {!importPreview ? (
+            <>
+              <p>Upload an Excel file containing product data. The file should have the following columns:</p>
+              <ul>
+                <li><strong>name</strong> - Product name (required)</li>
+                <li><strong>description</strong> - Product description</li>
+                <li><strong>barcode</strong> - Product barcode (leave empty for auto-generation)</li>
+                <li><strong>price</strong> - Selling price (required)</li>
+                <li><strong>costPrice</strong> - Cost price</li>
+                <li><strong>stockQuantity</strong> - Initial stock quantity (required)</li>
+                <li><strong>reorderLevel</strong> - Stock reorder level</li>
+                <li><strong>categoryName</strong> - Category name</li>
+                <li><strong>supplierName</strong> - Supplier name</li>
+              </ul>
+              
+              <div className="d-flex justify-content-between mb-3">
+                <Button 
+                  variant="outline-primary" 
+                  onClick={downloadTemplate}
+                >
+                  <>{FaFileDownload({ className: "me-1" })}</> Download Template
+                </Button>
+              </div>
+
+              <Form.Group className="mb-3">
+                <Form.Label>Excel File</Form.Label>
+                <Form.Control
+                  type="file"
+                  accept=".xlsx, .xls"
+                  onChange={handleFileChange}
+                />
+                <Form.Text className="text-muted">
+                  Only Excel files (.xlsx, .xls) are accepted
+                </Form.Text>
+              </Form.Group>
+            </>
+          ) : (
+            <>
+              <div className="d-flex justify-content-between mb-3">
+                <h5>Preview ({importData.length} products)</h5>
+                <Button 
+                  variant="link" 
+                  onClick={() => {
+                    setImportPreview(false);
+                    setImportData([]);
+                  }}
+                >
+                  Back to Upload
+                </Button>
+              </div>
+              
+              <div className="table-responsive" style={{ maxHeight: '400px', overflowY: 'auto' }}>
+                <Table hover size="sm">
+                  <thead>
+                    <tr>
+                      <th>#</th>
+                      <th>Name</th>
+                      <th>Description</th>
+                     
+                      <th>Price</th>
+                      <th>Cost Price</th>
+                      <th>Stock</th>
+                      <th>Reorder Level</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {importData.map((product, index) => (
+                      <tr key={index}>
+                        <td>{index + 1}</td>
+                        <td>{product.name}</td>
+                        <td>{product.description || '-'}</td>
+                        <td>Rs. {product.price}</td>
+                        <td>{product.costPrice ? `Rs. ${product.costPrice}` : '-'}</td>
+                        <td>{product.stockQuantity}</td>
+                        <td>{product.reorderLevel || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </Table>
+              </div>
+              
+              {importData.length > 100 && (
+                <p className="text-warning mt-2">
+                  Warning: You are importing a large number of products ({importData.length}). 
+                  This might take some time.
+                </p>
+              )}
+            </>
+          )}
+        </Modal.Body>
+        
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleCloseImportModal} disabled={importLoading}>
+            Cancel
+          </Button>
+          
+          {!importPreview ? (
+            <Button 
+              variant="primary" 
+              onClick={parseExcelFile}
+              disabled={!importFile || importLoading}
+            >
+              {importLoading ? (
+                <>
+                  <Spinner as="span" animation="border" size="sm" className="me-1" /> 
+                  Parsing...
+                </>
+              ) : (
+                <>
+                  <>{FaFileUpload({ className: "me-1" })}</> Preview Import
+                </>
+              )}
+            </Button>
+          ) : (
+            <Button 
+              variant="success" 
+              onClick={submitImportData}
+              disabled={importLoading || importData.length === 0}
+            >
+              {importLoading ? (
+                <>
+                  <Spinner as="span" animation="border" size="sm" className="me-1" /> 
+                  Importing...
+                </>
+              ) : (
+                <>
+                  Import {importData.length} Products
+                </>
+              )}
+            </Button>
+          )}
+        </Modal.Footer>
       </Modal>
       
       {/* Toasts for notifications */}

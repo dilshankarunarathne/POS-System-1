@@ -418,10 +418,10 @@ const refreshProducts = async (req, res) => {
 // Generate labels
 const generateLabels = async (req, res) => {
   try {
-    const { productIds } = req.body;
+    const { productIds, quantity = 1 } = req.body;
     
-    if (!productIds || !Array.isArray(productIds)) {
-      return res.status(400).json({ message: 'Product IDs array is required' });
+    if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
+      return res.status(400).json({ message: 'Product IDs are required' });
     }
     
     const products = await Product.find({
@@ -429,7 +429,9 @@ const generateLabels = async (req, res) => {
       shopId: req.user.shopId // Add shop filter
     }).select('name price barcode');
     
-    res.status(200).json(products);
+    // Instead of returning JSON, call the print controller's function directly
+    const printController = require('./printController');
+    return printController.generateProductLabels(req, res);
   } catch (error) {
     console.error('Error generating labels:', error);
     res.status(500).json({ message: 'Server error generating labels' });

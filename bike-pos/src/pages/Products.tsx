@@ -303,7 +303,7 @@ const Products: React.FC = () => {
     }
   };
   
-  // Print product labels - updated to handle direct printing
+  // Print product labels - updated to directly show print dialog
   const handlePrintLabels = async () => {
     try {
       setPrintLoading(true);
@@ -317,34 +317,46 @@ const Products: React.FC = () => {
       
       const response = await printApi.generateBarcodes(selectedProductIds, printQuantity);
       
-      const blob = new Blob([response.data], { type: 'application/pdf' });
-      const url = window.URL.createObjectURL(blob);
-      
-      // Open in a new window for printing
-      const printWindow = window.open(url, '_blank');
-      if (printWindow) {
-        printWindow.onload = () => {
-          printWindow.print();
-          // Cleanup
-          window.URL.revokeObjectURL(url);
-        };
+      // Ensure we received a PDF blob
+      if (response.headers['content-type'] === 'application/pdf' || 
+         (response.data instanceof Blob && response.data.type === 'application/pdf')) {
+        
+        const blob = new Blob([response.data], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        
+        // Open in a new window and directly show print dialog
+        const printWindow = window.open(url, '_blank');
+        if (printWindow) {
+          // Wait for the PDF to load then trigger print dialog
+          printWindow.onload = () => {
+            setTimeout(() => {
+              printWindow.print();
+            }, 500);
+          };
+          
+          setSuccessMessage(`${selectedProductIds.length} product labels sent to printer`);
+        } else {
+          // Fallback if popup is blocked
+          alert('Please allow pop-ups to print the labels');
+          
+          // Create a download link as fallback
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `product-labels-${Date.now()}.pdf`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          
+          setSuccessMessage(`${selectedProductIds.length} product labels downloaded`);
+        }
+        
+        // Close the dialog and reset selected items
+        setPrintDialogOpen(false);
+        setSelectedProductIds([]);
+        setPrintQuantity(1);
       } else {
-        // Fallback to download if pop-up is blocked
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `product-labels-${Date.now()}.pdf`;
-        
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        
-        window.URL.revokeObjectURL(url);
+        throw new Error('Received invalid response format from server');
       }
-      
-      setSuccessMessage(`${selectedProductIds.length} product labels sent to printer`);
-      setPrintDialogOpen(false);
-      setSelectedProductIds([]);
-      setPrintQuantity(1);
       
     } catch (err: any) {
       console.error('Error generating labels:', err);
@@ -375,7 +387,54 @@ const Products: React.FC = () => {
       }
     } finally {
       setPrintLoading(false);
+      // Clean up any URLs if necessary
+      if (printPreviewUrl) {
+        window.URL.revokeObjectURL(printPreviewUrl);
+        setPrintPreviewUrl(null);
+      }
     }
+  };
+
+  // Function to handle printing from preview
+  const handlePrintFromPreview = () => {
+    if (!printPreviewUrl) return;
+    
+    // Open in a new window for printing
+    const printWindow = window.open(printPreviewUrl, '_blank');
+    if (printWindow) {
+      printWindow.onload = () => {
+        setTimeout(() => {
+          printWindow.print();
+        }, 500);
+      };
+    } else {
+      // Fallback if popup is blocked
+      alert('Please allow pop-ups to print the labels');
+    }
+  };
+
+  // Function to download PDF from preview
+  const handleDownloadPdf = () => {
+    if (!printPreviewUrl) return;
+    
+    // Create a download link
+    const link = document.createElement('a');
+    link.href = printPreviewUrl;
+    link.download = `product-labels-${Date.now()}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  // Function to close the preview and clean up
+  const handleClosePreview = () => {
+    if (printPreviewUrl) {
+      window.URL.revokeObjectURL(printPreviewUrl);
+    }
+    setPrintPreviewUrl(null);
+    setShowPrintPreview(false);
+    setSelectedProductIds([]);
+    setPrintQuantity(1);
   };
   
   // Reset dialog when closing
@@ -894,9 +953,8 @@ const Products: React.FC = () => {
           <div className="mt-4">
             <p className="text-muted">
               <small>
-                When you click "Print Labels", the labels will open in a new window and your 
-                browser's print dialog will appear automatically. Make sure your label printer 
-                is selected in the print settings.
+                When you click "Print Labels", your browser's print dialog will appear automatically.
+                Make sure your label printer is selected in the print settings.
               </small>
             </p>
           </div>
@@ -1248,6 +1306,8 @@ const Products: React.FC = () => {
           )}
         </Modal.Footer>
       </Modal>
+      
+      {/* Remove the Print Preview Modal */}
       
       {/* Toasts for notifications */}
       <ToastContainer position="bottom-center" className="p-3">

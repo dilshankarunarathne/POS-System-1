@@ -159,51 +159,79 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
             return;
           }
           
+          // Log the raw decoded text for debugging
+          console.log("Raw QR scan:", decodedText);
+          
           // First try to parse directly
           let productData;
           try {
             productData = JSON.parse(decodedText);
+            console.log("Successfully parsed JSON directly", productData);
           } catch (initialError) {
-            // If direct parsing fails, try to clean up the text
-            console.log("Initial parse failed, attempting to clean up the string...");
+            console.warn("Initial JSON parse failed:", initialError);
             
-            // Remove potential problematic characters
-            const cleanedText = decodedText
-              .trim()
-              .replace(/[\u200B-\u200D\uFEFF]/g, '') // Remove zero-width spaces
-              .replace(/^[\u0000-\u001F\u007F-\u009F]/g, ''); // Remove control characters
-            
-            // Try parsing again
+            // Try with different encodings or formats
             try {
-              productData = JSON.parse(cleanedText);
+              // Some QR codes might have URL encoded data
+              if (decodedText.includes('%')) {
+                const decoded = decodeURIComponent(decodedText);
+                productData = JSON.parse(decoded);
+                console.log("Parsed after URL decoding", productData);
+              } else {
+                // Remove potential problematic characters
+                const cleanedText = decodedText
+                  .trim()
+                  .replace(/[\u200B-\u200D\uFEFF]/g, '') // Remove zero-width spaces
+                  .replace(/[\u0000-\u001F\u007F-\u009F]/g, '') // Remove control characters
+                  .replace(/^\s*[\r\n]/gm, ''); // Remove empty lines
+                
+                console.log("Cleaned text:", cleanedText);
+                productData = JSON.parse(cleanedText);
+                console.log("Parsed after cleaning", productData);
+              }
             } catch (secondError) {
-              // Last resort attempt - check if it's a barcode that wasn't meant to be JSON
+              console.warn("Second parse attempt failed:", secondError);
+              
+              // Handle special cases: just a barcode, or malformed JSON
               if (/^\d+$/.test(decodedText)) {
                 // If it's just a numeric barcode, create a simplified object
                 productData = { barcode: decodedText };
+                console.log("Created barcode object", productData);
               } else {
-                throw new Error("Could not parse QR data in any format");
+                // Try to extract barcode or ID from text using regex
+                const barcodeMatch = decodedText.match(/"barcode"\s*:\s*"([^"]+)"/);
+                const idMatch = decodedText.match(/"id"\s*:\s*"([^"]+)"/);
+                
+                if (barcodeMatch || idMatch) {
+                  productData = {} as Record<string, string>;
+                  if (barcodeMatch) productData.barcode = barcodeMatch[1];
+                  if (idMatch) productData.id = idMatch[1];
+                  console.log("Extracted data using regex", productData);
+                } else {
+                  throw new Error("Could not parse QR data in any format");
+                }
               }
             }
+          }
+          
+          if (!productData) {
+            throw new Error("Failed to extract product data");
           }
           
           // Update the last scan time and data
           lastScanTime.current = now;
           lastScannedData.current = decodedText;
           
-          // Log successful data for debugging
-          console.log("Successfully parsed QR data:", productData);
-          
           // Send the data to parent component
           onScanSuccess(productData);
         } catch (error) {
           console.error("QR parsing error:", error, "Raw text:", decodedText);
-          const message = `QR code format is invalid. Raw data: ${decodedText.substring(0, 20)}${decodedText.length > 20 ? '...' : ''}`;
+          // Provide more helpful error message with raw data for diagnosis
+          const message = `QR code could not be processed. Format may be incorrect. ${decodedText.substring(0, 30)}${decodedText.length > 30 ? '...' : ''}`;
           setErrorMessage(message);
           if (onScanError) {
             onScanError(message);
           }
-          // Continue scanning to allow another attempt
         }
       };
       

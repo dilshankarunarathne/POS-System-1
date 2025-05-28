@@ -129,11 +129,6 @@ const POS: React.FC = () => {
   // Add a reference for the complete sale button
   const completeSaleButtonRef = useRef<HTMLButtonElement>(null);
   
-  // Quantity input modal state
-  const [quantityModalOpen, setQuantityModalOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-  const [manualQuantity, setManualQuantity] = useState<string>('1');
-  
   // Load products on mount
   useEffect(() => {
     const fetchProducts = async () => {
@@ -260,29 +255,68 @@ const POS: React.FC = () => {
       setScanningMessage(null);
       setScanningProduct(null);
       
-      // Check if we have a barcode or id in the QR data
-      if (!qrData.barcode && !qrData.id) {
-        setScanningMessage('Invalid QR code data. Missing product identifier.');
+      console.log("QR scan received:", qrData);
+      
+      // Verify we have usable data in the QR code
+      if (!qrData) {
+        setScanningMessage('Invalid QR data: Empty or null data received');
         return;
       }
       
       let product;
+      let identifierType = '';
       
-      // Try to fetch product by barcode first if available
+      // First try using barcode if available
       if (qrData.barcode) {
-        const response = await productsApi.getByBarcode(qrData.barcode);
-        product = response.data;
+        identifierType = 'barcode';
+        console.log("Trying to fetch by barcode:", qrData.barcode);
+        try {
+          const response = await productsApi.getByBarcode(qrData.barcode);
+          if (response.data) {
+            product = response.data;
+            console.log("Product found by barcode:", product);
+          }
+        } catch (error) {
+          console.warn("Barcode lookup failed:", error);
+          // Continue to try other methods
+        }
       }
       
       // If no product found by barcode, try by ID
       if (!product && qrData.id) {
-        const response = await productsApi.getById(qrData.id);
-        product = response.data;
+        identifierType = 'id';
+        console.log("Trying to fetch by ID:", qrData.id);
+        try {
+          const response = await productsApi.getById(qrData.id);
+          if (response.data) {
+            product = response.data;
+            console.log("Product found by ID:", product);
+          }
+        } catch (error) {
+          console.warn("ID lookup failed:", error);
+        }
+      }
+      
+      // If both methods failed, search by name as last resort
+      if (!product && qrData.name) {
+        identifierType = 'name';
+        console.log("Trying to search by name:", qrData.name);
+        // This would require implementing a search by name API
+        try {
+          // Use getAll with query params instead of a direct search method
+          const response = await productsApi.getAll({ search: qrData.name });
+          if (response.data && response.data.products && response.data.products.length > 0) {
+            product = response.data.products[0]; // Take the first match
+            console.log("Product found by name search:", product);
+          }
+        } catch (error) {
+          console.warn("Name search failed:", error);
+        }
       }
       
       // Check if product exists
       if (!product) {
-        setScanningMessage('Product not found. Please try again with a different code.');
+        setScanningMessage(`Product not found. Could not find product with ${identifierType || 'provided data'}.`);
         return;
       }
       
@@ -295,84 +329,18 @@ const POS: React.FC = () => {
       // Set the scanned product for display
       setScanningProduct(product);
       
-      // Add product to cart
+      // Directly add the product to cart instead of showing quantity modal
       addToCart(product);
       
       // Show success message
-      setScanningMessage(`Added ${product.name} to cart! Scan another item.`);
+      setScanningMessage(`Added ${product.name} to cart!`);
       
     } catch (err) {
       console.error('Error processing QR code:', err);
-      setScanningMessage('Error processing QR code. Please try again.');
+      setScanningMessage('Error processing QR code. Please try again or enter the barcode manually.');
     } finally {
       setLoading(false);
     }
-  };
-
-  // Handle adding product with quantity
-  const handleAddProductWithQuantity = (product: Product) => {
-    setSelectedProduct(product);
-    setManualQuantity('1');
-    setQuantityModalOpen(true);
-  };
-
-  // Handle quantity confirmation
-  const handleQuantityConfirm = () => {
-    if (selectedProduct && manualQuantity) {
-      const quantity = parseInt(manualQuantity);
-      if (isNaN(quantity) || quantity <= 0) {
-        setError('Please enter a valid quantity');
-        return;
-      }
-      
-      if (quantity > selectedProduct.stockQuantity) {
-        setError('Cannot add more than available stock');
-        return;
-      }
-      
-      addToCartWithQuantity(selectedProduct, quantity);
-      setQuantityModalOpen(false);
-      setSelectedProduct(null);
-      setManualQuantity('1');
-    }
-  };
-
-  // Add product to cart with specific quantity
-  const addToCartWithQuantity = (product: Product, quantity: number) => {
-    setCartItems(prevItems => {
-      const existingItemIndex = prevItems.findIndex(
-        item => item.product.id === product.id
-      );
-      
-      if (existingItemIndex >= 0) {
-        const currentItem = prevItems[existingItemIndex];
-        const newQuantity = currentItem.quantity + quantity;
-        
-        if (newQuantity > product.stockQuantity) {
-          setError('Cannot add more of this product. Stock limit reached.');
-          return prevItems;
-        }
-        
-        const updatedItems = [...prevItems];
-        updatedItems[existingItemIndex] = {
-          ...currentItem,
-          quantity: newQuantity,
-          subtotal: newQuantity * product.price
-        };
-        
-        return updatedItems;
-      } else {
-        return [
-          ...prevItems,
-          {
-            product,
-            quantity,
-            subtotal: quantity * product.price,
-            discount: 0,
-          },
-        ];
-      }
-    });
   };
 
   // Add product to cart
@@ -810,7 +778,8 @@ const POS: React.FC = () => {
                           e.stopPropagation();
                           e.nativeEvent.stopImmediatePropagation();
                           if (product.stockQuantity > 0) {
-                            handleAddProductWithQuantity(product);
+                            // Directly add to cart instead of opening quantity modal
+                            addToCart(product);
                           } else {
                             setError('Product is out of stock.');
                           }
@@ -1237,52 +1206,6 @@ const POS: React.FC = () => {
             ) : (
               'Complete Sale'
             )}
-          </Button>
-        </Modal.Footer>
-      </Modal>
-
-      {/* Quantity Input Modal */}
-      <Modal
-        show={quantityModalOpen}
-        onHide={() => setQuantityModalOpen(false)}
-        centered
-      >
-        <Modal.Header closeButton>
-          <Modal.Title>Enter Quantity</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {selectedProduct && (
-            <div>
-              <h6>{selectedProduct.name}</h6>
-              <p className="text-muted mb-3">
-                Available Stock: {selectedProduct.stockQuantity} units
-              </p>
-              <Form.Group>
-                <Form.Label>Quantity</Form.Label>
-                <Form.Control
-                  type="number"
-                  value={manualQuantity}
-                  onChange={(e) => setManualQuantity(e.target.value)}
-                  min="1"
-                  max={selectedProduct.stockQuantity}
-                  autoFocus
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      handleQuantityConfirm();
-                    }
-                  }}
-                />
-              </Form.Group>
-            </div>
-          )}
-        </Modal.Body>
-        <Modal.Footer>
-          <Button variant="secondary" onClick={() => setQuantityModalOpen(false)}>
-            Cancel
-          </Button>
-          <Button variant="primary" onClick={handleQuantityConfirm}>
-            Add to Cart
           </Button>
         </Modal.Footer>
       </Modal>

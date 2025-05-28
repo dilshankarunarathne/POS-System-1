@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const fs = require('fs');
 const path = require('path');
 const { connectDB } = require('../config/database');
+const bcrypt = require('bcrypt');
 
 // Load environment variables from proper path
 dotenv.config({ path: path.resolve(__dirname, '../.env') });
@@ -35,7 +36,60 @@ const loadSampleData = (filename) => {
   }
 };
 
-const migrateCategories = async () => {
+const migrateShops = async () => {
+  try {
+    console.log('Migrating shops...');
+    const shops = loadSampleData('shops.json') || [];
+    
+    // Create a map to track old shop IDs to new MongoDB ObjectIds
+    const shopMap = {};
+    
+    // Insert shops into MongoDB
+    for (const shop of shops) {
+      // First find or create the owner user
+      const ownerData = {
+        name: `${shop.name} Admin`,
+        username: `admin_${shop.id}`,
+        email: shop.email || `admin_${shop.id}@example.com`,
+        password: bcrypt.hashSync('password', 10), // Default password, should be changed
+        role: 'admin'
+      };
+      
+      let owner = await User.findOne({ username: ownerData.username });
+      if (!owner) {
+        owner = await User.create(ownerData);
+      }
+      
+      const newShop = new Shop({
+        name: shop.name,
+        address: shop.address,
+        phone: shop.phone,
+        email: shop.email,
+        owner: owner._id,
+        active: shop.active !== false,
+        createdAt: shop.created_at || new Date()
+      });
+      
+      const savedShop = await newShop.save();
+      shopMap[shop.id] = savedShop._id;
+      
+      // Update the owner's shopId
+      owner.shopId = savedShop._id;
+      await owner.save();
+      
+      console.log(`Migrated shop: ${shop.name}`);
+    }
+    
+    fs.writeFileSync(path.join(__dirname, 'shopMap.json'), JSON.stringify(shopMap));
+    console.log(`Migrated ${shops.length} shops`);
+    return shopMap;
+  } catch (error) {
+    console.error('Error migrating shops:', error);
+    throw error;
+  }
+};
+
+const migrateCategories = async (shopMap) => {
   console.log('Migrating categories...');
   try {
     const categories = loadSampleData('categories.json');
@@ -45,9 +99,13 @@ const migrateCategories = async () => {
     
     // Insert categories into MongoDB
     for (const category of categories) {
+      // If no shop mapping exists, assign to first shop
+      const shopId = shopMap[category.shop_id] || Object.values(shopMap)[0];
+      
       const newCategory = new Category({
         name: category.name,
         description: category.description,
+        shopId: shopId,
         createdAt: category.created_at || new Date()
       });
       
@@ -65,7 +123,7 @@ const migrateCategories = async () => {
   }
 };
 
-const migrateProducts = async (categoryMap) => {
+const migrateProducts = async (categoryMap, shopMap) => {
   console.log('Migrating products...');
   try {
     const products = loadSampleData('products.json');
@@ -74,6 +132,9 @@ const migrateProducts = async (categoryMap) => {
     
     // Insert products into MongoDB
     for (const product of products) {
+      // If no shop mapping exists, assign to first shop
+      const shopId = shopMap[product.shop_id] || Object.values(shopMap)[0];
+      
       const newProduct = new Product({
         name: product.name,
         description: product.description,
@@ -83,6 +144,7 @@ const migrateProducts = async (categoryMap) => {
         quantity: product.quantity,
         barcode: product.barcode,
         category: categoryMap[product.category_id],
+        shopId: shopId,
         createdAt: product.created_at || new Date(),
         updatedAt: product.updated_at || product.created_at || new Date()
       });
@@ -100,7 +162,7 @@ const migrateProducts = async (categoryMap) => {
   }
 };
 
-const migrateUsers = async () => {
+const migrateUsers = async (shopMap) => {
   console.log('Migrating users...');
   try {
     const users = loadSampleData('users.json');
@@ -109,6 +171,9 @@ const migrateUsers = async () => {
     
     // Insert users into MongoDB
     for (const user of users) {
+      // If no shop mapping exists, assign to first shop
+      const shopId = shopMap[user.shop_id] || Object.values(shopMap)[0];
+      
       const newUser = new User({
         name: user.name,
         username: user.username || `user_${Math.floor(Math.random() * 10000)}`,
@@ -116,6 +181,7 @@ const migrateUsers = async () => {
         password: user.password, // Assuming passwords are already hashed
         role: user.role,
         active: user.active,
+        shopId: shopId,
         createdAt: user.created_at || new Date()
       });
       
@@ -139,7 +205,7 @@ const migrateUsers = async () => {
   }
 };
 
-const migrateCustomers = async () => {
+const migrateCustomers = async (shopMap) => {
   console.log('Migrating customers...');
   try {
     const customers = loadSampleData('customers.json');
@@ -148,6 +214,9 @@ const migrateCustomers = async () => {
     
     // Insert customers into MongoDB
     for (const customer of customers) {
+      // If no shop mapping exists, assign to first shop
+      const shopId = shopMap[customer.shop_id] || Object.values(shopMap)[0];
+      
       const newCustomer = new Customer({
         name: customer.name,
         email: customer.email,
@@ -158,6 +227,7 @@ const migrateCustomers = async () => {
           state: customer.state,
           zipCode: customer.zip_code
         },
+        shopId: shopId,
         createdAt: customer.created_at || new Date()
       });
       
@@ -174,104 +244,46 @@ const migrateCustomers = async () => {
   }
 };
 
-const migrateShops = async () => {
-  console.log('Migrating shops...');
-  try {
-    const shops = loadSampleData('shops.json');
-    
-    const shopMap = {};
-    
-    // Insert shops into MongoDB
-    for (const shop of shops) {
-      const newShop = new Shop({
-        name: shop.name,
-        address: shop.address,
-        phone: shop.phone,
-        email: shop.email,
-        owner: shop.owner_id, // Assuming this maps to a user ID
-        logo: shop.logo,
-        active: shop.active !== false,
-        createdAt: shop.created_at || new Date()
-      });
-      
-      const savedShop = await newShop.save();
-      shopMap[shop.id] = savedShop._id;
-    }
-    
-    fs.writeFileSync(path.join(__dirname, 'shopMap.json'), JSON.stringify(shopMap));
-    console.log(`Migrated ${shops.length} shops`);
-    return shopMap;
-  } catch (error) {
-    console.error('Error migrating shops:', error);
-    throw error;
-  }
-};
-
 const migrateSales = async (productMap, customerMap, userMap, shopMap = {}) => {
   console.log('Migrating sales...');
   try {
     const sales = loadSampleData('sales.json');
-    const saleItems = loadSampleData('sale_items.json');
     
-    // Group sale items by sale_id
-    const salesItemsMap = {};
-    for (const item of saleItems) {
-      if (!salesItemsMap[item.sale_id]) {
-        salesItemsMap[item.sale_id] = [];
-      }
-      salesItemsMap[item.sale_id].push(item);
-    }
-    
-    // Create a map to track old sale IDs to new MongoDB ObjectIds
     const saleMap = {};
     
     // Insert sales into MongoDB
     for (const sale of sales) {
-      const items = (salesItemsMap[sale.id] || []).map(item => {
-        const itemPrice = parseFloat(item.price) || 0;
-        const itemQuantity = parseInt(item.quantity) || 1;
-        const itemDiscount = parseFloat(item.discount) || 0;
-        
-        return {
-          product: productMap[item.product_id],
-          quantity: itemQuantity,
-          price: itemPrice,
-          discount: itemDiscount,
-          // Add calculated subtotal for each item
-          subtotal: (itemPrice * itemQuantity) - itemDiscount
-        };
-      });
+      // If no shop mapping exists, assign to first shop
+      const shopId = shopMap[sale.shop_id] || Object.values(shopMap)[0];
       
-      // Calculate correct subtotal from items
-      const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      const itemDiscounts = items.reduce((sum, item) => sum + (item.discount || 0), 0);
-      const tax = parseFloat(sale.tax) || 0;
-      const discount = parseFloat(sale.discount) || 0;
-      const total = subtotal + tax - discount - itemDiscounts;
-      
-      const saleDate = sale.created_at ? new Date(sale.created_at) : new Date();
+      // Map old IDs to new ones
+      const items = sale.items.map(item => ({
+        product: productMap[item.product_id],
+        quantity: item.quantity,
+        price: item.price,
+        discount: item.discount || 0
+      }));
       
       const newSale = new Sale({
-        invoiceNumber: sale.invoice_number || `INV-${saleDate.toISOString().slice(0,10).replace(/-/g,'')}-${Math.floor(Math.random() * 1000).toString().padStart(4, '0')}`,
+        invoiceNumber: sale.invoice_number,
         customer: customerMap[sale.customer_id],
         items,
-        subtotal,
-        tax,
-        discount,
-        total,
+        subtotal: sale.subtotal,
+        tax: sale.tax || 0,
+        discount: sale.discount || 0,
+        total: sale.total,
         paymentMethod: sale.payment_method || 'cash',
         user: userMap[sale.user_id],
-        shop: shopMap[sale.shop_id],
+        shopId: shopId,
         status: sale.status || 'completed',
-        createdAt: saleDate,
-        notes: sale.notes
+        notes: sale.notes,
+        createdAt: sale.created_at || new Date()
       });
       
       const savedSale = await newSale.save();
       saleMap[sale.id] = savedSale._id;
     }
     
-    // Save the mapping for later use
     fs.writeFileSync(path.join(__dirname, 'saleMap.json'), JSON.stringify(saleMap));
     console.log(`Migrated ${sales.length} sales`);
     return saleMap;
@@ -283,40 +295,28 @@ const migrateSales = async (productMap, customerMap, userMap, shopMap = {}) => {
 
 const migrateAllData = async () => {
   try {
-    if (!fs.existsSync(SAMPLE_DATA_DIR)) {
-      fs.mkdirSync(SAMPLE_DATA_DIR, { recursive: true });
-      console.log(`Created sample data directory: ${SAMPLE_DATA_DIR}`);
-      console.log('Please place your JSON data files in this directory and run again.');
-      process.exit(0);
-    }
-
-    // Use the shared connectDB function instead of the custom one
+    console.log('Starting data migration...');
+    
+    // Connect to MongoDB
     await connectDB();
     
-    // Clear existing MongoDB data
-    await Promise.all([
-      Category.deleteMany({}),
-      Product.deleteMany({}),
-      User.deleteMany({}),
-      Customer.deleteMany({}),
-      Sale.deleteMany({}),
-      Shop.deleteMany({})
-    ]);
-    
-    // Migrate data
-    const categoryMap = await migrateCategories();
-    const productMap = await migrateProducts(categoryMap);
-    const userMap = await migrateUsers();
-    const customerMap = await migrateCustomers();
+    // Migrate data in the correct order
     const shopMap = await migrateShops();
+    const categoryMap = await migrateCategories(shopMap);
+    const productMap = await migrateProducts(categoryMap, shopMap);
+    const userMap = await migrateUsers(shopMap);
+    const customerMap = await migrateCustomers(shopMap);
     await migrateSales(productMap, customerMap, userMap, shopMap);
     
-    console.log('Data migration completed successfully');
+    console.log('Data migration completed successfully!');
+    process.exit(0);
   } catch (error) {
-    console.error('Migration failed:', error);
-  } finally {
-    await mongoose.disconnect();
+    console.error('Error during migration:', error);
+    process.exit(1);
   }
 };
 
-migrateAllData();
+// Run the migration if this script is run directly
+if (require.main === module) {
+  migrateAllData();
+}

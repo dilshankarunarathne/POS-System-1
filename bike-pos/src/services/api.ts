@@ -154,7 +154,7 @@ export const productsApi = {
 
 // Categories API
 export const categoriesApi = {
-  getAll: () => api.get('/categories'),
+  getAll: (params?: { shopId?: string }) => api.get('/categories', { params }),
   getById: (id: string | number) => api.get(`/categories/${id}`),
   create: (data: any) => api.post('/categories', data),
   update: (id: string | number, data: any) => api.put(`/categories/${id}`, data),
@@ -225,21 +225,38 @@ export const salesApi = {
 
 // Reports API
 export const reportsApi = {
-  getSalesSummary: (params: { startDate?: string; endDate?: string; groupBy?: 'day' | 'week' | 'month' }) =>
-    api.get('/reports/sales-summary', { params }),
+  getSalesSummary: (params: { 
+    startDate?: string; 
+    endDate?: string; 
+    groupBy?: 'day' | 'week' | 'month';
+    shopId?: string;
+  }) => api.get('/reports/sales-summary', { params }),
   
   getProductSalesReport: (params: { 
     startDate?: string;
     endDate?: string;
     categoryId?: string | number;
     limit?: number;
+    shopId?: string;
   }) => api.get('/reports/product-sales', { params }),
   
-  getInventoryStatusReport: (params: { lowStock?: boolean; categoryId?: string | number }) =>
-    api.get('/reports/inventory-status', { params }),
+  getInventoryStatusReport: (params: { 
+    lowStock?: boolean; 
+    categoryId?: string | number;
+    shopId?: string;
+  }) => api.get('/reports/inventory-status', { params }),
   
-  generateSalesReport: (params: { startDate?: string; endDate?: string }) =>
-    api.get('/reports/generate-sales-report', { params }),
+  generateSalesReport: (params: { 
+    startDate?: string; 
+    endDate?: string;
+    shopId?: string;
+  }) => api.get('/reports/generate-sales-report', { params }),
+
+  getDailySales: (params: {
+    startDate?: string;
+    endDate?: string;
+    shopId?: string;
+  }) => api.get('/reports/sales/daily', { params }),
 };
 
 // Print API

@@ -45,6 +45,11 @@ const ProductSchema = new mongoose.Schema({
     ref: 'Supplier',
     default: null // Explicitly set default to null
   },
+  shopId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Shop',
+    required: true
+  },
   image: {
     type: String
   },
@@ -88,9 +93,10 @@ ProductSchema.pre('save', async function(next) {
 });
 
 // Add index to improve lookup performance
-ProductSchema.index({ barcode: 1 });
-ProductSchema.index({ category: 1 });
-ProductSchema.index({ supplier: 1 });
+ProductSchema.index({ shopId: 1, barcode: 1 }, { unique: true }); // Make barcode unique per shop
+ProductSchema.index({ shopId: 1, sku: 1 }, { unique: true }); // Make SKU unique per shop
+ProductSchema.index({ shopId: 1, category: 1 });
+ProductSchema.index({ shopId: 1, supplier: 1 });
 
 // Virtual property for mapping backend field names to frontend expectations
 ProductSchema.virtual('stockQuantity').get(function() {

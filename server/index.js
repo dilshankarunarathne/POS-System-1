@@ -35,6 +35,7 @@ const supplierRoutes = require('./routes/suppliers');
 const printRoutes = require('./routes/print');
 const userRoutes = require('./routes/users');
 const orderRoutes = require('./routes/orders');
+const shopRoutes = require('./routes/shops');
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -46,6 +47,7 @@ app.use('/api/suppliers', supplierRoutes);
 app.use('/api/print', printRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/shops', shopRoutes);
 
 // Root route
 app.get('/', (req, res) => {

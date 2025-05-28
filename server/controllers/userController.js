@@ -1,9 +1,29 @@
 const User = require('../models/User');
+const Shop = require('../models/Shop');
 
-// Get all users
+// Get all users (filtered by user access)
 const getAllUsers = async (req, res) => {
   try {
-    const users = await User.find().select('-password');
+    let users;
+    
+    // If developer, they can see all users or filter by shop
+    if (req.user.role === 'developer') {
+      const filter = {};
+      if (req.query.shopId) {
+        filter.shopId = req.query.shopId;
+      }
+      users = await User.find(filter)
+        .select('-password')
+        .populate('shopId', 'name')
+        .populate('createdBy', 'name username');
+    } else {
+      // Non-developers can only see users from their own shop
+      users = await User.find({ shopId: req.user.shopId })
+        .select('-password')
+        .populate('shopId', 'name')
+        .populate('createdBy', 'name username');
+    }
+    
     res.status(200).json(users);
   } catch (error) {
     console.error('Error fetching users:', error);
@@ -14,10 +34,23 @@ const getAllUsers = async (req, res) => {
 // Get user by ID
 const getUserById = async (req, res) => {
   try {
-    const user = await User.findById(req.params.id).select('-password');
+    const user = await User.findById(req.params.id)
+      .select('-password')
+      .populate('shopId', 'name')
+      .populate('createdBy', 'name username');
+    
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
+    
+    // Check if requester has access to this user
+    if (req.user.role !== 'developer') {
+      // Non-developers can only view users from their own shop
+      if (!req.user.shopId || !user.shopId || req.user.shopId.toString() !== user.shopId.toString()) {
+        return res.status(403).json({ message: 'Not authorized to access this user' });
+      }
+    }
+    
     res.status(200).json(user);
   } catch (error) {
     console.error('Error fetching user:', error);
@@ -28,7 +61,7 @@ const getUserById = async (req, res) => {
 // Create user
 const createUser = async (req, res) => {
   try {
-    const { name, username, email, password, role } = req.body;
+    const { name, username, email, password, role, shopId } = req.body;
     
     // Check if user already exists
     const existingUser = await User.findOne({ 
@@ -39,18 +72,59 @@ const createUser = async (req, res) => {
       return res.status(400).json({ message: 'User with this username or email already exists' });
     }
     
+    // Validate role permissions
+    if (req.user.role !== 'developer') {
+      // Non-developers can only create users for their own shop
+      if (!req.user.shopId || (shopId && req.user.shopId.toString() !== shopId)) {
+        return res.status(403).json({ message: 'You can only create users for your own shop' });
+      }
+      
+      // Non-developers can't create developer accounts
+      if (role === 'developer') {
+        return res.status(403).json({ message: 'You do not have permission to create developer accounts' });
+      }
+      
+      // Shop admins can only create manager or cashier accounts
+      if (req.user.role === 'admin' && role === 'admin') {
+        return res.status(403).json({ message: 'You do not have permission to create admin accounts' });
+      }
+    }
+    
+    // Determine shop assignment
+    let assignedShopId = null;
+    
+    if (shopId) {
+      // Verify the shop exists
+      const shop = await Shop.findById(shopId);
+      if (!shop) {
+        return res.status(404).json({ message: 'Shop not found' });
+      }
+      assignedShopId = shopId;
+    } else if (req.user.role !== 'developer' && req.user.shopId) {
+      // Non-developers creating users assign them to their own shop
+      assignedShopId = req.user.shopId;
+    }
+    
     const user = await User.create({
       name,
       username,
       email,
       password,
-      role: role || 'cashier'
+      role: role || 'cashier',
+      shopId: assignedShopId,
+      createdBy: req.user._id
     });
     
     const userData = user.toObject();
     delete userData.password;
     
-    res.status(201).json(userData);
+    // Populate references for response
+    const populatedUser = await User.findById(user._id)
+      .select('-password')
+      .populate('shopId', 'name')
+      .populate('createdBy', 'name username');
+    
+    res.status(201).json(populatedUser);
   } catch (error) {
     console.error('Error creating user:', error);
     res.status(500).json({ message: 'Server error creating user' });
@@ -60,12 +134,43 @@ const createUser = async (req, res) => {
 // Update user
 const updateUser = async (req, res) => {
   try {
-    const { name, username, email, role, password } = req.body;
+    const { name, username, email, role, password, shopId } = req.body;
+    const userId = req.params.id;
+    
+    // Find the user to update
+    const user = await User.findById(userId);
+    
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Check if requester has permission to update this user
+    if (req.user.role !== 'developer') {
+      // Non-developers can only update users from their own shop
+      if (!req.user.shopId || !user.shopId || req.user.shopId.toString() !== user.shopId.toString()) {
+        return res.status(403).json({ message: 'Not authorized to update this user' });
+      }
+      
+      // Only developers can update a user's shop
+      if (shopId && shopId !== user.shopId.toString()) {
+        return res.status(403).json({ message: 'You do not have permission to change a user\'s shop' });
+      }
+      
+      // Non-developers can't change roles to developer
+      if (role === 'developer') {
+        return res.status(403).json({ message: 'You do not have permission to create developer accounts' });
+      }
+      
+      // Shop admins can't promote users to admin
+      if (req.user.role === 'admin' && role === 'admin' && user.role !== 'admin') {
+        return res.status(403).json({ message: 'You do not have permission to create admin accounts' });
+      }
+    }
     
     // Check if username or email is already taken by another user
     if (username || email) {
       const existingUser = await User.findOne({
-        _id: { $ne: req.params.id },
+        _id: { $ne: userId },
         $or: [
           ...(username ? [{ username }] : []),
           ...(email ? [{ email }] : [])
@@ -84,19 +189,32 @@ const updateUser = async (req, res) => {
     if (email) updateData.email = email;
     if (role) updateData.role = role;
     if (password) updateData.password = password;
+    if (shopId && req.user.role === 'developer') {
+      // Verify shop exists
+      const shop = await Shop.findById(shopId);
+      if (!shop) {
+        return res.status(404).json({ message: 'Shop not found' });
+      }
+      updateData.shopId = shopId;
+    }
     updateData.updatedAt = new Date();
     
-    const user = await User.findByIdAndUpdate(
-      req.params.id,
-      updateData,
-      { new: true, runValidators: true }
-    ).select('-password');
-    
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
+    // For password updates, use save method to trigger password hash middleware
+    if (password) {
+      Object.assign(user, updateData);
+      await user.save();
+    } else {
+      // Otherwise, use findByIdAndUpdate
+      await User.findByIdAndUpdate(userId, updateData, { runValidators: true });
     }
     
-    res.status(200).json(user);
+    // Get updated user
+    const updatedUser = await User.findById(userId)
+      .select('-password')
+      .populate('shopId', 'name')
+      .populate('createdBy', 'name username');
+    
+    res.status(200).json(updatedUser);
   } catch (error) {
     console.error('Error updating user:', error);
     res.status(500).json({ message: 'Server error updating user' });
@@ -112,12 +230,30 @@ const toggleUserStatus = async (req, res) => {
       return res.status(404).json({ message: 'User not found' });
     }
     
+    // Check permissions
+    if (req.user.role !== 'developer') {
+      // Non-developers can only manage users from their own shop
+      if (!req.user.shopId || !user.shopId || req.user.shopId.toString() !== user.shopId.toString()) {
+        return res.status(403).json({ message: 'Not authorized to manage this user' });
+      }
+      
+      // Can't deactivate users with higher role
+      if (
+        (req.user.role === 'admin' && user.role === 'developer') || 
+        (req.user.role === 'manager' && ['admin', 'developer'].includes(user.role))
+      ) {
+        return res.status(403).json({ message: 'Cannot modify status of users with higher role' });
+      }
+    }
+    
     // Don't allow deactivating yourself
     if (user._id.toString() === req.user._id.toString()) {
       return res.status(400).json({ message: 'Cannot deactivate your own account' });
     }
     
+    // Toggle status
     user.active = !user.active;
+    user.updatedAt = new Date();
     await user.save();
     
     const userData = user.toObject();
@@ -137,6 +273,22 @@ const deleteUser = async (req, res) => {
     
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
+    }
+    
+    // Check permissions
+    if (req.user.role !== 'developer') {
+      // Non-developers can only delete users from their own shop
+      if (!req.user.shopId || !user.shopId || req.user.shopId.toString() !== user.shopId.toString()) {
+        return res.status(403).json({ message: 'Not authorized to delete this user' });
+      }
+      
+      // Can't delete users with higher role
+      if (
+        (req.user.role === 'admin' && user.role === 'developer') || 
+        (req.user.role === 'manager' && ['admin', 'developer'].includes(user.role))
+      ) {
+        return res.status(403).json({ message: 'Cannot delete users with higher role' });
+      }
     }
     
     // Don't allow deleting yourself

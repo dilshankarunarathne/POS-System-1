@@ -33,6 +33,7 @@ import {
 import { Bar, Line, Pie } from 'react-chartjs-2';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
+import { useAuth } from '../contexts/AuthContext';
 import { categoriesApi, reportsApi } from '../services/api';
 
 // Register ChartJS components
@@ -49,6 +50,7 @@ ChartJS.register(
 );
 
 const Reports = () => {
+  const { user, getCurrentShop } = useAuth();
   const [activeTab, setActiveTab] = useState('sales');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -75,21 +77,22 @@ const Reports = () => {
     profit: number;
     profitMargin: string;
   }
+  
   const [productSales, setProductSales] = useState<ProductSale[]>([]);
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [categories, setCategories] = useState<{id: string, name: string}[]>([]);
-  const [topProductsLimit, setTopProductsLimit] = useState(10);
+  const [categories, setCategories] = useState<any[]>([]);
+  const [categoryFilter, setCategoryFilter] = useState<string>('');
+  const [topProductsLimit, setTopProductsLimit] = useState<number>(10);
   
   // Inventory data
   interface InventoryItem {
     name: string;
-    barcode: string;
     category: string;
-    stockQuantity: number;
+    quantity: number;
     reorderLevel: number;
     value: number;
-    stockStatus: string;
+    barcode?: string;
   }
+  
   const [inventoryData, setInventoryData] = useState<{ inventory: InventoryItem[], summary: any }>({ inventory: [], summary: {} });
   const [showLowStock, setShowLowStock] = useState(false);
   
@@ -97,7 +100,13 @@ const Reports = () => {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const response = await categoriesApi.getAll();
+        const currentShop = getCurrentShop();
+        if (!currentShop) {
+          setError('No shop selected');
+          return;
+        }
+        
+        const response = await categoriesApi.getAll({ shopId: currentShop._id });
         setCategories(response.data);
       } catch (err) {
         console.error('Error fetching categories:', err);
@@ -105,7 +114,7 @@ const Reports = () => {
     };
     
     fetchCategories();
-  }, []);
+  }, [getCurrentShop]);
   
   // Format date for API
   const formatDateForApi = (date: Date | null): string => {
@@ -119,10 +128,20 @@ const Reports = () => {
       setLoading(true);
       setError(null);
       
+      const currentShop = getCurrentShop();
+      if (!currentShop) {
+        if (user?.role !== 'developer') {
+          setError('No shop selected. Please contact your administrator.');
+        }
+        setLoading(false);
+        return;
+      }
+      
       const response = await reportsApi.getSalesSummary({
         startDate: formatDateForApi(startDate),
         endDate: formatDateForApi(endDate),
         groupBy,
+        shopId: currentShop._id
       });
       
       setSalesSummary(response.data);
@@ -141,11 +160,21 @@ const Reports = () => {
       setLoading(true);
       setError(null);
       
+      const currentShop = getCurrentShop();
+      if (!currentShop) {
+        if (user?.role !== 'developer') {
+          setError('No shop selected. Please contact your administrator.');
+        }
+        setLoading(false);
+        return;
+      }
+      
       const response = await reportsApi.getProductSalesReport({
         startDate: formatDateForApi(startDate),
         endDate: formatDateForApi(endDate),
         categoryId: categoryFilter,
         limit: topProductsLimit,
+        shopId: currentShop._id
       });
       
       setProductSales(response.data);
@@ -164,9 +193,19 @@ const Reports = () => {
       setLoading(true);
       setError(null);
       
+      const currentShop = getCurrentShop();
+      if (!currentShop) {
+        if (user?.role !== 'developer') {
+          setError('No shop selected. Please contact your administrator.');
+        }
+        setLoading(false);
+        return;
+      }
+      
       const response = await reportsApi.getInventoryStatusReport({
         lowStock: showLowStock,
         categoryId: categoryFilter,
+        shopId: currentShop._id
       });
       
       setInventoryData(response.data);
@@ -185,9 +224,19 @@ const Reports = () => {
       setLoading(true);
       setError(null);
       
+      const currentShop = getCurrentShop();
+      if (!currentShop) {
+        if (user?.role !== 'developer') {
+          setError('No shop selected. Please contact your administrator.');
+        }
+        setLoading(false);
+        return;
+      }
+      
       const response = await reportsApi.generateSalesReport({
         startDate: formatDateForApi(startDate),
         endDate: formatDateForApi(endDate),
+        shopId: currentShop._id
       });
       
       // Open PDF in new tab
@@ -799,12 +848,12 @@ const Reports = () => {
                                     <td>{item.name}</td>
                                     <td>{item.barcode}</td>
                                     <td>{item.category}</td>
-                                    <td className="text-end">{item.stockQuantity}</td>
+                                    <td className="text-end">{item.quantity}</td>
                                     <td className="text-end">{item.reorderLevel}</td>
                                     <td className="text-end">Rs. {item.value}</td>
                                     <td>
-                                      <span className={`badge ${item.stockStatus === 'Low' ? 'bg-danger' : 'bg-success'}`}>
-                                        {item.stockStatus}
+                                      <span className={`badge ${item.quantity < item.reorderLevel ? 'bg-danger' : 'bg-success'}`}>
+                                        {item.quantity < item.reorderLevel ? 'Low Stock' : 'In Stock'}
                                       </span>
                                     </td>
                                   </tr>

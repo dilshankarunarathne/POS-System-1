@@ -33,6 +33,7 @@ import {
 } from 'react-bootstrap-icons';
 import { Bar, Line } from 'react-chartjs-2';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { productsApi, reportsApi } from '../services/api';
 
 // Register ChartJS components
@@ -50,6 +51,7 @@ ChartJS.register(
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { user, getCurrentShop } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [salesData, setSalesData] = useState<any>({ 
@@ -74,6 +76,12 @@ const Dashboard: React.FC = () => {
         setLoading(true);
         setError(null);
         
+        const currentShop = getCurrentShop();
+        if (!currentShop) {
+          setError('No shop selected');
+          return;
+        }
+        
         // Get dates for the last 7 days
         const endDate = new Date();
         const startDate = new Date();
@@ -86,14 +94,15 @@ const Dashboard: React.FC = () => {
         // Fetch sales summary data
         const salesResponse = await reportsApi.getSalesSummary({
           startDate: startDateStr,
-          endDate: endDateStr
+          endDate: endDateStr,
+          shopId: currentShop._id
         });
         
         // Fetch daily sales data
-        const dailyResponse = await reportsApi.getSalesSummary({
+        const dailyResponse = await reportsApi.getDailySales({
           startDate: startDateStr,
           endDate: endDateStr,
-          groupBy: "day"
+          shopId: currentShop._id
         });
         
         if (Array.isArray(dailyResponse.data)) {
@@ -119,7 +128,10 @@ const Dashboard: React.FC = () => {
         });
         
         // Fetch low stock products
-        const lowStockResponse = await productsApi.getAll({ limit: 100 });
+        const lowStockResponse = await productsApi.getAll({ 
+          limit: 100,
+          shopId: currentShop._id
+        });
         
         // Filter products with low stock
         const lowStockData = lowStockResponse.data?.products?.filter(
@@ -137,7 +149,8 @@ const Dashboard: React.FC = () => {
         // Fetch top selling products
         const topProductsResponse = await reportsApi.getProductSalesReport({
           startDate: startDateStr,
-          endDate: endDateStr
+          endDate: endDateStr,
+          shopId: currentShop._id
         });
         
         const topProductsData = topProductsResponse.data?.products || [];
@@ -153,7 +166,6 @@ const Dashboard: React.FC = () => {
           console.warn('Top products data is not an array');
           setTopProducts([]);
         }
-        
       } catch (err: any) {
         console.error('Failed to fetch dashboard data:', err);
         setError('Failed to load dashboard data. ' + (err.message || 'Please try again later.'));
@@ -175,7 +187,7 @@ const Dashboard: React.FC = () => {
     };
     
     fetchDashboardData();
-  }, []);
+  }, [getCurrentShop]);
   
   // Prepare data for sales chart
   const salesChartData = {

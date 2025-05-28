@@ -20,22 +20,81 @@ import { LinkContainer } from 'react-router-bootstrap';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
-const menuItems = [
-  { name: 'Dashboard', icon: <House size={18} />, path: '/dashboard' },
-  { name: 'Point of Sale', icon: <Cart size={18} />, path: '/pos' },
-  { name: 'Products', icon: <BoxSeam size={18} />, path: '/products' },
-  // { name: 'Categories', icon: <Diagram3 size={18} />, path: '/categories' },
-  // { name: 'Suppliers', icon: <Truck size={18} />, path: '/suppliers' },
-  { name: 'Sales', icon: <Receipt size={18} />, path: '/sales' },
-  { name: 'Reports', icon: <BarChart size={18} />, path: '/reports' },
-];
+// Menu items configuration
+const getMenuItems = (role: string) => {
+  const items = [
+    {
+      name: 'Dashboard',
+      path: '/dashboard', 
+      icon: <House size={18} />,
+      roles: [ 'admin', 'manager', 'cashier']
+    },
+    {
+      name: 'POS',
+      path: '/pos',
+      icon: <Cart size={18} />,
+      roles: ['admin', 'manager', 'cashier']
+    },
+    {
+      name: 'Products',
+      path: '/products',
+      icon: <BoxSeam size={18} />,
+      roles: ['admin', 'manager']
+    },
+    {
+      name: 'Categories',
+      path: '/categories',
+      icon: <Diagram3 size={18} />,
+      roles: ['admin', 'manager']
+    },
+    {
+      name: 'Suppliers',
+      path: '/suppliers',
+      icon: <Truck size={18} />,
+      roles: ['admin', 'manager']
+    },
+    {
+      name: 'Sales',
+      path: '/sales',
+      icon: <Receipt size={18} />,
+      roles: ['admin', 'manager']
+    },
+    {
+      name: 'Reports',
+      path: '/reports',
+      icon: <BarChart size={18} />,
+      roles: ['admin', 'manager']
+    }
+  ];
+
+  // Add developer-specific items
+  if (role === 'developer') {
+    items.unshift(
+      {
+        name: 'Developer Dashboard',
+        path: '/developer/dashboard',
+        icon: <House size={18} />,
+        roles: ['developer']
+      },
+      {
+        name: 'User Management',
+        path: '/developer/users',
+        icon: <House size={18} />,
+        roles: ['developer']
+      }
+    );
+  }
+
+  return items.filter(item => item.roles.includes(role));
+};
 
 const Layout = () => {
-  const { user, logout } = useAuth();
+  const { user, logout, getCurrentShop } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [showOffcanvas, setShowOffcanvas] = useState(false);
   const [isMobile, setIsMobile] = useState(false);
+  const currentShop = getCurrentShop();
 
   // Check if mobile view
   useEffect(() => {
@@ -59,6 +118,9 @@ const Layout = () => {
     setShowOffcanvas(false);
   };
 
+  // Get menu items based on user role
+  const menuItems = getMenuItems(user?.role || 'cashier');
+
   // Get current page title
   const getCurrentPageTitle = () => {
     const currentItem = menuItems.find(item => item.path === location.pathname);
@@ -66,18 +128,19 @@ const Layout = () => {
   };
 
   return (
-    <>
+    <div className="layout-container">
       {/* Enhanced Navbar */}
       <Navbar 
         bg="primary" 
         variant="dark" 
         expand="lg" 
         fixed="top" 
-        className="shadow-lg py-2 px-0"
+        className="shadow-sm py-2"
         style={{
           background: 'linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%)',
           backdropFilter: 'blur(10px)',
-          borderBottom: '1px solid rgba(255,255,255,0.1)'
+          borderBottom: '1px solid rgba(255,255,255,0.1)',
+          zIndex: 1030
         }}
       >
         <Container fluid className="px-3 px-md-4">
@@ -102,16 +165,16 @@ const Layout = () => {
                 <div className="brand-icon me-2 bg-white bg-opacity-10 rounded-circle p-2">
                   <BoxSeam size={20} />
                 </div>
-                <span className="d-none d-sm-inline">Bike Parts POS</span>
-                <span className="d-sm-none">BikePOS</span>
+                <span className="d-none d-sm-inline">
+                  {user?.role === 'developer' ? 'Bike Parts POS' : currentShop?.name || 'Bike Parts POS'}
+                </span>
+                <span className="d-sm-none">
+                  {user?.role === 'developer' ? 'BikePOS' : currentShop?.name || 'BikePOS'}
+                </span>
               </Navbar.Brand>
             </LinkContainer>
           </div>
 
-         
-
-          {/* Right side controls */}
-          <div className="d-flex align-items-center">
              {/* Desktop Navigation */}
           {!isMobile && (
             <Nav className="mx-auto d-none d-lg-flex">
@@ -134,99 +197,91 @@ const Layout = () => {
             </Nav>
           )}
 
+          {/* Right side controls */}
+          <div className="d-flex align-items-center">
             {/* User Dropdown */}
             <Dropdown align="end">
-              <Dropdown.Toggle 
-                as="button"
-                className="btn btn-link text-white border-0 p-0 d-flex align-items-center user-dropdown"
-              >
-               
-                <div 
-                  className="user-avatar bg-white bg-opacity-20 text-white rounded-circle d-flex justify-content-center align-items-center fw-bold"
-                  style={{ width: '40px', height: '40px', fontSize: '14px' }}
-                >
-                  {user?.username?.charAt(0).toUpperCase()}
+              <Dropdown.Toggle variant="link" className="nav-link text-white border-0 d-flex align-items-center p-0">
+                <div className="d-none d-md-block me-2 text-end">
+                  <div className="fw-bold">{user?.name}</div>
+                  <div className="small text-white-50">
+                    <span className="text-capitalize">{user?.role}</span>
+                    {currentShop && user?.role !== 'developer' && (
+                      <> • {currentShop.name}</>
+                    )}
+                  </div>
+                </div>
+                <div className="user-avatar bg-white bg-opacity-10 rounded-circle p-2">
+                  <BoxArrowRight size={20} />
                 </div>
               </Dropdown.Toggle>
-              
-              <Dropdown.Menu className="shadow-lg border-0 mt-2" style={{ minWidth: '200px' }}>
-                <Dropdown.ItemText className="text-muted small">
-                  <div className="fw-bold text-dark">{user?.username}</div>
-                  <div>Role: {user?.role?.charAt(0).toUpperCase()}{user?.role?.slice(1)}</div>
-                </Dropdown.ItemText>
-                <Dropdown.Divider />
-                <Dropdown.Item onClick={handleLogout} className="text-danger">
-                  <BoxArrowRight size={16} className="me-2" />
-                  Sign Out
-                </Dropdown.Item>
+              <Dropdown.Menu>
+                <Dropdown.Item onClick={handleLogout}>Logout</Dropdown.Item>
               </Dropdown.Menu>
             </Dropdown> 
           </div>
         </Container>
       </Navbar>
 
-      {/* Enhanced Mobile Offcanvas */}
+      {/* Mobile Navigation Offcanvas */}
       <Offcanvas
         show={showOffcanvas}
         onHide={() => setShowOffcanvas(false)}
         placement="start"
-        className="mobile-sidebar"
-        style={{ width: '280px' }}
+        className="sidebar-nav"
       >
-        <Offcanvas.Header 
-          closeButton 
-          className="bg-primary text-white"
-          style={{ background: 'linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%)' }}
-        >
-          <Offcanvas.Title className="fw-bold d-flex align-items-center">
-            <div className="brand-icon me-2 bg-white bg-opacity-20 rounded-circle p-2">
-              <BoxSeam size={18} />
-            </div>
-            Bike Parts POS
+        <Offcanvas.Header closeButton>
+          <Offcanvas.Title>
+            {user?.role === 'developer' ? 'Bike Parts POS' : currentShop?.name || 'Bike Parts POS'}
           </Offcanvas.Title>
         </Offcanvas.Header>
-        
-        <Offcanvas.Body className="p-0 bg-light">
+        <Offcanvas.Body>
           <Nav className="flex-column">
-            {menuItems.map((item) => {
-              const isActive = location.pathname === item.path;
-              
-              return (
+            {menuItems.map((item) => (
                 <LinkContainer key={item.name} to={item.path} onClick={handleNavigation}>
-                  <Nav.Link 
-                    className={`mobile-nav-item px-4 py-3 border-0 d-flex align-items-center ${
-                      isActive ? 'active-mobile-nav' : ''
-                    }`}
-                  >
-                    <span className="nav-icon me-3">{item.icon}</span>
-                    <span className="nav-text">{item.name}</span>
+                <Nav.Link className="py-2">
+                  <span className="me-3">{item.icon}</span>
+                  {item.name}
                   </Nav.Link>
                 </LinkContainer>
-              );
-            })}
+            ))}
           </Nav>
         </Offcanvas.Body>
       </Offcanvas>
 
-      {/* Enhanced Main Content */}
+      {/* Main Content */}
       <main className="main-content">
-        <Container fluid className="content-container p-3 p-md-4">
-          {/* Mobile Page Header */}
-          {isMobile && (
-            <div className="mobile-header mb-3 pb-3 border-bottom">
-              <h4 className="mb-0 fw-bold text-primary d-flex align-items-center">
-                {menuItems.find(item => item.path === location.pathname)?.icon}
-                <span className="ms-2">{getCurrentPageTitle()}</span>
-              </h4>
-            </div>
-          )}
-          
+        <Container fluid className="h-100 py-4 px-3 px-md-4">
           <Outlet />
         </Container>
       </main>
 
       {/* Custom Styles */}
       <style>{`
+        .layout-container {
+          min-height: 100vh;
+          display: flex;
+          flex-direction: column;
+        }
+
+        .navbar {
+          height: 60px;
+        }
+
+        .main-content {
+          flex: 1;
+          margin-top: 60px;
+          background: #f8f9fa;
+          min-height: calc(100vh - 60px);
+          width: 100%;
+          padding-bottom: 2rem;
+        }
+
+        .sidebar-nav {
+          margin-top: 60px;
+          width: 280px;
+        }
+
         .hamburger-icon {
           width: 20px;
           height: 15px;
@@ -247,17 +302,9 @@ const Layout = () => {
           transition: .25s ease-in-out;
         }
         
-        .hamburger-icon span:nth-child(1) {
-          top: 0px;
-        }
-        
-        .hamburger-icon span:nth-child(2) {
-          top: 6px;
-        }
-        
-        .hamburger-icon span:nth-child(3) {
-          top: 12px;
-        }
+        .hamburger-icon span:nth-child(1) { top: 0px; }
+        .hamburger-icon span:nth-child(2) { top: 6px; }
+        .hamburger-icon span:nth-child(3) { top: 12px; }
 
         .nav-item-custom {
           color: rgba(255, 255, 255, 0.8) !important;
@@ -281,56 +328,6 @@ const Layout = () => {
           opacity: 0.8;
         }
 
-        .mobile-nav-item {
-          color: #6c757d;
-          transition: all 0.3s ease;
-          border-left: 3px solid transparent;
-        }
-
-        .mobile-nav-item:hover {
-          background: #f8f9fa;
-          color: #0d6efd;
-          border-left-color: #0d6efd;
-        }
-
-        .active-mobile-nav {
-          background: #e3f2fd;
-          color: #0d6efd;
-          border-left-color: #0d6efd;
-          font-weight: 500;
-        }
-
-        .main-content {
-          margin-top: 70px; /* Increased from 60px to ensure content isn't hidden */
-          padding-top: 15px; /* Added padding to create space for content */
-          min-height: calc(100vh - 70px);
-          background: #f8f9fa;
-          width: 100%;
-        }
-
-        .content-container {
-          max-width: 100%;
-          width: 100%;
-        }
-
-        @media (min-width: 768px) {
-          .main-content {
-            margin-top: 75px; /* More space on larger screens */
-            padding-top: 20px;
-          }
-          .content-container {
-            padding-top: 1rem;
-            padding-bottom: 2rem;
-          }
-        }
-
-        @media (min-width: 1200px) {
-          .content-container {
-            padding-top: 1.5rem;
-            padding-bottom: 2.5rem;
-          }
-        }
-
         .user-avatar {
           transition: all 0.3s ease;
         }
@@ -339,25 +336,52 @@ const Layout = () => {
           transform: scale(1.05);
         }
 
-        .mobile-sidebar {
-          box-shadow: 0 0 20px rgba(0, 0, 0, 0.1);
-        }
-
-        .mobile-header {
-          background: white;
-          margin: 0 0 1.5rem 0;
-          padding: 0 0 1rem 0; /* Adjusted padding to prevent overlap */
-          border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-        }
-
+        /* Responsive Adjustments */
         @media (min-width: 768px) {
-          .mobile-header {
-            margin: 0 0 2rem 0;
-            padding: 2rem;
+          .main-content {
+            padding-top: 1rem;
           }
         }
+
+        @media (min-width: 992px) {
+          .main-content {
+            padding-top: 1.5rem;
+          }
+        }
+
+        /* Mobile Specific Styles */
+        @media (max-width: 991.98px) {
+          .navbar-brand {
+            font-size: 1.1rem;
+          }
+          
+          .brand-icon {
+            width: 32px;
+            height: 32px;
+          }
+        }
+
+        /* Offcanvas Navigation Styles */
+        .offcanvas-body .nav-link {
+          padding: 0.75rem 1rem;
+          color: #495057;
+          border-radius: 0.25rem;
+          margin-bottom: 0.25rem;
+          transition: all 0.2s ease;
+        }
+
+        .offcanvas-body .nav-link:hover {
+          background-color: #f8f9fa;
+          color: #0d6efd;
+        }
+
+        .offcanvas-body .nav-link.active {
+          background-color: #e9ecef;
+          color: #0d6efd;
+          font-weight: 500;
+        }
       `}</style>
-    </>
+    </div>
   );
 };
 

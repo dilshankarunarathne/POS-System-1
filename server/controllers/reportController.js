@@ -17,13 +17,17 @@ const getSalesSummary = async (req, res) => {
     // Format for aggregation
     start.setHours(0, 0, 0, 0);
 
+    // Base match condition with shop filter
+    const matchCondition = { 
+      createdAt: { $gte: start, $lte: end },
+      status: { $ne: 'cancelled' }, // Exclude cancelled sales
+      shopId: new mongoose.Types.ObjectId(req.user.shopId._id)
+    };
+
     // Aggregate sales by day
     const dailySalesAggregation = await Sale.aggregate([
       {
-        $match: { 
-          createdAt: { $gte: start, $lte: end },
-          status: { $ne: 'cancelled' } // Exclude cancelled sales
-        }
+        $match: matchCondition
       },
       {
         $addFields: {
@@ -58,10 +62,7 @@ const getSalesSummary = async (req, res) => {
     // Get total sales within period
     const totalStats = await Sale.aggregate([
       {
-        $match: { 
-          createdAt: { $gte: start, $lte: end },
-          status: { $ne: 'cancelled' }
-        }
+        $match: matchCondition
       },
       {
         $group: {
@@ -91,10 +92,7 @@ const getSalesSummary = async (req, res) => {
     // Group by payment methods
     const paymentMethodStats = await Sale.aggregate([
       {
-        $match: { 
-          createdAt: { $gte: start, $lte: end },
-          status: { $ne: 'cancelled' }
-        }
+        $match: matchCondition
       },
       {
         $group: {
@@ -147,13 +145,17 @@ const getDailySales = async (req, res) => {
     end.setHours(23, 59, 59, 999);
     start.setHours(0, 0, 0, 0);
 
+    // Base match condition with shop filter
+    const matchCondition = { 
+      createdAt: { $gte: start, $lte: end },
+      status: { $ne: 'cancelled' },
+      shopId: new mongoose.Types.ObjectId(req.user.shopId._id)
+    };
+
     // Aggregate daily sales
     const dailySales = await Sale.aggregate([
       {
-        $match: { 
-          createdAt: { $gte: start, $lte: end },
-          status: { $ne: 'cancelled' }
-        }
+        $match: matchCondition
       },
       {
         $addFields: {
@@ -201,12 +203,16 @@ const getProductSalesReport = async (req, res) => {
     // Set end date to end of day
     end.setHours(23, 59, 59, 999);
 
+    // Base match condition with shop filter
+    const matchCondition = { 
+      createdAt: { $gte: start, $lte: end },
+      shopId: new mongoose.Types.ObjectId(req.user.shopId._id)
+    };
+
     // Aggregate product sales
     const productSales = await Sale.aggregate([
       {
-        $match: { 
-          createdAt: { $gte: start, $lte: end }
-        }
+        $match: matchCondition
       },
       {
         $unwind: '$items'
@@ -228,6 +234,11 @@ const getProductSalesReport = async (req, res) => {
       },
       {
         $unwind: '$product'
+      },
+      {
+        $match: {
+          'product.shopId': new mongoose.Types.ObjectId(req.user.shopId._id)
+        }
       },
       {
         $project: {
@@ -257,34 +268,79 @@ const getProductSalesReport = async (req, res) => {
 // Get inventory status report
 const getInventoryStatusReport = async (req, res) => {
   try {
-    // Get all products with their stock levels
-    const products = await Product.find().populate('category');
+    // Match condition with shop filter
+    const matchCondition = { 
+      shopId: new mongoose.Types.ObjectId(req.user.shopId._id)
+    };
 
-    // Calculate inventory statistics
-    const totalProducts = products.length;
-    const totalInventoryValue = products.reduce((sum, product) => {
-      return sum + (product.cost * product.quantity);
-    }, 0);
-    
-    const lowStockThreshold = 10; // Define low stock threshold
-    const lowStockItems = products.filter(product => product.quantity <= lowStockThreshold);
-    
-    const outOfStock = products.filter(product => product.quantity === 0);
+    // Get inventory status
+    const inventoryStatus = await Product.aggregate([
+      {
+        $match: matchCondition
+      },
+      {
+        $lookup: {
+          from: 'categories',
+          localField: 'category',
+          foreignField: '_id',
+          as: 'categoryInfo'
+        }
+      },
+      {
+        $unwind: {
+          path: '$categoryInfo',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $group: {
+          _id: '$categoryInfo.name',
+          totalProducts: { $sum: 1 },
+          totalValue: { $sum: { $multiply: ['$price', '$quantity'] } },
+          lowStock: {
+            $sum: {
+              $cond: [
+                { $lte: ['$quantity', '$reorderLevel'] },
+                1,
+                0
+              ]
+            }
+          },
+          outOfStock: {
+            $sum: {
+              $cond: [
+                { $eq: ['$quantity', 0] },
+                1,
+                0
+              ]
+            }
+          }
+        }
+      },
+      {
+        $project: {
+          category: { $ifNull: ['$_id', 'Uncategorized'] },
+          totalProducts: 1,
+          totalValue: { $round: ['$totalValue', 2] },
+          lowStock: 1,
+          outOfStock: 1,
+          _id: 0
+        }
+      },
+      {
+        $sort: { totalProducts: -1 }
+      }
+    ]);
 
     res.status(200).json({
-      totalProducts,
-      totalInventoryValue,
-      lowStockItems: {
-        count: lowStockItems.length,
-        items: lowStockItems.map(item => ({
-          id: item._id,
-          name: item.name,
-          sku: item.sku,
-          quantity: item.quantity,
-          category: item.category?.name || 'Uncategorized'
-        }))
-      },
-      outOfStockCount: outOfStock.length
+      categories: inventoryStatus,
+      summary: {
+        totalCategories: inventoryStatus.length,
+        totalProducts: inventoryStatus.reduce((sum, cat) => sum + cat.totalProducts, 0),
+        totalValue: inventoryStatus.reduce((sum, cat) => sum + cat.totalValue, 0),
+        lowStockItems: inventoryStatus.reduce((sum, cat) => sum + cat.lowStock, 0),
+        outOfStockItems: inventoryStatus.reduce((sum, cat) => sum + cat.outOfStock, 0)
+      }
     });
   } catch (error) {
     console.error('Error generating inventory report:', error);

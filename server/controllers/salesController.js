@@ -4,27 +4,44 @@ const SaleItem = require('../models/SaleItem');
 const Product = require('../models/Product');
 const User = require('../models/User');
 const Customer = require('../models/Customer');
+const Shop = require('../models/Shop');
 const printController = require('./printController');
 
-// Generate invoice number
-const generateInvoiceNumber = async () => {
-  const today = new Date();
-  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
-  
-  // Get the last invoice number for today
-  const lastSale = await Sale.findOne({
-    invoiceNumber: new RegExp(`^INV-${dateStr}-`)
-  }).sort({ createdAt: -1 });
-  
-  let nextNumber = 1;
-  if (lastSale && lastSale.invoiceNumber) {
-    const parts = lastSale.invoiceNumber.split('-');
-    if (parts.length >= 3) {
-      nextNumber = parseInt(parts[2]) + 1;
+// Generate invoice number with shop-specific prefix
+const generateInvoiceNumber = async (shopId) => {
+  try {
+    let shopPrefix = 'INV';
+    
+    // If shopId is provided, fetch shop to get first 3 letters of shop name
+    if (shopId) {
+      const shop = await Shop.findById(shopId);
+      if (shop && shop.name) {
+        shopPrefix = shop.name.substring(0, 3).toUpperCase();
+      }
     }
+    
+    const today = new Date();
+    const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+    
+    // Get the last invoice number for today and this shop
+    const lastSale = await Sale.findOne({
+      invoiceNumber: new RegExp(`^${shopPrefix}-${dateStr}-`),
+      shopId: shopId
+    }).sort({ createdAt: -1 });
+    
+    let nextNumber = 1;
+    if (lastSale && lastSale.invoiceNumber) {
+      const parts = lastSale.invoiceNumber.split('-');
+      if (parts.length >= 3) {
+        nextNumber = parseInt(parts[2]) + 1;
+      }
+    }
+    
+    return `${shopPrefix}-${dateStr}-${nextNumber.toString().padStart(4, '0')}`;
+  } catch (error) {
+    console.error('Error generating invoice number:', error);
+    return `INV-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   }
-  
-  return `INV-${dateStr}-${nextNumber.toString().padStart(4, '0')}`;
 };
 
 // Create a new sale
@@ -53,7 +70,7 @@ const createSale = async (req, res) => {
     }
     
     // Generate invoice number
-    const invoiceNumber = await generateInvoiceNumber();
+    const invoiceNumber = await generateInvoiceNumber(req.user.shopId);
     
     // Create customer if customerName is provided but no customer ID
     let customerId = customer;
@@ -62,7 +79,10 @@ const createSale = async (req, res) => {
         // Check if customer already exists with this phone number
         let existingCustomer = null;
         if (customerPhone) {
-          existingCustomer = await Customer.findOne({ phone: customerPhone });
+          existingCustomer = await Customer.findOne({ 
+            phone: customerPhone,
+            shopId: req.user.shopId
+          });
         }
         
         if (existingCustomer) {
@@ -72,6 +92,7 @@ const createSale = async (req, res) => {
           const newCustomer = await Customer.create({
             name: customerName,
             phone: customerPhone,
+            shopId: req.user.shopId,
             createdAt: new Date()
           });
           customerId = newCustomer._id;
@@ -93,19 +114,23 @@ const createSale = async (req, res) => {
       total,
       paymentMethod,
       user: req.user.id,
+      shopId: req.user.shopId,
       notes,
       createdAt: new Date()
     });
     
     // Process items and update product stock
     for (const item of items) {
-      // Check if product exists and has enough stock
-      const product = await Product.findById(item.product || item.productId).session(session);
+      // Check if product exists, belongs to the user's shop, and has enough stock
+      const product = await Product.findOne({ 
+        _id: item.product || item.productId,
+        shopId: req.user.shopId
+      }).session(session);
       
       if (!product) {
         await session.abortTransaction();
         session.endSession();
-        return res.status(404).json({ message: `Product with ID ${item.product || item.productId} not found` });
+        return res.status(404).json({ message: `Product with ID ${item.product || item.productId} not found in your shop` });
       }
       
       if (product.quantity < item.quantity) {
@@ -143,6 +168,10 @@ const createSale = async (req, res) => {
     const createdSale = await Sale.findById(sale._id)
       .populate('customer')
       .populate('user', 'name username')
+      .populate({
+        path: 'shopId',
+        select: 'name'
+      })
       .populate('items.product');
     
     res.status(201).json(createdSale);
@@ -171,6 +200,15 @@ const getAllSales = async (req, res) => {
     
     // Prepare filter conditions
     const filter = {};
+    
+    // Add shop filter based on user role
+    if (req.user.role !== 'developer') {
+      // Non-developers can only see sales from their shop
+      filter.shopId = req.user.shopId;
+    } else if (req.query.shopId) {
+      // Developers can filter by shop
+      filter.shopId = req.query.shopId;
+    }
     
     // Date range filter
     if (startDate || endDate) {
@@ -209,6 +247,10 @@ const getAllSales = async (req, res) => {
     const sales = await Sale.find(filter)
       .populate('customer')
       .populate('user', 'name username')
+      .populate({
+        path: 'shopId',
+        select: 'name'
+      })
       .sort(sortOptions)
       .skip((Number(page) - 1) * Number(limit))
       .limit(Number(limit));

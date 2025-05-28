@@ -1,12 +1,24 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { authApi } from '../services/api';
 
+// Shop type
+interface Shop {
+  _id: string;
+  name: string;
+  address?: string;
+  phone?: string;
+  email?: string;
+}
+
 // User type
 interface User {
   id: number;
+  _id?: string;
   username: string;
   name: string;
-  role: 'admin' | 'manager' | 'cashier';
+  role: 'developer' | 'admin' | 'manager' | 'cashier';
+  shopId?: Shop;
+  accessibleShops?: Shop[];
 }
 
 // Auth context type
@@ -16,6 +28,7 @@ interface AuthContextType {
   error: string | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
+  getCurrentShop: () => Shop | undefined;
 }
 
 // Create context
@@ -26,6 +39,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Get current shop
+  const getCurrentShop = () => {
+    return user?.shopId;
+  };
 
   // Load user from localStorage on mount
   useEffect(() => {
@@ -76,10 +94,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const response = await authApi.login({ username, password });
       const { token, user } = response.data;
       
-      localStorage.setItem('token', token);
-      localStorage.setItem('user', JSON.stringify(user));
+      // Ensure the user object has the correct shape
+      const userData: User = {
+        ...user,
+        id: user._id,
+        shopId: user.shopId
+      };
       
-      setUser(user);
+      localStorage.setItem('token', token);
+      localStorage.setItem('user', JSON.stringify(userData));
+      
+      setUser(userData);
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err.response?.data?.message || 'Failed to login. Please check your credentials.');
@@ -97,7 +122,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, error, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, error, login, logout, getCurrentShop }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,4 +1,11 @@
 const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
+const dotenv = require('dotenv');
+const authRoutes = require('./routes/auth');
+const userRoutes = require('./routes/users');
+const shopRoutes = require('./routes/shops');
+const statsRoutes = require('./routes/stats');
 const productController = require('../controllers/productController');
 const { authenticate, authorize } = require('../middleware/auth');
 const multer = require('multer');
@@ -6,7 +13,28 @@ const path = require('path');
 const fs = require('fs');
 const logger = require('./middleware/loggerMiddleware');
 
-const router = express.Router();
+// Load environment variables
+dotenv.config();
+
+const app = express();
+
+// Middleware
+app.use(cors());
+app.use(express.json());
+
+// Connect to MongoDB
+mongoose.connect(process.env.MONGODB_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true
+})
+.then(() => console.log('Connected to MongoDB'))
+.catch(err => console.error('MongoDB connection error:', err));
+
+// Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/users', userRoutes);
+app.use('/api/shops', shopRoutes);
+app.use('/api/stats', statsRoutes);
 
 // Set up multer for file uploads
 const storage = multer.diskStorage({
@@ -46,6 +74,7 @@ app.use(logger);
 
 // Routes - IMPORTANT: Order matters for route matching!
 // Put more specific routes before generic ones
+const router = express.Router();
 router.get('/refresh', authenticate, productController.refreshProducts);
 router.get('/latest', authenticate, productController.getLatestProducts);
 router.get('/barcode/:barcode', authenticate, productController.getProductByBarcode);
@@ -61,7 +90,18 @@ router.put('/:id', authenticate, authorize('admin', 'manager'), upload.single('i
 router.delete('/:id', authenticate, authorize('admin'), productController.deleteProduct);
 router.patch('/:id/stock', authenticate, authorize('admin', 'manager'), productController.updateStock);
 
-module.exports = router;
+app.use('/api/products', router);
 
 // Serve static files from the uploads directory
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  res.status(500).json({ message: 'Something broke!' });
+});
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});

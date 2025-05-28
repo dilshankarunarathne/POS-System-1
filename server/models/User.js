@@ -26,12 +26,20 @@ const UserSchema = new mongoose.Schema({
   },
   role: {
     type: String,
-    enum: ['admin', 'manager', 'cashier'],
+    enum: ['developer', 'admin', 'manager', 'cashier'],
     default: 'cashier'
+  },
+  shopId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Shop'
   },
   active: {
     type: Boolean,
     default: true
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
   },
   createdAt: {
     type: Date,
@@ -52,15 +60,31 @@ UserSchema.pre('save', async function(next) {
   try {
     const salt = await bcrypt.genSalt(10);
     this.password = await bcrypt.hash(this.password, salt);
+    this.updatedAt = Date.now();
     next();
   } catch (error) {
     next(error);
   }
 });
 
-// Method to check if password matches
-UserSchema.methods.checkPassword = async function(enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
+// Check if password matches
+UserSchema.methods.checkPassword = async function(password) {
+  return await bcrypt.compare(password, this.password);
+};
+
+// Get user's shops based on role
+UserSchema.methods.getAccessibleShops = async function() {
+  if (this.role === 'developer') {
+    // Developers can access all shops
+    return await mongoose.model('Shop').find({ active: true });
+  } else if (this.role === 'admin' && this.shopId) {
+    // Admins can only access their assigned shop
+    return [await mongoose.model('Shop').findById(this.shopId)];
+  } else if (this.shopId) {
+    // Other roles can only access their assigned shop
+    return [await mongoose.model('Shop').findById(this.shopId)];
+  }
+  return [];
 };
 
 module.exports = mongoose.model('User', UserSchema);

@@ -82,9 +82,10 @@ const SaleSchema = new mongoose.Schema({
   notes: {
     type: String
   },
-  shop: {
+  shopId: {
     type: mongoose.Schema.Types.ObjectId,
-    ref: 'Shop'
+    ref: 'Shop',
+    required: true
   }
 });
 
@@ -102,6 +103,7 @@ SaleSchema.methods.getReceiptData = function() {
     total: this.total,
     paymentMethod: this.paymentMethod,
     user: this.user,
+    shopId: this.shopId,
     notes: this.notes
   };
 };
@@ -114,9 +116,10 @@ SaleSchema.pre('save', async function(next) {
       const today = new Date();
       const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
       
-      // Get the last invoice number for today
+      // Get the last invoice number for today and this shop
       const lastSale = await this.constructor.findOne({
-        invoiceNumber: new RegExp(`^INV-${dateStr}-`)
+        invoiceNumber: new RegExp(`^INV-${dateStr}-`),
+        shopId: this.shopId
       }).sort({ createdAt: -1 });
       
       let nextNumber = 1;
@@ -167,9 +170,10 @@ SaleSchema.pre('save', async function(next) {
       const today = new Date();
       const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
       
-      // Get the last invoice number for today
+      // Get the last invoice number for today and this shop
       const lastSale = await this.constructor.findOne({
-        invoiceNumber: new RegExp(`^INV-${dateStr}-`)
+        invoiceNumber: new RegExp(`^INV-${dateStr}-`),
+        shopId: this.shopId
       }).sort({ createdAt: -1 });
       
       let nextNumber = 1;

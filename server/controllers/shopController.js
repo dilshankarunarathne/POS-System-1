@@ -1,16 +1,25 @@
 const Shop = require('../models/Shop');
 const User = require('../models/User');
 
-// Get all shops (admin only)
+// Get all shops
 exports.getAllShops = async (req, res) => {
   try {
-    const shops = await Shop.find()
-      .populate('owner', 'name username email')
-      .populate('createdBy', 'name username');
-      
-    res.status(200).json(shops);
+    let shops;
+    
+    if (req.user.role === 'developer') {
+      // Developers can see all shops
+      shops = await Shop.find().sort({ createdAt: -1 });
+    } else {
+      // Other users can only see their assigned shop
+      if (!req.user.shopId) {
+        return res.json([]);
+      }
+      shops = [await Shop.findById(req.user.shopId._id)];
+    }
+
+    res.json(shops);
   } catch (error) {
-    console.error('Error fetching shops:', error.message);
+    console.error('Error fetching shops:', error);
     res.status(500).json({ message: 'Server error fetching shops' });
   }
 };
@@ -18,67 +27,61 @@ exports.getAllShops = async (req, res) => {
 // Get shop by ID
 exports.getShopById = async (req, res) => {
   try {
-    const shop = await Shop.findById(req.params.id)
-      .populate('owner', 'name username email')
-      .populate('createdBy', 'name username');
-      
+    const shop = await Shop.findById(req.params.id);
+    
     if (!shop) {
       return res.status(404).json({ message: 'Shop not found' });
     }
-    
+
     // Check if user has access to this shop
-    if (req.user.role !== 'admin' && (!req.user.shop || req.user.shop._id.toString() !== shop._id.toString())) {
-      return res.status(403).json({ message: 'Not authorized to access this shop' });
+    if (req.user.role !== 'developer' && (!req.user.shopId || req.user.shopId._id.toString() !== shop._id.toString())) {
+      return res.status(403).json({ message: 'Access denied' });
     }
-    
-    res.status(200).json(shop);
+
+    res.json(shop);
   } catch (error) {
-    console.error('Error fetching shop:', error.message);
+    console.error('Error fetching shop:', error);
     res.status(500).json({ message: 'Server error fetching shop' });
   }
 };
 
-// Create shop (admin only)
+// Create shop
 exports.createShop = async (req, res) => {
   try {
-    // Only admin can create shops directly
-    if (req.user.role !== 'admin') {
-      return res.status(403).json({ message: 'Not authorized to create shops' });
+    // Only developers can create shops
+    if (req.user.role !== 'developer') {
+      return res.status(403).json({ message: 'Access denied' });
     }
-    
-    const { name, address, phone, email, ownerId } = req.body;
-    
-    if (!name || !ownerId) {
-      return res.status(400).json({ message: 'Shop name and owner ID are required' });
+
+    const { name, address, phone, email, owner } = req.body;
+
+    // Check if shop with same name exists
+    const existingShop = await Shop.findOne({ name });
+    if (existingShop) {
+      return res.status(400).json({ message: 'Shop with this name already exists' });
     }
-    
-    // Check if owner exists and is actually an owner
-    const owner = await User.findById(ownerId);
-    if (!owner) {
-      return res.status(404).json({ message: 'Owner not found' });
+
+    // Verify owner exists and is a valid user
+    if (owner) {
+      const ownerUser = await User.findById(owner);
+      if (!ownerUser) {
+        return res.status(400).json({ message: 'Specified owner not found' });
+      }
     }
-    
-    if (owner.role !== 'owner') {
-      return res.status(400).json({ message: 'User is not a shop owner' });
-    }
-    
-    // Create shop
-    const shop = await Shop.create({
+
+    const shop = new Shop({
       name,
       address,
       phone,
       email,
-      owner: ownerId,
+      owner: owner || req.user._id, // Use provided owner or default to current developer
       createdBy: req.user._id
     });
-    
-    // Update owner with shop reference
-    owner.shop = shop._id;
-    await owner.save();
-    
+
+    await shop.save();
     res.status(201).json(shop);
   } catch (error) {
-    console.error('Error creating shop:', error.message);
+    console.error('Error creating shop:', error);
     res.status(500).json({ message: 'Server error creating shop' });
   }
 };
@@ -86,59 +89,95 @@ exports.createShop = async (req, res) => {
 // Update shop
 exports.updateShop = async (req, res) => {
   try {
-    const { name, address, phone, email } = req.body;
+    // Only developers can update shops
+    if (req.user.role !== 'developer') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const { name } = req.body;
     const shopId = req.params.id;
-    
+
+    // Check if shop exists
     const shop = await Shop.findById(shopId);
-    
     if (!shop) {
       return res.status(404).json({ message: 'Shop not found' });
     }
-    
-    // Check if user has permission to update (admin or shop owner)
-    if (req.user.role !== 'admin' && 
-        (!req.user.shop || req.user.shop._id.toString() !== shopId || req.user.role !== 'owner')) {
-      return res.status(403).json({ message: 'Not authorized to update this shop' });
+
+    // Check if new name is already taken by another shop
+    if (name && name !== shop.name) {
+      const existingShop = await Shop.findOne({ 
+        _id: { $ne: shopId },
+        name 
+      });
+      
+      if (existingShop) {
+        return res.status(400).json({ message: 'Shop with this name already exists' });
+      }
     }
-    
-    // Update shop fields
+
+    // Update shop
     shop.name = name || shop.name;
-    shop.address = address || shop.address;
-    shop.phone = phone || shop.phone;
-    shop.email = email || shop.email;
     shop.updatedAt = Date.now();
-    
     await shop.save();
-    
-    res.status(200).json(shop);
+
+    res.json(shop);
   } catch (error) {
-    console.error('Error updating shop:', error.message);
+    console.error('Error updating shop:', error);
     res.status(500).json({ message: 'Server error updating shop' });
   }
 };
 
-// Get shop users (admin or owner only)
-exports.getShopUsers = async (req, res) => {
+// Delete shop
+exports.deleteShop = async (req, res) => {
   try {
-    const shopId = req.params.id;
+    // Only developers can delete shops
+    if (req.user.role !== 'developer') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const shop = await Shop.findById(req.params.id);
     
-    const shop = await Shop.findById(shopId);
     if (!shop) {
       return res.status(404).json({ message: 'Shop not found' });
     }
-    
-    // Check if user has permission (admin or shop owner)
-    if (req.user.role !== 'admin' && 
-        (!req.user.shop || req.user.shop._id.toString() !== shopId || req.user.role !== 'owner')) {
-      return res.status(403).json({ message: 'Not authorized to view shop users' });
+
+    // Check if shop has any users
+    const usersCount = await User.countDocuments({ shopId: shop._id });
+    if (usersCount > 0) {
+      return res.status(400).json({ 
+        message: 'Cannot delete shop with active users. Please reassign or delete users first.' 
+      });
     }
-    
-    // Find all users for this shop
-    const users = await User.find({ shop: shopId }).select('-password');
-    
-    res.status(200).json(users);
+
+    await Shop.deleteOne({ _id: shop._id });
+    res.json({ message: 'Shop deleted successfully' });
   } catch (error) {
-    console.error('Error fetching shop users:', error.message);
-    res.status(500).json({ message: 'Server error fetching shop users' });
+    console.error('Error deleting shop:', error);
+    res.status(500).json({ message: 'Server error deleting shop' });
+  }
+};
+
+// Toggle shop status
+exports.toggleShopStatus = async (req, res) => {
+  try {
+    // Only developers can toggle shop status
+    if (req.user.role !== 'developer') {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+
+    const shop = await Shop.findById(req.params.id);
+    
+    if (!shop) {
+      return res.status(404).json({ message: 'Shop not found' });
+    }
+
+    shop.active = !shop.active;
+    shop.updatedAt = Date.now();
+    await shop.save();
+
+    res.json(shop);
+  } catch (error) {
+    console.error('Error toggling shop status:', error);
+    res.status(500).json({ message: 'Server error updating shop status' });
   }
 };

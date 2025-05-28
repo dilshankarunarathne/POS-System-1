@@ -4,13 +4,14 @@ const Product = require('../models/Product');
 const Customer = require('../models/Customer');
 
 // Generate invoice number
-const generateInvoiceNumber = async () => {
+const generateInvoiceNumber = async (shopId) => {
   const today = new Date();
   const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
   
-  // Get the last invoice number for today
+  // Get the last invoice number for today for this shop
   const lastSale = await Sale.findOne({
-    invoiceNumber: new RegExp(`^INV-${dateStr}-`)
+    invoiceNumber: new RegExp(`^INV-${dateStr}-`),
+    shopId: shopId
   }).sort({ createdAt: -1 });
   
   let nextNumber = 1;
@@ -34,7 +35,7 @@ exports.createSale = async (req, res) => {
     
     // Generate invoice number if not provided
     if (!saleData.invoiceNumber) {
-      saleData.invoiceNumber = await generateInvoiceNumber();
+      saleData.invoiceNumber = await generateInvoiceNumber(req.user.shopId);
     }
     
     // Create customer if customerName is provided but no customer ID
@@ -44,7 +45,10 @@ exports.createSale = async (req, res) => {
         // Check if customer already exists with this phone number
         let existingCustomer = null;
         if (customerPhone) {
-          existingCustomer = await Customer.findOne({ phone: customerPhone });
+          existingCustomer = await Customer.findOne({ 
+            phone: customerPhone,
+            shopId: req.user.shopId
+          });
         }
         
         if (existingCustomer) {
@@ -54,6 +58,7 @@ exports.createSale = async (req, res) => {
           const newCustomer = await Customer.create({
             name: customerName,
             phone: customerPhone,
+            shopId: req.user.shopId,
             createdAt: new Date()
           });
           customerId = newCustomer._id;
@@ -69,7 +74,8 @@ exports.createSale = async (req, res) => {
       ...saleData,
       customer: customerId,
       items,
-      user: req.user.id  // Add user ID from authenticated request
+      user: req.user.id,
+      shopId: req.user.shopId  // Add shop ID
     });
     
     await newSale.save({ session });
@@ -78,7 +84,10 @@ exports.createSale = async (req, res) => {
     for (const item of items) {
       const productId = item.product || item.productId;
       await Product.updateOne(
-        { _id: productId },
+        { 
+          _id: productId,
+          shopId: req.user.shopId
+        },
         { $inc: { quantity: -item.quantity } },
         { session }
       );
@@ -88,7 +97,10 @@ exports.createSale = async (req, res) => {
     session.endSession();
     
     // Return the sale with populated items
-    const completeSale = await Sale.findById(newSale._id)
+    const completeSale = await Sale.findOne({
+      _id: newSale._id,
+      shopId: req.user.shopId
+    })
       .populate('customer', 'name email phone')
       .populate('user', 'name username')
       .populate('items.product');
@@ -118,7 +130,9 @@ exports.getSales = async (req, res) => {
     } = req.query;
     
     // Prepare filter conditions
-    const filter = {};
+    const filter = {
+      shopId: req.user.shopId // Add shop filter
+    };
     
     // Date range filter
     if (startDate || endDate) {

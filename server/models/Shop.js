@@ -28,6 +28,24 @@ const ShopSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  settings: {
+    currency: {
+      type: String,
+      default: 'Rs'
+    },
+    taxRate: {
+      type: Number,
+      default: 0
+    },
+    receiptHeader: {
+      type: String,
+      default: 'Thank you for your purchase!'
+    },
+    receiptFooter: {
+      type: String,
+      default: 'Return policy: Items can be returned within 7 days with receipt'
+    }
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User'

@@ -84,6 +84,10 @@ const Products: React.FC = () => {
     imageUrl: '',
   });
   
+  // State for print preview
+  const [printPreviewUrl, setPrintPreviewUrl] = useState<string | null>(null);
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  
   // Fetch products on component mount and when filters change
   useEffect(() => {
     fetchProducts();
@@ -247,7 +251,59 @@ const Products: React.FC = () => {
     setPrintDialogOpen(true);
   };
   
-  // Print product labels
+  // Generate preview for printing labels
+  const handleGeneratePreview = async () => {
+    try {
+      setPrintLoading(true);
+      
+      if (selectedProductIds.length === 0) {
+        setError('No products selected for printing labels');
+        return;
+      }
+      
+      console.log('Sending request to preview barcodes for products:', selectedProductIds);
+      
+      const response = await printApi.generateBarcodes(selectedProductIds, printQuantity); // Use the API without a preview parameter
+      
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      const url = window.URL.createObjectURL(blob);
+      
+      setPrintPreviewUrl(url);
+      setShowPrintPreview(true);
+      
+    } catch (err: any) {
+      console.error('Error generating preview:', err);
+      
+      if (err.response) {
+        if (err.response.data instanceof Blob) {
+          try {
+            const text = await err.response.data.text();
+            let errorMsg = 'Unknown error';
+            try {
+              const errorObj = JSON.parse(text);
+              errorMsg = errorObj.message || 'Error generating preview';
+            } catch (e) {
+              errorMsg = text || 'Error generating preview';
+            }
+            setError(`Failed to generate preview: ${errorMsg}`);
+          } catch (textErr) {
+            setError(`Failed to generate preview: Server returned an error`);
+          }
+        } else {
+          const errorMessage = err.response.data?.message || `Server error: ${err.response.status}`;
+          setError(`Failed to generate preview: ${errorMessage}`);
+        }
+      } else if (err.request) {
+        setError('Failed to generate preview: No response from server. Please check your network connection.');
+      } else {
+        setError(`Failed to generate preview: ${err.message || 'Unknown error'}`);
+      }
+    } finally {
+      setPrintLoading(false);
+    }
+  };
+  
+  // Print product labels - updated to handle direct printing
   const handlePrintLabels = async () => {
     try {
       setPrintLoading(true);
@@ -264,17 +320,28 @@ const Products: React.FC = () => {
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
       
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `product-labels-${Date.now()}.pdf`;
+      // Open in a new window for printing
+      const printWindow = window.open(url, '_blank');
+      if (printWindow) {
+        printWindow.onload = () => {
+          printWindow.print();
+          // Cleanup
+          window.URL.revokeObjectURL(url);
+        };
+      } else {
+        // Fallback to download if pop-up is blocked
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `product-labels-${Date.now()}.pdf`;
+        
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        window.URL.revokeObjectURL(url);
+      }
       
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
-      window.URL.revokeObjectURL(url);
-      
-      setSuccessMessage(`${selectedProductIds.length} product labels generated successfully`);
+      setSuccessMessage(`${selectedProductIds.length} product labels sent to printer`);
       setPrintDialogOpen(false);
       setSelectedProductIds([]);
       setPrintQuantity(1);
@@ -309,6 +376,11 @@ const Products: React.FC = () => {
     } finally {
       setPrintLoading(false);
     }
+  };
+  
+  // Reset dialog when closing
+  const handleClosePrintDialog = () => {
+    setPrintDialogOpen(false);
   };
   
   // Handle form input changes
@@ -795,8 +867,11 @@ const Products: React.FC = () => {
         </Card.Body>
       </Card>
       
-      {/* Print Labels Modal */}
-      <Modal show={printDialogOpen} onHide={() => setPrintDialogOpen(false)}>
+      {/* Print Labels Modal - Simplified */}
+      <Modal 
+        show={printDialogOpen} 
+        onHide={handleClosePrintDialog}
+      >
         <Modal.Header closeButton>
           <Modal.Title>Print Product Labels</Modal.Title>
         </Modal.Header>
@@ -815,12 +890,22 @@ const Products: React.FC = () => {
               min={1}
             />
           </Form.Group>
+          
+          <div className="mt-4">
+            <p className="text-muted">
+              <small>
+                When you click "Print Labels", the labels will open in a new window and your 
+                browser's print dialog will appear automatically. Make sure your label printer 
+                is selected in the print settings.
+              </small>
+            </p>
+          </div>
         </Modal.Body>
         
         <Modal.Footer>
           <Button 
             variant="secondary" 
-            onClick={() => setPrintDialogOpen(false)}
+            onClick={handleClosePrintDialog}
             disabled={printLoading}
           >
             Cancel
@@ -833,7 +918,7 @@ const Products: React.FC = () => {
             {printLoading ? (
               <>
                 <Spinner as="span" animation="border" size="sm" className="me-1" /> 
-                Generating...
+                Processing...
               </>
             ) : (
               <>

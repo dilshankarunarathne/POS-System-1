@@ -1,0 +1,26 @@
+[
+  {
+    "id": 1,
+    "name": "Main Bike Shop",
+    "address": "123 Main Street, City",
+    "phone": "123-456-7890",
+    "email": "main@bikeshop.com",
+    "active": true
+  },
+  {
+    "id": 2,
+    "name": "Downtown Bike Shop",
+    "address": "456 Downtown Avenue, City",
+    "phone": "987-654-3210",
+    "email": "downtown@bikeshop.com",
+    "active": true
+  },
+  {
+    "id": 3,
+    "name": "Suburb Bike Shop",
+    "address": "789 Suburb Boulevard, City",
+    "phone": "555-123-4567",
+    "email": "suburb@bikeshop.com",
+    "active": true
+  }
+]

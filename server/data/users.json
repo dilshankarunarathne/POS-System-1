@@ -1,11 +1,20 @@
 [
   {
+    "name": "System Developer",
+    "username": "developer",
+    "email": "developer@bikepos.com",
+    "password": "$2a$10$xLxAYZ8cGpDobZKZ7rQIzOD4tX0rX.Owp8vXzp.g0y7jq5YiH7wCi",
+    "role": "developer",
+    "active": true
+  },
+  {
     "name": "Admin User",
     "username": "admin",
     "email": "admin@bikepos.com",
     "password": "$2a$10$xLxAYZ8cGpDobZKZ7rQIzOD4tX0rX.Owp8vXzp.g0y7jq5YiH7wCi",
     "role": "admin",
-    "active": true
+    "active": true,
+    "shop": 1
   },
   {
     "name": "Manager User",
@@ -13,7 +22,8 @@
     "email": "manager@bikepos.com",
     "password": "$2a$10$xLxAYZ8cGpDobZKZ7rQIzOD4tX0rX.Owp8vXzp.g0y7jq5YiH7wCi",
     "role": "manager",
-    "active": true
+    "active": true,
+    "shop": 1
   },
   {
     "name": "Cashier User",
@@ -21,6 +31,25 @@
     "email": "cashier@bikepos.com",
     "password": "$2a$10$xLxAYZ8cGpDobZKZ7rQIzOD4tX0rX.Owp8vXzp.g0y7jq5YiH7wCi",
     "role": "cashier",
-    "active": true
+    "active": true,
+    "shop": 1
+  },
+  {
+    "name": "Downtown Admin",
+    "username": "downtown_admin",
+    "email": "dtadmin@bikepos.com",
+    "password": "$2a$10$xLxAYZ8cGpDobZKZ7rQIzOD4tX0rX.Owp8vXzp.g0y7jq5YiH7wCi",
+    "role": "admin",
+    "active": true,
+    "shop": 2
+  },
+  {
+    "name": "Suburb Admin",
+    "username": "suburb_admin",
+    "email": "sbadmin@bikepos.com",
+    "password": "$2a$10$xLxAYZ8cGpDobZKZ7rQIzOD4tX0rX.Owp8vXzp.g0y7jq5YiH7wCi",
+    "role": "admin",
+    "active": true,
+    "shop": 3
   }
-] 
+]

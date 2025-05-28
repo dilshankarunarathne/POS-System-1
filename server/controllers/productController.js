@@ -14,7 +14,9 @@ const getAllProducts = async (req, res) => {
     
     // Add sorting and filtering options
     const sort = req.query.sort || '-updatedAt'; // Default sort by latest updated
-    const filter = {};
+    const filter = {
+      shopId: req.user.shopId // Add shop filter
+    };
     
     if (req.query.category) {
       filter.category = req.query.category;
@@ -50,7 +52,7 @@ const getAllProducts = async (req, res) => {
       const productObj = product.toObject();
       return {
         ...productObj,
-        id: productObj._id, // Ensure ID is available in the expected format 
+        id: productObj._id,
         stockQuantity: productObj.quantity,
         costPrice: productObj.cost,
         categoryId: productObj.category ? productObj.category._id : null,
@@ -77,7 +79,10 @@ const getAllProducts = async (req, res) => {
 // Get product by ID
 const getProductById = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id)
+    const product = await Product.findOne({
+      _id: req.params.id,
+      shopId: req.user.shopId // Add shop filter
+    })
       .populate('category')
       .populate('supplier');
       
@@ -94,7 +99,10 @@ const getProductById = async (req, res) => {
 // Get product by barcode
 const getProductByBarcode = async (req, res) => {
   try {
-    const product = await Product.findOne({ barcode: req.params.barcode })
+    const product = await Product.findOne({ 
+      barcode: req.params.barcode,
+      shopId: req.user.shopId // Add shop filter
+    })
       .populate('category')
       .populate('supplier');
       
@@ -120,7 +128,10 @@ const getByBarcode = async (req, res) => {
       });
     }
     
-    const product = await Product.findOne({ barcode })
+    const product = await Product.findOne({ 
+      barcode,
+      shopId: req.user.shopId // Add shop filter
+    })
       .populate('category');
     
     if (!product) {
@@ -147,7 +158,10 @@ const getByBarcode = async (req, res) => {
 // Create product
 const createProduct = async (req, res) => {
   try {
-    const productData = req.body;
+    const productData = {
+      ...req.body,
+      shopId: req.user.shopId // Add shop ID to new products
+    };
     
     // If an image was uploaded, add the path
     if (req.file) {
@@ -176,7 +190,10 @@ const createProduct = async (req, res) => {
     // Handle category - only use existing categories, don't create new ones
     if (productData.categoryId) {
       // Use category ID directly
-      const category = await Category.findById(productData.categoryId);
+      const category = await Category.findOne({
+        _id: productData.categoryId,
+        shopId: req.user.shopId // Add shop filter
+      });
       if (category) {
         productData.category = category._id;
       } else {
@@ -184,7 +201,10 @@ const createProduct = async (req, res) => {
       }
     } else if (productData.categoryName) {
       // Find category by name but don't create a new one
-      const category = await Category.findOne({ name: productData.categoryName });
+      const category = await Category.findOne({ 
+        name: productData.categoryName,
+        shopId: req.user.shopId // Add shop filter
+      });
       if (category) {
         productData.category = category._id;
       } else {
@@ -239,14 +259,14 @@ const createProduct = async (req, res) => {
 // Update product
 const updateProduct = async (req, res) => {
   try {
-    const productData = req.body;
+    const productData = { ...req.body };
     
     // If an image was uploaded, add the path
     if (req.file) {
       productData.image = `/uploads/products/${req.file.filename}`;
     }
     
-    // Map frontend field names to backend field names if needed
+    // Map frontend field names to backend field names
     if (productData.stockQuantity !== undefined) {
       productData.quantity = parseInt(productData.stockQuantity);
       delete productData.stockQuantity;
@@ -265,69 +285,37 @@ const updateProduct = async (req, res) => {
       productData.reorderLevel = parseInt(productData.reorderLevel);
     }
     
-    // Handle category - support both ID and name-based assignment
+    // Handle category
     if (productData.categoryId) {
-      // Use category ID directly
-      const category = await Category.findById(productData.categoryId);
-      if (category) {
-        productData.category = category._id;
-      }
-    } else if (productData.categoryName) {
-      // Find category by name or create a new one
-      let category = await Category.findOne({ 
-        name: { $regex: new RegExp(`^${productData.categoryName}$`, 'i') }
+      const category = await Category.findOne({
+        _id: productData.categoryId,
+        shopId: req.user.shopId
       });
-      
-      // If category doesn't exist and name is provided, create it
-      if (!category && productData.categoryName.trim()) {
-        category = await Category.create({ name: productData.categoryName.trim() });
-      }
-      
       if (category) {
         productData.category = category._id;
-      } else {
-        productData.category = null;
       }
     }
-    
     delete productData.categoryId;
-    delete productData.categoryName;
     
-    // Handle supplier - support both ID and name-based assignment
+    // Handle supplier
     if (productData.supplierId) {
-      // Use supplier ID directly
-      const supplier = await Supplier.findById(productData.supplierId);
-      if (supplier) {
-        productData.supplier = supplier._id;
-      }
-    } else if (productData.supplierName) {
-      // Find supplier by name or create a new one
-      let supplier = await Supplier.findOne({ 
-        name: { $regex: new RegExp(`^${productData.supplierName}$`, 'i') }
+      const supplier = await Supplier.findOne({
+        _id: productData.supplierId,
+        shopId: req.user.shopId
       });
-      
-      // If supplier doesn't exist and name is provided, create it
-      if (!supplier && productData.supplierName.trim()) {
-        supplier = await Supplier.create({ name: productData.supplierName.trim() });
-      }
-      
       if (supplier) {
         productData.supplier = supplier._id;
-      } else {
-        productData.supplier = null;
       }
     }
-    
     delete productData.supplierId;
-    delete productData.supplierName;
     
-    // Set updated timestamp
-    productData.updatedAt = new Date();
-    
-    const product = await Product.findByIdAndUpdate(
-      req.params.id,
+    const product = await Product.findOneAndUpdate(
+      { 
+        _id: req.params.id,
+        shopId: req.user.shopId // Add shop filter
+      },
       productData,
-      { new: true, runValidators: true }
+      { new: true }
     ).populate('category').populate('supplier');
     
     if (!product) {
@@ -337,21 +325,29 @@ const updateProduct = async (req, res) => {
     res.status(200).json(product);
   } catch (error) {
     console.error('Error updating product:', error);
-    res.status(500).json({ message: 'Server error updating product', error: error.message });
+    res.status(500).json({ message: 'Server error updating product' });
   }
 };
 
 // Delete product
 const deleteProduct = async (req, res) => {
   try {
-    const product = await Product.findByIdAndDelete(req.params.id);
+    const product = await Product.findOneAndDelete({ 
+      _id: req.params.id,
+      shopId: req.user.shopId // Add shop filter
+    });
     
     if (!product) {
       return res.status(404).json({ message: 'Product not found' });
     }
     
-    // If the product has an image, you might want to delete it from storage
-    // This would require a file system operation to remove the file
+    // Delete product image if exists
+    if (product.image) {
+      const imagePath = path.join(__dirname, '..', 'public', product.image);
+      if (fs.existsSync(imagePath)) {
+        fs.unlinkSync(imagePath);
+      }
+    }
     
     res.status(200).json({ message: 'Product deleted successfully' });
   } catch (error) {
@@ -360,7 +356,7 @@ const deleteProduct = async (req, res) => {
   }
 };
 
-// Update stock quantity
+// Update stock
 const updateStock = async (req, res) => {
   try {
     const { quantity } = req.body;
@@ -369,13 +365,13 @@ const updateStock = async (req, res) => {
       return res.status(400).json({ message: 'Quantity is required' });
     }
     
-    const product = await Product.findByIdAndUpdate(
-      req.params.id,
+    const product = await Product.findOneAndUpdate(
       { 
-        $set: { quantity: quantity },
-        updatedAt: new Date() 
+        _id: req.params.id,
+        shopId: req.user.shopId // Add shop filter
       },
-      { new: true, runValidators: true }
+      { $inc: { quantity: parseInt(quantity) } },
+      { new: true }
     );
     
     if (!product) {
@@ -389,58 +385,54 @@ const updateStock = async (req, res) => {
   }
 };
 
-// Get the latest added products
+// Get latest products
 const getLatestProducts = async (req, res) => {
   try {
-    const limit = parseInt(req.query.limit) || 10; // Default to 10 products
-    const products = await Product.find()
-      .sort({ createdAt: -1 })
-      .limit(limit)
+    const products = await Product.find({ shopId: req.user.shopId }) // Add shop filter
+      .sort('-createdAt')
+      .limit(5)
       .populate('category')
       .populate('supplier');
-    
-    if (!products || products.length === 0) {
-      return res.status(404).json({ message: 'No products found' });
-    }
     
     res.status(200).json(products);
   } catch (error) {
     console.error('Error fetching latest products:', error);
-    res.status(500).json({ message: 'Server error while fetching latest products', error: error.message });
+    res.status(500).json({ message: 'Server error fetching latest products' });
   }
 };
 
-// Force refresh the products list
+// Refresh products
 const refreshProducts = async (req, res) => {
   try {
-    // Clear any potential cache (if you're using caching)
-    // Then fetch all products fresh from the database
-    const products = await Product.find()
-      .sort({ updatedAt: -1 })
+    const products = await Product.find({ shopId: req.user.shopId }) // Add shop filter
       .populate('category')
       .populate('supplier');
     
     res.status(200).json(products);
   } catch (error) {
     console.error('Error refreshing products:', error);
-    res.status(500).json({ message: 'Server error while refreshing products', error: error.message });
+    res.status(500).json({ message: 'Server error refreshing products' });
   }
 };
 
 // Generate labels
 const generateLabels = async (req, res) => {
   try {
-    console.log('Redirecting label generation to print controller');
-    // Forward this request to the print controller
-    const printController = require('./printController');
-    return printController.generateProductLabels(req, res);
+    const { productIds } = req.body;
+    
+    if (!productIds || !Array.isArray(productIds)) {
+      return res.status(400).json({ message: 'Product IDs array is required' });
+    }
+    
+    const products = await Product.find({
+      _id: { $in: productIds },
+      shopId: req.user.shopId // Add shop filter
+    }).select('name price barcode');
+    
+    res.status(200).json(products);
   } catch (error) {
     console.error('Error generating labels:', error);
-    res.status(500).json({
-      success: false,
-      message: 'Server error generating labels',
-      error: error.message
-    });
+    res.status(500).json({ message: 'Server error generating labels' });
   }
 };
 
@@ -448,12 +440,12 @@ module.exports = {
   getAllProducts,
   getProductById,
   getProductByBarcode,
+  getByBarcode,
   createProduct,
   updateProduct,
   deleteProduct,
   updateStock,
   getLatestProducts,
   refreshProducts,
-  generateLabels,
-  getByBarcode
+  generateLabels
 };

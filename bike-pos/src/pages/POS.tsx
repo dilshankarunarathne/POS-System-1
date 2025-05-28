@@ -129,6 +129,11 @@ const POS: React.FC = () => {
   // Add a reference for the complete sale button
   const completeSaleButtonRef = useRef<HTMLButtonElement>(null);
   
+  // Quantity input modal state
+  const [quantityModalOpen, setQuantityModalOpen] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+  const [manualQuantity, setManualQuantity] = useState<string>('1');
+  
   // Load products on mount
   useEffect(() => {
     const fetchProducts = async () => {
@@ -304,7 +309,71 @@ const POS: React.FC = () => {
     }
   };
 
-  
+  // Handle adding product with quantity
+  const handleAddProductWithQuantity = (product: Product) => {
+    setSelectedProduct(product);
+    setManualQuantity('1');
+    setQuantityModalOpen(true);
+  };
+
+  // Handle quantity confirmation
+  const handleQuantityConfirm = () => {
+    if (selectedProduct && manualQuantity) {
+      const quantity = parseInt(manualQuantity);
+      if (isNaN(quantity) || quantity <= 0) {
+        setError('Please enter a valid quantity');
+        return;
+      }
+      
+      if (quantity > selectedProduct.stockQuantity) {
+        setError('Cannot add more than available stock');
+        return;
+      }
+      
+      addToCartWithQuantity(selectedProduct, quantity);
+      setQuantityModalOpen(false);
+      setSelectedProduct(null);
+      setManualQuantity('1');
+    }
+  };
+
+  // Add product to cart with specific quantity
+  const addToCartWithQuantity = (product: Product, quantity: number) => {
+    setCartItems(prevItems => {
+      const existingItemIndex = prevItems.findIndex(
+        item => item.product.id === product.id
+      );
+      
+      if (existingItemIndex >= 0) {
+        const currentItem = prevItems[existingItemIndex];
+        const newQuantity = currentItem.quantity + quantity;
+        
+        if (newQuantity > product.stockQuantity) {
+          setError('Cannot add more of this product. Stock limit reached.');
+          return prevItems;
+        }
+        
+        const updatedItems = [...prevItems];
+        updatedItems[existingItemIndex] = {
+          ...currentItem,
+          quantity: newQuantity,
+          subtotal: newQuantity * product.price
+        };
+        
+        return updatedItems;
+      } else {
+        return [
+          ...prevItems,
+          {
+            product,
+            quantity,
+            subtotal: quantity * product.price,
+            discount: 0,
+          },
+        ];
+      }
+    });
+  };
 
   // Add product to cart
   const addToCart = (product: Product) => {
@@ -690,7 +759,6 @@ const POS: React.FC = () => {
 
   // Render product grid
   const renderProductGrid = () => {
-    // Ensure we have a valid array to work with
     const productsToRender = filteredProducts || [];
     
     return (
@@ -733,23 +801,23 @@ const POS: React.FC = () => {
                       </Badge>
                     </td>
                     <td className="text-center">
-                    <Button
-  variant="primary"
-  size="sm"
-  disabled={product.stockQuantity <= 0}
-  onClick={(e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    e.nativeEvent.stopImmediatePropagation(); // Add this line
-    if (product.stockQuantity > 0) {
-      addToCart(product);
-    } else {
-      setError('Product is out of stock.');
-    }
-  }}
->
-  <>{BsPlus({ size: 16, className: "me-1" })}</>Add
-</Button>
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        disabled={product.stockQuantity <= 0}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          e.nativeEvent.stopImmediatePropagation();
+                          if (product.stockQuantity > 0) {
+                            handleAddProductWithQuantity(product);
+                          } else {
+                            setError('Product is out of stock.');
+                          }
+                        }}
+                      >
+                        <>{BsPlus({ size: 16, className: "me-1" })}</>Add
+                      </Button>
                     </td>
                   </tr>
                 ))}
@@ -1169,6 +1237,52 @@ const POS: React.FC = () => {
             ) : (
               'Complete Sale'
             )}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Quantity Input Modal */}
+      <Modal
+        show={quantityModalOpen}
+        onHide={() => setQuantityModalOpen(false)}
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>Enter Quantity</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {selectedProduct && (
+            <div>
+              <h6>{selectedProduct.name}</h6>
+              <p className="text-muted mb-3">
+                Available Stock: {selectedProduct.stockQuantity} units
+              </p>
+              <Form.Group>
+                <Form.Label>Quantity</Form.Label>
+                <Form.Control
+                  type="number"
+                  value={manualQuantity}
+                  onChange={(e) => setManualQuantity(e.target.value)}
+                  min="1"
+                  max={selectedProduct.stockQuantity}
+                  autoFocus
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleQuantityConfirm();
+                    }
+                  }}
+                />
+              </Form.Group>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setQuantityModalOpen(false)}>
+            Cancel
+          </Button>
+          <Button variant="primary" onClick={handleQuantityConfirm}>
+            Add to Cart
           </Button>
         </Modal.Footer>
       </Modal>

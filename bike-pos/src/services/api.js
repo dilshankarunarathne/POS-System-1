@@ -142,11 +142,7 @@ export const printApi = {
   printInventory: (params) => api.get('/print/inventory', { params }),
   printBarcode: (productId) => api.get(`/print/barcode/${productId}`),
   generateBarcodes: (productIds, quantity = 1) => 
-    api.post('/products/print-labels', { productIds, quantity }, { 
-      responseType: 'blob',
-      // Add timeout to allow large PDFs to generate
-      timeout: 30000 
-    })
+    api.post('/products/print-labels', { productIds, quantity }, { responseType: 'blob' })
 };
 
 export default api;

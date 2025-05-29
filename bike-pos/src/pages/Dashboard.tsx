@@ -135,15 +135,24 @@ const Dashboard: React.FC = () => {
         
         // Filter products with low stock
         const lowStockData = lowStockResponse.data?.products?.filter(
-          (product: any) => product.quantity <= (product.lowStockThreshold || 10)
+          (product: any) => {
+            // Use product's specific threshold if available, stored as reorderLevel in database
+            const threshold = product.reorderLevel !== undefined ? 
+              product.reorderLevel : 
+              ((currentShop as any).settings?.defaultLowStockThreshold || 10);
+            
+            return product.quantity <= threshold;
+          }
         ).slice(0, 5) || [];
+        
         setLowStockProducts(Array.isArray(lowStockData) ? 
           lowStockData.map(product => ({
             id: product._id,
             name: product.name,
             category: product.category?.name || 'Uncategorized',
             stock: product.quantity,
-            stockThreshold: product.lowStockThreshold || 10,
+            stockThreshold: product.reorderLevel || 
+              ((currentShop as any).settings?.defaultLowStockThreshold || 10),
           })) : []);
         
         // Fetch top selling products

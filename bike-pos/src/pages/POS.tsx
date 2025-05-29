@@ -129,6 +129,9 @@ const POS: React.FC = () => {
   // Add a reference for the complete sale button
   const completeSaleButtonRef = useRef<HTMLButtonElement>(null);
   
+  // Add a state to track temporary empty input values
+  const [tempQuantities, setTempQuantities] = useState<{[key: number]: string}>({});
+
   // Load products on mount
   useEffect(() => {
     const fetchProducts = async () => {
@@ -825,7 +828,54 @@ const POS: React.FC = () => {
                   >
                     <>{BsDash({ size: 16 })}</>
                   </Button>
-                  <span className="mx-2">{item.quantity}</span>
+                  <Form.Control
+                    type="text"
+                    min="1"
+                    max={item.product.stockQuantity}
+                    className="mx-2"
+                    value={tempQuantities[index] !== undefined ? tempQuantities[index] : item.quantity.toString()}
+                    onChange={(e) => {
+                      // Store the current input value in tempQuantities
+                      const newTempQuantities = { ...tempQuantities };
+                      newTempQuantities[index] = e.target.value;
+                      setTempQuantities(newTempQuantities);
+                      
+                      // If the input is not empty, update the actual quantity
+                      if (e.target.value !== '') {
+                        const newValue = parseInt(e.target.value, 10);
+                        if (!isNaN(newValue)) {
+                          updateCartItemQuantity(index, newValue);
+                        }
+                      }
+                    }}
+                    onBlur={(e) => {
+                      // When the field loses focus, ensure it has a valid value
+                      if (e.target.value === '' || isNaN(parseInt(e.target.value, 10))) {
+                        // Reset to 1 as default if empty or invalid
+                        updateCartItemQuantity(index, 1);
+                      }
+                      
+                      // Clear the temporary value
+                      const newTempQuantities = { ...tempQuantities };
+                      delete newTempQuantities[index];
+                      setTempQuantities(newTempQuantities);
+                    }}
+                    onKeyDown={(e) => {
+                      // Handle Enter key
+                      if (e.key === 'Enter') {
+                        if (e.currentTarget.value === '' || isNaN(parseInt(e.currentTarget.value, 10))) {
+                          updateCartItemQuantity(index, 1);
+                        }
+                        e.currentTarget.blur(); // Remove focus
+                        
+                        // Clear the temporary value
+                        const newTempQuantities = { ...tempQuantities };
+                        delete newTempQuantities[index];
+                        setTempQuantities(newTempQuantities);
+                      }
+                    }}
+                    style={{ width: '60px', textAlign: 'center', padding: '2px' }}
+                  />
                   <Button
                     variant="outline-secondary"
                     size="sm"

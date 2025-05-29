@@ -44,6 +44,9 @@ interface SaleItem {
     name: string;
     barcode?: string;
   };
+  // Add these fields for manual items
+  isManual?: boolean;
+  name?: string;
 }
 
 interface Sale {
@@ -290,9 +293,12 @@ const Sales: React.FC = () => {
       printIframe.style.border = 'none';
       document.body.appendChild(printIframe);
       
-      // Format items for receipt
+      // Format items for receipt with improved handling of manual items
       const receiptItems = sale.SaleItems?.map(item => {
-        const productName = item.product?.name || item.Product?.name || 'Unknown Product';
+        const isManualItem = item.isManual || (!item.product && !item.Product);
+        const productName = isManualItem 
+          ? (item.name || 'Manual Item') 
+          : (item.product?.name || item.Product?.name || 'Unknown Product');
         const unitPrice = item.price || item.unitPrice || 0;
         const subtotal = item.subtotal || (unitPrice * item.quantity);
         
@@ -892,9 +898,26 @@ const Sales: React.FC = () => {
                     
                     <tbody>
                       {selectedSale.SaleItems?.map((item: SaleItem, index) => {
+                        // Calculate subtotal consistently
                         const subtotal = item.subtotal || (item.price * item.quantity);
-                        const productName = item.product?.name || item.Product?.name || 'Unknown Product';
-                        const productBarcode = item.product?.barcode || item.Product?.barcode || item.product?.sku || '';
+                        
+                        // Improved logic for detecting manual items and handling product names
+                        const isManualItem = item.isManual || (!item.product && !item.Product);
+                        
+                        // Get the most reliable product name from all possible sources
+                        const productName = isManualItem 
+                          ? (item.name || 'Manual Item') 
+                          : (item.product?.name || 
+                             item.Product?.name || 
+                             'Product Not Found');
+                        
+                        // Get the barcode with fallbacks
+                        const productBarcode = isManualItem 
+                          ? 'Manual Entry'
+                          : (item.product?.barcode || 
+                             item.Product?.barcode || 
+                             item.product?.sku || 
+                             '');
                         
                         return (
                           <tr key={item.id || item._id || index}>

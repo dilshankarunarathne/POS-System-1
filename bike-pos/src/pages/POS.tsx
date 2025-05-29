@@ -40,9 +40,13 @@ interface Product {
   };
 }
 
-// Define CartItem type
+// Update CartItem type to handle manual items
 interface CartItem {
-  product: Product;
+  product?: Product; // Make product optional for manual items
+  manualItem?: boolean; // Flag for manual items
+  name?: string; // For manual items
+  barcode?: string; // Optional barcode for manual items
+  price?: number; // Price for manual items
   quantity: number;
   subtotal: number;
   discount: number;
@@ -51,15 +55,16 @@ interface CartItem {
 // Payment method type
 type PaymentMethod = 'cash' | 'credit_card' | 'debit_card' | 'mobile_payment' | 'other';
 
-// Update Sale interface to match what the backend expects
+// Update Sale interface to completely separate manual and product items
 interface Sale {
-  items: {
-    product?: number; // Make it accept both product and productId
+  items: Array<{
     productId?: number;
     quantity: number;
     price: number;
     discount?: number;
-  }[];
+    isManual?: boolean; // Updated flag name for consistency with backend
+    name?: string; // Name for manual items
+  }>;
   subtotal: number;
   discount: number;
   tax: number;
@@ -131,6 +136,12 @@ const POS: React.FC = () => {
   
   // Add a state to track temporary empty input values
   const [tempQuantities, setTempQuantities] = useState<{[key: number]: string}>({});
+
+  // Add state for manual entry mode and form
+  const [isManualMode, setIsManualMode] = useState(false);
+  const [manualItemName, setManualItemName] = useState('');
+  const [manualItemPrice, setManualItemPrice] = useState('');
+  const [manualItemQuantity, setManualItemQuantity] = useState('1');
 
   // Load products on mount
   useEffect(() => {
@@ -356,7 +367,7 @@ const POS: React.FC = () => {
       
       // Check if product is already in cart
       const existingItemIndex = prevItems.findIndex(
-        item => item.product.id === product.id
+        item => item.product && item.product.id === product.id
       );
       
       if (existingItemIndex >= 0) {
@@ -368,7 +379,7 @@ const POS: React.FC = () => {
         const updatedItems = [...prevItems];
         
         // Check if we have enough stock
-        if (currentItem.quantity >= product.stockQuantity) {
+        if (currentItem.product && currentItem.quantity >= currentItem.product.stockQuantity) {
           setError('Cannot add more of this product. Stock limit reached.');
           return prevItems;
         }
@@ -378,7 +389,7 @@ const POS: React.FC = () => {
         updatedItems[existingItemIndex] = {
           ...currentItem,
           quantity: newQuantity,
-          subtotal: newQuantity * product.price
+          subtotal: newQuantity * (currentItem.product?.price || currentItem.price || 0)
         };
         
         console.log('New quantity:', newQuantity);
@@ -412,14 +423,15 @@ const POS: React.FC = () => {
         return updatedItems;
       }
       
-      if (newQuantity > item.product.stockQuantity) {
+      if (item.product && newQuantity > item.product.stockQuantity) {
         setError('Cannot add more of this product. Stock limit reached.');
         return prevItems;
       }
       
       // Update quantity and subtotal
       item.quantity = newQuantity;
-      item.subtotal = newQuantity * item.product.price;
+      // Calculate subtotal based on whether it's a product or manual item
+      item.subtotal = newQuantity * (item.product?.price || item.price || 0);
       
       return updatedItems;
     });
@@ -500,14 +512,31 @@ const POS: React.FC = () => {
       setProcessingSale(true);
       setError(null);
       
+      // Prepare sale items by correctly separating manual and product items
+      const saleItems = cartItems.map(item => {
+        if (item.product) {
+          // Regular product item
+          return {
+            productId: item.product.id,
+            quantity: item.quantity,
+            price: item.product.price,
+            discount: item.discount || 0
+          };
+        } else {
+          // Manual item - ensure we include isManual flag and name
+          return {
+            isManual: true,
+            name: item.name || 'Manual Item',
+            quantity: item.quantity,
+            price: item.price || 0,
+            discount: item.discount || 0
+          };
+        }
+      });
+      
       // Prepare sale data with proper structure matching backend model
       const sale: Sale = {
-        items: cartItems.map(item => ({
-          productId: item.product.id, // Use productId to match the expected API interface
-          quantity: item.quantity,
-          price: item.product.price,
-          discount: item.discount || 0
-        })),
+        items: saleItems,
         subtotal: cartSubtotal,
         discount: manualDiscount,
         tax: cartTax,
@@ -518,12 +547,14 @@ const POS: React.FC = () => {
         user: user?.id
       };
       
+      console.log("Sending sale data:", JSON.stringify(sale)); // Add logging to debug
+      
       // Use the salesApi endpoint
       const response = await salesApi.create(sale);
       
       // Handle successful sale
       if (response.data) {
-        // Set receipt data for direct printing
+        // Set receipt data for direct printing with better handling of manual items
         const receiptDataForPrint = {
           id: response.data._id || response.data.id,
           invoiceNumber: response.data.invoiceNumber || `INV-${Date.now()}`,
@@ -531,10 +562,10 @@ const POS: React.FC = () => {
           customer: customerName || 'Walk-in Customer',
           cashier: user?.name || user?.username || 'Staff',
           items: cartItems.map(item => ({
-            name: item.product.name,
+            name: item.product ? item.product.name : (item.name || 'Manual Item'),
             quantity: item.quantity,
-            price: item.product.price,
-            total: item.subtotal - item.discount
+            price: item.product ? item.product.price : (item.price || 0),
+            total: (item.quantity * (item.product ? item.product.price : (item.price || 0))) - item.discount
           })),
           subtotal: cartSubtotal,
           discount: cartDiscount + manualDiscount,
@@ -543,10 +574,8 @@ const POS: React.FC = () => {
           paymentMethod: paymentMethod
         };
         
-        // Close checkout dialog
+        // Close checkout dialog and reset state
         setCheckoutDialogOpen(false);
-        
-        // Reset cart and related data
         setCartItems([]);
         setManualDiscount(0);
         setCustomerName('');
@@ -558,14 +587,15 @@ const POS: React.FC = () => {
         // Directly print receipt without showing the receipt dialog
         directPrintReceipt(receiptDataForPrint);
       }
-    } catch (err: any) { // Type the error as 'any' to fix TypeScript error
+    } catch (err: any) {
       console.error('Error processing sale:', err);
+      console.error('Response data:', err?.response?.data); // Add more detailed error logging
       setError(`Failed to process sale: ${err?.response?.data?.message || err?.message || 'Unknown error'}`);
     } finally {
       setProcessingSale(false);
     }
   };
-  
+
   // Direct print receipt function (bypasses the receipt preview dialog)
   const directPrintReceipt = async (receiptToPrint: ReceiptData) => {
     try {
@@ -581,7 +611,15 @@ const POS: React.FC = () => {
       printIframe.style.border = 'none';
       document.body.appendChild(printIframe);
       
-      // Generate receipt HTML content
+      // Ensure all items have valid properties before generating receipt HTML
+      const safeItems = receiptToPrint.items.map(item => ({
+        name: item.name || 'Unnamed Item',
+        quantity: item.quantity || 1,
+        price: typeof item.price === 'number' ? item.price : 0,
+        total: typeof item.total === 'number' ? item.total : 0
+      }));
+      
+      // Generate receipt HTML content - fixed the template structure
       const receiptHtml = `
         <html>
           <head>
@@ -605,8 +643,8 @@ const POS: React.FC = () => {
             </style>
           </head>
           <body>
-            <div class="receipt" style="font-family: monospace; font-size: 12px; width: 76mm; margin: 2mm;">
-              <div class="text-center" style="text-align: center;">
+            <div class="receipt">
+              <div class="text-center">
                 <h3 style="margin: 4px 0;">RECEIPT</h3>
                 <p style="margin: 4px 0;">${receiptToPrint.date}</p>
                 <p style="margin: 4px 0;">Invoice: ${receiptToPrint.invoiceNumber}</p>
@@ -631,7 +669,7 @@ const POS: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  ${receiptToPrint.items.map(item => `
+                  ${safeItems.map(item => `
                     <tr>
                       <td style="text-align: left; padding: 2px;">${item.name}</td>
                       <td style="text-align: center; padding: 2px;">${item.quantity}</td>
@@ -728,6 +766,46 @@ const POS: React.FC = () => {
   
   // Remove or comment out the handleReceiptKeyPress function as we're not showing the dialog
 
+  // Add a function to handle manual item submission
+  const handleManualItemSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!manualItemName.trim()) {
+      setError('Item name is required');
+      return;
+    }
+    
+    const price = parseFloat(manualItemPrice);
+    if (isNaN(price) || price <= 0) {
+      setError('Please enter a valid price');
+      return;
+    }
+    
+    const quantity = parseInt(manualItemQuantity, 10);
+    if (isNaN(quantity) || quantity <= 0) {
+      setError('Please enter a valid quantity');
+      return;
+    }
+    
+    // Create manual item and add to cart
+    const newItem: CartItem = {
+      manualItem: true,
+      name: manualItemName.trim(),
+      price: price,
+      quantity: quantity,
+      subtotal: price * quantity,
+      discount: 0
+    };
+    
+    setCartItems(prev => [...prev, newItem]);
+    
+    // Reset form
+    setManualItemName('');
+    setManualItemPrice('');
+    setManualItemQuantity('1');
+    setSuccessMessage('Manual item added to cart');
+  };
+
   // Render product grid
   const renderProductGrid = () => {
     const productsToRender = filteredProducts || [];
@@ -812,11 +890,13 @@ const POS: React.FC = () => {
           </ListGroup.Item>
         ) : (
           cartItems.map((item, index) => (
-            <ListGroup.Item key={item.product.id} className="py-3">
+            <ListGroup.Item key={item.product?.id || `manual-${index}`} className="py-3">
               <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-2">
                 <div>
-                  <h6 className="mb-1">{item.product.name}</h6>
-                  <small className="text-muted">Rs. {item.product.price.toFixed(2)} x {item.quantity}</small>
+                  <h6 className="mb-1">{item.product ? item.product.name : item.name}</h6>
+                  <small className="text-muted">
+                    Rs. {item.product ? item.product.price.toFixed(2) : item.price?.toFixed(2)} x {item.quantity}
+                  </small>
                 </div>
                 
                 <div className="d-flex align-items-center my-2 my-md-0">
@@ -831,7 +911,7 @@ const POS: React.FC = () => {
                   <Form.Control
                     type="text"
                     min="1"
-                    max={item.product.stockQuantity}
+                    max={item.product?.stockQuantity || 9999}
                     className="mx-2"
                     value={tempQuantities[index] !== undefined ? tempQuantities[index] : item.quantity.toString()}
                     onChange={(e) => {
@@ -983,34 +1063,105 @@ const POS: React.FC = () => {
                 <Card className="shadow-sm mb-4">
                   <Card.Body>
                     <Row className="mb-3">
-                     
+                      {/* Toggle between product search and manual entry */}
+                      <Col md={6} className="mb-3 mb-md-0">
+                        <div className="btn-group w-100">
+                          <Button 
+                            variant={isManualMode ? "outline-primary" : "primary"}
+                            onClick={() => setIsManualMode(false)}
+                            className="flex-grow-1"
+                          >
+                            Products
+                          </Button>
+                          <Button 
+                            variant={isManualMode ? "primary" : "outline-primary"}
+                            onClick={() => setIsManualMode(true)}
+                            className="flex-grow-1"
+                          >
+                            Manual Entry
+                          </Button>
+                        </div>
+                      </Col>
                       
-                      {/* Product Search */}
+                      {/* Product Search or Manual Entry Form */}
                       <Col md={6}>
-                        <InputGroup>
-                          <InputGroup.Text>
-                            <>{BsSearch({ size: 16 })}</>
-                          </InputGroup.Text>
-                          <Form.Control
-                            type="text"
-                            placeholder="Search Products"
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                          />
-                          {searchQuery && (
-                            <Button variant="outline-secondary" onClick={() => setSearchQuery('')}>
-                              <>{BsX({ size: 16 })}</>
+                        {isManualMode ? (
+                          <Form onSubmit={handleManualItemSubmit}>
+                            <InputGroup className="mb-2">
+                              <Form.Control
+                                type="text"
+                                placeholder="Item name"
+                                value={manualItemName}
+                                onChange={(e) => setManualItemName(e.target.value)}
+                                required
+                              />
+                            </InputGroup>
+                            <Row>
+                              <Col xs={7}>
+                                <InputGroup className="mb-2">
+                                  <InputGroup.Text>Rs.</InputGroup.Text>
+                                  <Form.Control
+                                    type="number"
+                                    step="0.01"
+                                    min="0"
+                                    placeholder="Price"
+                                    value={manualItemPrice}
+                                    onChange={(e) => setManualItemPrice(e.target.value)}
+                                    required
+                                  />
+                                </InputGroup>
+                              </Col>
+                              <Col xs={5}>
+                                <InputGroup className="mb-2">
+                                  <Form.Control
+                                    type="number"
+                                    min="1"
+                                    placeholder="Qty"
+                                    value={manualItemQuantity}
+                                    onChange={(e) => setManualItemQuantity(e.target.value)}
+                                    required
+                                  />
+                                </InputGroup>
+                              </Col>
+                            </Row>
+                            <Button type="submit" variant="success" className="w-100">
+                              <>{BsPlus({ size: 16, className: "me-1" })}</>Add to Cart
                             </Button>
-                          )}
-                        </InputGroup>
+                          </Form>
+                        ) : (
+                          <InputGroup>
+                            <InputGroup.Text>
+                              <>{BsSearch({ size: 16 })}</>
+                            </InputGroup.Text>
+                            <Form.Control
+                              type="text"
+                              placeholder="Search Products"
+                              value={searchQuery}
+                              onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                            {searchQuery && (
+                              <Button variant="outline-secondary" onClick={() => setSearchQuery('')}>
+                                <>{BsX({ size: 16 })}</>
+                              </Button>
+                            )}
+                          </InputGroup>
+                        )}
                       </Col>
                     </Row>
                     
                     <ErrorAlert />
                     <SuccessAlert />
                     
-                    {/* Products Grid */}
-                    {renderProductGrid()}
+                    {/* Products Grid or Manual Entry Instructions */}
+                    {!isManualMode ? renderProductGrid() : (
+                      <div className="text-center my-5 py-5">
+                        <h5>Manual Item Entry Mode</h5>
+                        <p className="text-muted">
+                          Use the form above to add custom items to your cart.<br/>
+                          These items will be included in the bill but won't affect inventory.
+                        </p>
+                      </div>
+                    )}
                   </Card.Body>
                 </Card>
               </Col>

@@ -272,20 +272,40 @@ exports.getSaleById = async (req, res) => {
       });
       
       // Add legacy SaleItems field for frontend compatibility
-      saleObj.SaleItems = saleObj.items.map(item => ({
-        id: item._id.toString(),
-        productId: item.product?._id.toString(),
-        quantity: item.quantity,
-        unitPrice: item.price,
-        price: item.price,
-        discount: item.discount || 0,
-        subtotal: item.price * item.quantity,
-        Product: {
-          id: item.product?._id.toString(),
-          name: item.product?.name || 'Unknown',
-          barcode: item.product?.barcode || item.product?.sku || ''
+      saleObj.SaleItems = saleObj.items.map(item => {
+        // Handle both manual and product items
+        if (item.isManual) {
+          return {
+            id: item._id.toString(),
+            isManual: true,
+            name: item.name || 'Manual Item',
+            quantity: item.quantity,
+            price: item.price,
+            discount: item.discount || 0,
+            subtotal: item.price * item.quantity
+          };
+        } else {
+          return {
+            id: item._id.toString(),
+            productId: item.product?._id.toString(),
+            quantity: item.quantity,
+            unitPrice: item.price,
+            price: item.price,
+            discount: item.discount || 0,
+            subtotal: item.price * item.quantity,
+            Product: {
+              id: item.product?._id.toString(),
+              name: item.product?.name || 'Unknown',
+              barcode: item.product?.barcode || item.product?.sku || ''
+            },
+            product: {
+              _id: item.product?._id.toString(),
+              name: item.product?.name || 'Unknown',
+              barcode: item.product?.barcode || item.product?.sku || ''
+            }
+          };
         }
-      }));
+      });
     }
     
     res.status(200).json(saleObj);

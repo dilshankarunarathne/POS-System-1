@@ -121,40 +121,52 @@ const createSale = async (req, res) => {
     
     // Process items and update product stock
     for (const item of items) {
-      // Check if product exists, belongs to the user's shop, and has enough stock
-      const product = await Product.findOne({ 
-        _id: item.product || item.productId,
-        shopId: req.user.shopId
-      }).session(session);
-      
-      if (!product) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(404).json({ message: `Product with ID ${item.product || item.productId} not found in your shop` });
-      }
-      
-      if (product.quantity < item.quantity) {
-        await session.abortTransaction();
-        session.endSession();
-        return res.status(400).json({ 
-          message: `Insufficient stock for product: ${product.name}`,
-          product: product.name,
-          available: product.quantity,
-          requested: item.quantity
+      if (item.isManual) {
+        // Handle manual items - no product reference or stock updates needed
+        sale.items.push({
+          isManual: true,
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          discount: item.discount || 0
         });
+      } else {
+        // Handle regular product items
+        // Check if product exists, belongs to the user's shop, and has enough stock
+        const product = await Product.findOne({ 
+          _id: item.product || item.productId,
+          shopId: req.user.shopId
+        }).session(session);
+        
+        if (!product) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(404).json({ message: `Product with ID ${item.product || item.productId} not found in your shop` });
+        }
+        
+        if (product.quantity < item.quantity) {
+          await session.abortTransaction();
+          session.endSession();
+          return res.status(400).json({ 
+            message: `Insufficient stock for product: ${product.name}`,
+            product: product.name,
+            available: product.quantity,
+            requested: item.quantity
+          });
+        }
+        
+        // Add item to sale
+        sale.items.push({
+          product: product._id,
+          quantity: item.quantity,
+          price: item.price,
+          discount: item.discount || 0
+        });
+        
+        // Update product stock
+        product.quantity -= item.quantity;
+        await product.save({ session });
       }
-      
-      // Add item to sale
-      sale.items.push({
-        product: product._id,
-        quantity: item.quantity,
-        price: item.price,
-        discount: item.discount || 0
-      });
-      
-      // Update product stock
-      product.quantity -= item.quantity;
-      await product.save({ session });
     }
     
     // Save the sale
@@ -306,10 +318,11 @@ const getSaleById = async (req, res) => {
       return res.status(400).json({ message: 'Invalid sale ID format' });
     }
     
+    // Use a better populate method to get all product fields we need
     const sale = await Sale.findById(saleId)
       .populate({
         path: 'items.product',
-        select: 'name price sku barcode'
+        select: 'name price sku barcode _id'  // Explicitly include _id field
       })
       .populate('customer')
       .populate('user', 'name username');
@@ -335,37 +348,71 @@ const getSaleById = async (req, res) => {
       saleObj.date = saleObj.createdAt;
     }
     
-    // Ensure each item has the calculated subtotal
+    // Fix to correctly handle both manual and product items
     if (saleObj.items && Array.isArray(saleObj.items)) {
-      saleObj.items = saleObj.items.map(item => {
-        // Add unique identifier for each item
-        item.id = item._id;
-        // Calculate subtotal if not already present
-        if (!item.subtotal) {
-          item.subtotal = item.price * item.quantity;
-        }
-        // Make sure product information is consistent
-        if (item.product) {
-          item.product.id = item._id;
-        }
-        return item;
-      });
-      
       // Add legacy SaleItems field for frontend compatibility
-      saleObj.SaleItems = saleObj.items.map(item => ({
-        id: item._id.toString(),
-        productId: item.product?._id.toString(),
-        quantity: item.quantity,
-        unitPrice: item.price,
-        price: item.price,
-        discount: item.discount || 0,
-        subtotal: item.price * item.quantity,
-        Product: {
-          id: item.product?._id.toString(),
-          name: item.product?.name || 'Unknown',
-          barcode: item.product?.barcode || item.product?.sku || ''
+      saleObj.SaleItems = saleObj.items.map(item => {
+        // For manual items
+        if (item.isManual) {
+          return {
+            id: item._id.toString(),
+            isManual: true,
+            name: item.name || 'Manual Item',
+            quantity: item.quantity,
+            price: item.price,
+            discount: item.discount || 0,
+            subtotal: item.price * item.quantity
+          };
+        } 
+        // For product items
+        else {
+          // Calculate subtotal if not already present
+          const subtotal = item.subtotal || (item.price * item.quantity);
+          
+          // Check if product exists and has necessary fields
+          if (item.product) {
+            return {
+              id: item._id.toString(),
+              productId: item.product._id.toString(),
+              quantity: item.quantity,
+              unitPrice: item.price,
+              price: item.price,
+              discount: item.discount || 0,
+              subtotal: subtotal,
+              Product: {
+                id: item.product._id.toString(),
+                name: item.product.name || 'Unnamed Product',
+                barcode: item.product.barcode || item.product.sku || ''
+              },
+              product: {
+                _id: item.product._id.toString(),
+                name: item.product.name || 'Unnamed Product',
+                barcode: item.product.barcode || item.product.sku || ''
+              }
+            };
+          } else {
+            // If product reference is missing or broken
+            return {
+              id: item._id.toString(),
+              productId: item.product, // Keep the ID reference if available
+              quantity: item.quantity,
+              price: item.price,
+              discount: item.discount || 0,
+              subtotal: subtotal,
+              Product: {
+                id: 'unknown',
+                name: 'Product Not Found',
+                barcode: ''
+              },
+              product: {
+                _id: 'unknown',
+                name: 'Product Not Found',
+                barcode: ''
+              }
+            };
+          }
         }
-      }));
+      });
     }
     
     res.status(200).json(saleObj);

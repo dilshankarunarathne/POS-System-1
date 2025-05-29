@@ -81,6 +81,8 @@ interface Sale {
     quantity: number; 
     price: number;
     discount?: number;
+    isManual?: boolean; // Add flag for manual items
+    name?: string; // Add name for manual items
   }>;
   subtotal: number;
   tax?: number;
@@ -204,15 +206,32 @@ export const salesApi = {
   },
   
   create: (saleData: Sale) => {
-    // Ensure the API understands MongoDB's _id format
-    if (saleData.items) {
-      saleData.items = saleData.items.map(item => ({
-        ...item,
-        product: item.productId || item.product
-      }));
-    }
+    // Improved handling of manual and product items
+    const formattedData = {
+      ...saleData,
+      items: saleData.items.map(item => {
+        // Keep isManual flag and name for manual items
+        if (item.isManual) {
+          return {
+            isManual: true,
+            name: item.name || 'Manual Item',
+            quantity: item.quantity,
+            price: item.price,
+            discount: item.discount || 0
+          };
+        } else {
+          // For regular products, ensure we have the proper ID format
+          return {
+            product: item.productId || item.product,
+            quantity: item.quantity,
+            price: item.price,
+            discount: item.discount || 0
+          };
+        }
+      })
+    };
     
-    return api.post('/sales', saleData)
+    return api.post('/sales', formattedData)
       .catch(error => {
         console.error('Error creating sale:', error);
         throw new Error(`Failed to create sale: ${error.response?.data?.message || error.message}`);

@@ -190,9 +190,17 @@ const generateReceipt = async (req, res) => {
     doc.text('Total', col4, doc.y - doc.currentLineHeight());
     doc.moveDown(0.5);
     
-    // Add items
+    // Add items, handling both manual and regular product items
     sale.items.forEach(item => {
-      const productName = item.product ? item.product.name : 'Unknown Product';
+      let productName;
+      if (item.isManual) {
+        // Use the name field for manual items
+        productName = item.name || 'Manual Item';
+      } else {
+        // Use product name for regular items
+        productName = item.product ? item.product.name : 'Unknown Product';
+      }
+      
       const lineStart = doc.y;
       
       // Handle potentially long product names by limiting width
@@ -202,7 +210,7 @@ const generateReceipt = async (req, res) => {
       // Put the rest of the info on the same vertical position as product name
       doc.text(item.quantity.toString(), col2, lineStart);
       doc.text(`Rs. ${item.price.toFixed(2)}`, col3, lineStart);
-      doc.text(`Rs. ${(item.quantity * item.price).toFixed(2)}`, col4, lineStart);
+      doc.text(`Rs. ${((item.quantity * item.price) - (item.discount || 0)).toFixed(2)}`, col4, lineStart);
       
       // Move down by the amount we need based on how many lines the product name took
       doc.moveDown((lineEnd - lineStart) / doc.currentLineHeight());

@@ -13,7 +13,7 @@ const SaleSchema = new mongoose.Schema({
     product: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Product',
-      required: true
+      required: function() { return !this.isManual; }
     },
     quantity: {
       type: Number,
@@ -26,6 +26,14 @@ const SaleSchema = new mongoose.Schema({
     discount: {
       type: Number,
       default: 0
+    },
+    isManual: {
+      type: Boolean,
+      default: false
+    },
+    name: {
+      type: String,
+      required: function() { return this.isManual; }
     }
   }],
   subtotal: {
@@ -91,12 +99,35 @@ const SaleSchema = new mongoose.Schema({
 
 // Add utility method for receipt data
 SaleSchema.methods.getReceiptData = function() {
+  // Map items with better handling of manual items
+  const itemsWithDetails = this.items.map(item => {
+    if (item.isManual) {
+      return {
+        name: item.name || 'Manual Item',
+        quantity: item.quantity,
+        price: item.price,
+        discount: item.discount || 0,
+        subtotal: (item.price * item.quantity) - (item.discount || 0)
+      };
+    } else {
+      // For regular product items
+      return {
+        productId: item.product?._id || item.product,
+        name: item.product?.name || 'Unknown Product',
+        quantity: item.quantity,
+        price: item.price,
+        discount: item.discount || 0,
+        subtotal: (item.price * item.quantity) - (item.discount || 0)
+      };
+    }
+  });
+  
   return {
     id: this._id.toString(),
     invoiceNumber: this.invoiceNumber,
     date: this.createdAt,
     customer: this.customer,
-    items: this.items,
+    items: itemsWithDetails,
     subtotal: this.subtotal,
     tax: this.tax,
     discount: this.discount,

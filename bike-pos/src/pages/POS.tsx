@@ -983,31 +983,7 @@ const POS: React.FC = () => {
                 <Card className="shadow-sm mb-4">
                   <Card.Body>
                     <Row className="mb-3">
-                      {/* Barcode Scanner Input */}
-                      <Col md={6} className="mb-3 mb-md-0">
-                        <Form onSubmit={handleBarcodeSubmit}>
-                          <InputGroup>
-                            <Form.Control
-                              type="text"
-                              placeholder="Scan Barcode"
-                              value={barcodeInput}
-                              onChange={(e) => setBarcodeInput(e.target.value)}
-                              ref={barcodeInputRef}
-                              disabled={loading}
-                            />
-                            {loading && (
-                              <InputGroup.Text>
-                                <Spinner animation="border" size="sm" />
-                              </InputGroup.Text>
-                            )}
-                            {barcodeInput && (
-                              <Button variant="outline-secondary" onClick={() => setBarcodeInput('')}>
-                                <>{BsX({ size: 16 })}</>
-                              </Button>
-                            )}
-                          </InputGroup>
-                        </Form>
-                      </Col>
+                     
                       
                       {/* Product Search */}
                       <Col md={6}>

@@ -99,26 +99,6 @@ const getProductById = async (req, res) => {
 // Get product by barcode
 const getProductByBarcode = async (req, res) => {
   try {
-    const product = await Product.findOne({ 
-      barcode: req.params.barcode,
-      shopId: req.user.shopId // Add shop filter
-    })
-      .populate('category')
-      .populate('supplier');
-      
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found' });
-    }
-    res.status(200).json(product);
-  } catch (error) {
-    console.error('Error fetching product by barcode:', error);
-    res.status(500).json({ message: 'Server error fetching product' });
-  }
-};
-
-// Get product by barcode
-const getByBarcode = async (req, res) => {
-  try {
     const { barcode } = req.params;
     
     if (!barcode) {
@@ -132,7 +112,8 @@ const getByBarcode = async (req, res) => {
       barcode,
       shopId: req.user.shopId // Add shop filter
     })
-      .populate('category');
+      .populate('category')
+      .populate('supplier');
     
     if (!product) {
       return res.status(404).json({ 
@@ -141,9 +122,15 @@ const getByBarcode = async (req, res) => {
       });
     }
     
+    // Transform for frontend field naming consistency
+    const productData = product.toObject();
     return res.status(200).json({
-      success: true,
-      data: product
+      ...productData,
+      id: productData._id,
+      stockQuantity: productData.quantity,
+      costPrice: productData.cost,
+      categoryId: productData.category ? productData.category._id : null,
+      supplierId: productData.supplier ? productData.supplier._id : null
     });
   } catch (error) {
     console.error('Error fetching product by barcode:', error);
@@ -441,8 +428,7 @@ const generateLabels = async (req, res) => {
 module.exports = {
   getAllProducts,
   getProductById,
-  getProductByBarcode,
-  getByBarcode,
+  getProductByBarcode, // Make sure getProductByBarcode is exported properly
   createProduct,
   updateProduct,
   deleteProduct,

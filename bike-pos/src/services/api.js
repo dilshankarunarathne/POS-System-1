@@ -73,6 +73,18 @@ export const productsApi = {
     return api.get(`/products/${id}`);
   },
   
+  // Get product by barcode - Add this function
+  getByBarcode: (barcode) => {
+    return api.get(`/products/barcode/${barcode}`)
+      .catch(error => {
+        console.error('Error fetching product by barcode:', error);
+        if (error.response && error.response.status === 404) {
+          throw new Error(`Product with barcode ${barcode} not found`);
+        }
+        throw error;
+      });
+  },
+  
   // Create product
   create: (productData) => {
     return api.post('/products', productData);

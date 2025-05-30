@@ -22,6 +22,7 @@ import {
   Printer,
   Search
 } from 'react-bootstrap-icons';
+import { useAuth } from '../contexts/AuthContext'; // Add this import
 import { salesApi } from '../services/api';
 
 // Define Sales types
@@ -96,6 +97,7 @@ interface ReceiptData {
 }
 
 const Sales: React.FC = () => {
+  const { user } = useAuth(); // Add this to access user and shop information
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -293,6 +295,11 @@ const Sales: React.FC = () => {
       printIframe.style.border = 'none';
       document.body.appendChild(printIframe);
       
+      // Get the current shop from Auth context
+      const currentShop = user?.shopId ? { name: user.shopId.name } : null;
+      const shopName = currentShop?.name || "Bike Shop";
+      const shopPhone = user?.shopId?.phone || "";
+      
       // Format items for receipt with improved handling of manual items
       const receiptItems = sale.SaleItems?.map(item => {
         const isManualItem = item.isManual || (!item.product && !item.Product);
@@ -314,98 +321,158 @@ const Sales: React.FC = () => {
       const receiptHtml = `
         <html>
           <head>
-            <title>Print Receipt</title>
+            <title>XP-365B Receipt</title>
             <style>
               @page { 
-                size: 80mm auto;  /* Standard thermal paper width */
-                margin: 0mm; 
+                size: 80mm auto;  /* XP-365B standard thermal paper width */
+                margin: 0mm;      /* Remove browser margins */
               }
               body { 
-                font-family: monospace; 
+                font-family: 'Arial', sans-serif; 
                 font-size: 12px; 
-                width: 76mm; 
-                margin: 2mm;
+                width: 72mm;      /* Slightly less than paper width to ensure proper printing */
+                margin: 4mm;
+                padding: 0;
                 -webkit-print-color-adjust: exact;
                 print-color-adjust: exact;
               }
-              .text-center { text-align: center; }
-              hr { border: none; border-top: 1px dashed #000; margin: 6px 0; }
-              table { width: 100%; border-collapse: collapse; }
+              .receipt {
+                width: 100%;
+              }
+              .text-center { 
+                text-align: center; 
+              }
+              hr { 
+                border: none; 
+                border-top: 1px dashed #000; 
+                margin: 5px 0; 
+              }
+              table { 
+                width: 100%; 
+                border-collapse: collapse; 
+                margin: 5px 0;
+              }
+              th {
+                font-weight: bold;
+                text-align: left;
+                font-size: 11px;
+              }
+              .item-row td {
+                font-size: 12px;
+                padding: 2px 0;
+              }
+              .summary-row {
+                display: flex;
+                justify-content: space-between;
+                margin: 2px 0;
+                font-size: 12px;
+              }
+              .total-row {
+                font-weight: bold;
+                font-size: 14px;
+                margin-top: 5px;
+              }
+              .store-info {
+                font-size: 10px;
+                margin-top: 10px;
+              }
+              .truncate {
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                max-width: 35mm; /* XP-365B specific width adjustment */
+              }
+              /* Add extra space at the bottom for printer cutting */
+              .paper-cut-space {
+                height: 20mm;
+              }
             </style>
+            <script>
+              // Auto-close print dialog after printing
+              window.addEventListener('afterprint', function() {
+                // Signal back to parent that printing is complete
+                window.parent.postMessage('printComplete', '*');
+              });
+            </script>
           </head>
           <body>
-            <div class="receipt" style="font-family: monospace; font-size: 12px; width: 76mm; margin: 2mm;">
-              <div class="text-center" style="text-align: center;">
-                <h3 style="margin: 4px 0;">RECEIPT</h3>
-                <p style="margin: 4px 0;">${new Date(sale.date).toLocaleString()}</p>
-                <p style="margin: 4px 0;">Invoice: ${sale.invoiceNumber}</p>
+            <div class="receipt">
+              <div class="text-center">
+                <h2 style="margin: 0px 0 4px 0; font-size: 18px;">${shopName}</h2>
+                <h3 style="margin: 0px 0 4px 0; font-size: 16px;">RECEIPT</h3>
+                <p style="margin: 3px 0; font-size: 11px;">${new Date(sale.date).toLocaleString()}</p>
+                <p style="margin: 3px 0; font-size: 11px;">Invoice: ${sale.invoiceNumber}</p>
               </div>
               
-              <hr style="border: none; border-top: 1px dashed #000; margin: 8px 0;" />
+              <hr />
               
               <div>
-                <p style="margin: 2px 0;">Customer: ${sale.customerName || 'Walk-in Customer'}</p>
-                <p style="margin: 2px 0;">Cashier: ${sale.cashier?.username || sale.user?.username || sale.user?.name || 'Unknown'}</p>
+                <p style="margin: 2px 0; font-size: 11px;">Customer: ${sale.customerName || 'Walk-in Customer'}</p>
+                <p style="margin: 2px 0; font-size: 11px;">Cashier: ${sale.cashier?.username || sale.user?.username || sale.user?.name || 'Unknown'}</p>
               </div>
               
-              <hr style="border: none; border-top: 1px dashed #000; margin: 8px 0;" />
+              <hr />
               
-              <table style="width: 100%; border-collapse: collapse;">
+              <table>
                 <thead>
                   <tr>
-                    <th style="text-align: left; padding: 2px;">Item</th>
-                    <th style="text-align: center; padding: 2px;">Qty</th>
-                    <th style="text-align: right; padding: 2px;">Price</th>
-                    <th style="text-align: right; padding: 2px;">Total</th>
+                    <th style="width: 40%;">Item</th>
+                    <th style="width: 15%; text-align: center;">Qty</th>
+                    <th style="width: 20%; text-align: right;">Price</th>
+                    <th style="width: 25%; text-align: right;">Total</th>
                   </tr>
                 </thead>
                 <tbody>
                   ${receiptItems.map(item => `
-                    <tr>
-                      <td style="text-align: left; padding: 2px;">${item.name}</td>
-                      <td style="text-align: center; padding: 2px;">${item.quantity}</td>
-                      <td style="text-align: right; padding: 2px;">Rs. ${item.price.toFixed(2)}</td>
-                      <td style="text-align: right; padding: 2px;">Rs. ${item.total.toFixed(2)}</td>
+                    <tr class="item-row">
+                      <td class="truncate">${item.name}</td>
+                      <td style="text-align: center;">${item.quantity}</td>
+                      <td style="text-align: right;">${item.price.toFixed(2)}</td>
+                      <td style="text-align: right;">${item.total.toFixed(2)}</td>
                     </tr>
                   `).join('')}
                 </tbody>
               </table>
               
-              <hr style="border: none; border-top: 1px dashed #000; margin: 8px 0;" />
+              <hr />
               
-              <div style="width: 100%;">
-                <div style="display: flex; justify-content: space-between; margin: 2px 0;">
+              <div>
+                <div class="summary-row">
                   <span>Subtotal:</span>
                   <span>Rs. ${sale.subtotal.toFixed(2)}</span>
                 </div>
                 ${sale.discount > 0 ? `
-                  <div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                  <div class="summary-row">
                     <span>Discount:</span>
                     <span>Rs. ${sale.discount.toFixed(2)}</span>
                   </div>
                 ` : ''}
                 ${sale.tax > 0 ? `
-                  <div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                  <div class="summary-row">
                     <span>Tax:</span>
                     <span>Rs. ${sale.tax.toFixed(2)}</span>
                   </div>
                 ` : ''}
-                <div style="display: flex; justify-content: space-between; margin: 6px 0; font-weight: bold;">
+                <div class="summary-row total-row">
                   <span>Total:</span>
                   <span>Rs. ${sale.total.toFixed(2)}</span>
                 </div>
-                <div style="display: flex; justify-content: space-between; margin: 2px 0;">
+                <div class="summary-row">
                   <span>Payment Method:</span>
                   <span>${sale.paymentMethod.replace('_', ' ').toUpperCase()}</span>
                 </div>
               </div>
               
-              <hr style="border: none; border-top: 1px dashed #000; margin: 8px 0;" />
+              <hr />
               
-              <div class="text-center" style="text-align: center; margin-top: 10px;">
+              <div class="text-center">
                 <p style="margin: 2px 0;">Thank you for your purchase!</p>
                 <p style="margin: 2px 0;">Please visit again</p>
+                ${shopPhone ? `<p style="margin: 4px 0; font-size: 11px;">Contact us: ${shopPhone}</p>` : ''}
               </div>
+              
+              <!-- Add space for the paper cutter -->
+              <div class="paper-cut-space"></div>
             </div>
           </body>
         </html>

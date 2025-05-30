@@ -604,6 +604,8 @@ const POS: React.FC = () => {
       // Get the current shop from Auth context
       const currentShop = user?.shopId ? { name: user.shopId.name } : null;
       const shopName = currentShop?.name || "Bike Shop";
+      const shopPhone = user?.shopId?.phone || "";
+
 
       // Create a hidden iframe for printing
       const printIframe = document.createElement('iframe');
@@ -774,6 +776,8 @@ const POS: React.FC = () => {
               <div class="text-center">
                 <p style="margin: 2px 0;">Thank you for your purchase!</p>
                 <p style="margin: 2px 0;">Please visit again</p>
+                ${shopPhone ? `<p style="margin: 4px 0; font-size: 11px;">Contact us: ${shopPhone}</p>` : ''}
+
               </div>
               
               <!-- Add space for the paper cutter -->

@@ -127,6 +127,7 @@ const POS: React.FC = () => {
   // QR scanner state
   const [scanningMessage, setScanningMessage] = useState<string | null>(null);
   const [scanningProduct, setScanningProduct] = useState<Product | null>(null);
+  const [qrScannerActive, setQrScannerActive] = useState(true); // Add state to track scanner activity
   
   // Focus references
   const barcodeInputRef = useRef<HTMLInputElement>(null);
@@ -189,30 +190,66 @@ const POS: React.FC = () => {
     }
   }, []);
   
-  // Add a new useEffect to ensure the QR scanner is always running when the component mounts
+  // Update the QR scanner useEffect to better handle camera activation/deactivation
   useEffect(() => {
-    // This ensures the camera is activated when the component mounts
+    // Only activate camera when the component is visible and not in a modal
     const activateCamera = () => {
-      const qrScannerElement = document.querySelector('.qr-scanner-container video');
-      if (qrScannerElement) {
-        // If there's a start button in the QR scanner, simulate a click on it
-        const startButton = document.querySelector('.qr-scanner-container button') as HTMLButtonElement;
-        if (startButton) {
-          startButton.click();
+      if (qrScannerActive) {
+        const qrScannerElement = document.querySelector('.qr-scanner-container video');
+        if (qrScannerElement) {
+          // If there's a start button in the QR scanner, simulate a click on it
+          const startButton = document.querySelector('.qr-scanner-container button') as HTMLButtonElement;
+          if (startButton) {
+            try {
+              startButton.click();
+            } catch (err) {
+              console.warn('Could not activate QR scanner:', err);
+            }
+          }
         }
       }
     };
     
-    // Initial activation
-    activateCamera();
-    
-    // Try again after a short delay (in case the elements aren't immediately ready)
-    const timeoutId = setTimeout(activateCamera, 1000);
+    // Initial activation with delay to ensure DOM is ready
+    const timeoutId = setTimeout(activateCamera, 500);
     
     return () => {
       clearTimeout(timeoutId);
+      
+      // Cleanup: ensure video tracks are stopped when component unmounts or scanner becomes inactive
+      if (!qrScannerActive) {
+        const videoElements = document.querySelectorAll('.qr-scanner-container video');
+        videoElements.forEach((videoElement: any) => {
+          if (videoElement && videoElement.srcObject) {
+            const tracks = videoElement.srcObject.getTracks();
+            tracks.forEach((track: MediaStreamTrack) => {
+              track.stop();
+            });
+            videoElement.srcObject = null;
+          }
+        });
+      }
     };
-  }, []); // Empty dependency array means this runs once on mount
+  }, [qrScannerActive]); // Depend on qrScannerActive state
+  
+  // Add a visibility change listener to handle tab/window visibility changes
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Page is not visible, deactivate camera to avoid resource waste and errors
+        setQrScannerActive(false);
+      } else {
+        // Page is visible again, reactivate camera
+        setQrScannerActive(true);
+      }
+    };
+    
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+    };
+  }, []);
   
   // Calculate cart totals
   const cartSubtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
@@ -1127,17 +1164,51 @@ const POS: React.FC = () => {
             <h5 className="mb-3 d-flex align-items-center">
               <i className="bi bi-qr-code-scan me-2"></i>
               QR Scanner
+              <Button 
+                variant="outline-secondary"
+                size="sm"
+                className="ms-2 rounded-circle p-1"
+                onClick={() => setQrScannerActive(prev => !prev)}
+                title={qrScannerActive ? "Pause camera" : "Start camera"}
+              >
+                <i className={`bi ${qrScannerActive ? "bi-pause-fill" : "bi-play-fill"}`}></i>
+              </Button>
             </h5>
             <div className="flex-grow-1 position-relative qr-scanner-container rounded shadow-sm overflow-hidden">
-              <QRScanner
-                onScanSuccess={handleQRScanSuccess}
-                onScanError={(error) => setScanningMessage(error)}
-                autoStart={true}
-              />
+              {qrScannerActive ? (
+                <QRScanner
+                  onScanSuccess={handleQRScanSuccess}
+                  onScanError={(error) => {
+                    console.warn('QR Scanner error:', error);
+                    setScanningMessage(`Scanner error: ${error}`);
+                  }}
+                  autoStart={true}
+                />
+              ) : (
+                <div className="d-flex justify-content-center align-items-center h-100 bg-dark text-white">
+                  <div className="text-center">
+                    <i className="bi bi-camera-video-off fs-1 mb-2 d-block"></i>
+                    <p className="mb-2">Camera paused</p>
+                    <Button 
+                      variant="outline-light" 
+                      size="sm"
+                      onClick={() => setQrScannerActive(true)}
+                    >
+                      Resume Camera
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
             {scanningMessage && (
               <div className="alert alert-info mt-3 mb-0 shadow-sm">
                 <small>{scanningMessage}</small>
+                <button 
+                  type="button" 
+                  className="btn-close float-end"
+                  style={{ padding: '0.25rem' }}
+                  onClick={() => setScanningMessage(null)}
+                ></button>
               </div>
             )}
           </div>

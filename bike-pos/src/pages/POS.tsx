@@ -11,8 +11,7 @@ import {
   ListGroup,
   Modal,
   Row,
-  Spinner,
-  Table
+  Spinner
 } from 'react-bootstrap';
 // Fix icon imports
 import {
@@ -30,6 +29,7 @@ import { productsApi, salesApi } from '../services/api'; // Add salesApi import
 interface Product {
   id: number;
   name: string;
+  description: string;
   barcode: string;
   price: number;
   stockQuantity: number;
@@ -909,56 +909,54 @@ const POS: React.FC = () => {
             <p className="text-muted">No products found. Try a different search.</p>
           </div>
         ) : (
-          <div className="table-responsive">
-            <Table hover size="sm" className="align-middle">
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Category</th>
-                  <th className="text-end">Price</th>
-                  <th className="text-end">Stock</th>
-                  <th className="text-center">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {productsToRender.map(product => (
-                  <tr
-                    key={product.id}
-                    className={product.stockQuantity <= 0 ? 'table-secondary' : ''}
+          <div className="product-grid">
+            <Row xs={1} md={2} xl={3} className="g-3">
+              {productsToRender.map(product => (
+                <Col key={product.id}>
+                  <Card 
+                    className={`h-100 product-card ${product.stockQuantity <= 0 ? 'bg-light' : ''}`}
+                    style={{ transition: 'all 0.2s ease' }}
                   >
-                    <td>{product.name}</td>
-                    <td>{product.Category?.name || 'Uncategorized'}</td>
-                    <td className="text-end">Rs. {product.price.toFixed(2)}</td>
-                    <td className="text-end">
-                      <Badge bg={product.stockQuantity > 10 ? "success" : 
-                              product.stockQuantity > 0 ? "warning" : "danger"}>
-                        {product.stockQuantity}
-                      </Badge>
-                    </td>
-                    <td className="text-center">
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        disabled={product.stockQuantity <= 0}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          e.nativeEvent.stopImmediatePropagation();
-                          if (product.stockQuantity > 0) {
-                            // Directly add to cart instead of opening quantity modal
-                            addToCart(product);
-                          } else {
-                            setError('Product is out of stock.');
-                          }
-                        }}
-                      >
-                        <>{BsPlus({ size: 16, className: "me-1" })}</>Add
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </Table>
+                    <Card.Body className="d-flex flex-column">
+                      <div className="d-flex justify-content-between align-items-start mb-2">
+                        <Card.Title className="mb-0 fs-6 text-truncate" style={{ maxWidth: '80%' }}>
+                          {product.name}
+                        </Card.Title>
+                        <Badge bg={product.stockQuantity > 10 ? "success" : 
+                                product.stockQuantity > 0 ? "warning" : "danger"}
+                               className="rounded-pill px-2">
+                          {product.stockQuantity}
+                        </Badge>
+                      </div>
+                      <Card.Text className="text-muted small mb-2 flex-grow-1" style={{ fontSize: '0.85rem' }}>
+                        {product.description || 'No description'}
+                      </Card.Text>
+                      <div className="d-flex justify-content-between align-items-center mt-auto">
+                        <span className="fw-bold">Rs. {product.price.toFixed(2)}</span>
+                        <Button
+                          variant={product.stockQuantity <= 0 ? "outline-secondary" : "primary"}
+                          size="sm"
+                          disabled={product.stockQuantity <= 0}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.nativeEvent.stopImmediatePropagation();
+                            if (product.stockQuantity > 0) {
+                              addToCart(product);
+                            } else {
+                              setError('Product is out of stock.');
+                            }
+                          }}
+                          className="rounded-pill d-flex align-items-center"
+                        >
+                          <>{BsPlus({ size: 16, className: "me-1" })}</>Add
+                        </Button>
+                      </div>
+                    </Card.Body>
+                  </Card>
+                </Col>
+              ))}
+            </Row>
           </div>
         )}
       </div>
@@ -970,26 +968,46 @@ const POS: React.FC = () => {
     return (
       <ListGroup variant="flush" className="cart-items">
         {cartItems.length === 0 ? (
-          <ListGroup.Item className="text-center py-4">
-            <p className="text-muted mb-0">Cart is empty</p>
-            <small>Scan or search for products to add</small>
+          <ListGroup.Item className="text-center py-5">
+            <div className="empty-cart-placeholder">
+              <div className="text-muted mb-3">
+                <i className="bi bi-cart fs-1"></i>
+              </div>
+              <p className="mb-1 fw-medium">Your cart is empty</p>
+              <small className="text-muted">Scan or search for products to add</small>
+            </div>
           </ListGroup.Item>
         ) : (
           cartItems.map((item, index) => (
-            <ListGroup.Item key={item.product?.id || `manual-${index}`} className="py-3">
-              <div className="d-flex flex-column flex-md-row align-items-md-center justify-content-between mb-2">
-                <div>
-                  <h6 className="mb-1">{item.product ? item.product.name : item.name}</h6>
-                  <small className="text-muted">
-                    Rs. {item.product ? item.product.price.toFixed(2) : item.price?.toFixed(2)} x {item.quantity}
-                  </small>
+            <ListGroup.Item key={item.product?.id || `manual-${index}`} className="py-3 cart-item">
+              <div className="d-flex align-items-start mb-2">
+                <div className="flex-grow-1">
+                  <h6 className="mb-0 d-flex align-items-center">
+                    {item.manualItem && (
+                      <span className="badge bg-info text-dark rounded-pill me-2" style={{fontSize: '0.7rem'}}>
+                        Manual
+                      </span>
+                    )}
+                    {item.product ? item.product.name : item.name}
+                  </h6>
+                  <div className="d-flex justify-content-between mt-1">
+                    <small className="text-muted">
+                      Rs. {item.product ? item.product.price.toFixed(2) : item.price?.toFixed(2)} each
+                    </small>
+                    <span className="fw-bold text-primary">
+                      Rs. {(item.subtotal - item.discount).toFixed(2)}
+                    </span>
+                  </div>
                 </div>
-                
-                <div className="d-flex align-items-center my-2 my-md-0">
+              </div>
+              
+              <div className="d-flex justify-content-between align-items-center">
+                <div className="d-flex align-items-center quantity-control">
                   <Button
-                    variant="outline-secondary"
+                    variant="light"
                     size="sm"
-                    className="p-1"
+                    className="rounded-circle p-1 d-flex align-items-center justify-content-center"
+                    style={{ width: '28px', height: '28px' }}
                     onClick={() => updateCartItemQuantity(index, item.quantity - 1)}
                   >
                     <>{BsDash({ size: 16 })}</>
@@ -998,15 +1016,13 @@ const POS: React.FC = () => {
                     type="text"
                     min="1"
                     max={item.product?.stockQuantity || 9999}
-                    className="mx-2"
+                    className="mx-2 text-center"
                     value={tempQuantities[index] !== undefined ? tempQuantities[index] : item.quantity.toString()}
                     onChange={(e) => {
-                      // Store the current input value in tempQuantities
                       const newTempQuantities = { ...tempQuantities };
                       newTempQuantities[index] = e.target.value;
                       setTempQuantities(newTempQuantities);
                       
-                      // If the input is not empty, update the actual quantity
                       if (e.target.value !== '') {
                         const newValue = parseInt(e.target.value, 10);
                         if (!isNaN(newValue)) {
@@ -1015,67 +1031,58 @@ const POS: React.FC = () => {
                       }
                     }}
                     onBlur={(e) => {
-                      // When the field loses focus, ensure it has a valid value
                       if (e.target.value === '' || isNaN(parseInt(e.target.value, 10))) {
-                        // Reset to 1 as default if empty or invalid
                         updateCartItemQuantity(index, 1);
                       }
                       
-                      // Clear the temporary value
                       const newTempQuantities = { ...tempQuantities };
                       delete newTempQuantities[index];
                       setTempQuantities(newTempQuantities);
                     }}
                     onKeyDown={(e) => {
-                      // Handle Enter key
                       if (e.key === 'Enter') {
                         if (e.currentTarget.value === '' || isNaN(parseInt(e.currentTarget.value, 10))) {
                           updateCartItemQuantity(index, 1);
                         }
-                        e.currentTarget.blur(); // Remove focus
+                        e.currentTarget.blur();
                         
-                        // Clear the temporary value
                         const newTempQuantities = { ...tempQuantities };
                         delete newTempQuantities[index];
                         setTempQuantities(newTempQuantities);
                       }
                     }}
-                    style={{ width: '60px', textAlign: 'center', padding: '2px' }}
+                    style={{ width: '50px', textAlign: 'center', padding: '2px', height: '28px' }}
                   />
                   <Button
-                    variant="outline-secondary"
+                    variant="light"
                     size="sm"
-                    className="p-1"
+                    className="rounded-circle p-1 d-flex align-items-center justify-content-center"
+                    style={{ width: '28px', height: '28px' }}
                     onClick={() => updateCartItemQuantity(index, item.quantity + 1)}
                   >
                     <>{BsPlus({ size: 16 })}</>
                   </Button>
-                  <Button
-                    variant="outline-danger"
-                    size="sm"
-                    className="ms-2 p-1"
-                    onClick={() => removeCartItem(index)}
-                  >
-                    <>{BsTrash({ size: 16 })}</>
-                  </Button>
                 </div>
-              </div>
-              
-              <div className="d-flex justify-content-between align-items-center">
-                <div className="d-flex align-items-center">
-                  <Form.Label className="mb-0 me-2">Discount:</Form.Label>
-                  <InputGroup size="sm">
-                    <InputGroup.Text>Rs.</InputGroup.Text>
+                
+                <div className="d-flex align-items-center gap-2">
+                  <InputGroup size="sm" className="cart-discount-input">
+                    <InputGroup.Text className="py-0 px-2 bg-light" style={{fontSize: '0.75rem'}}>Discount</InputGroup.Text>
                     <Form.Control
                       type="number"
                       value={item.discount}
                       onChange={(e) => handleItemDiscountChange(index, parseFloat(e.target.value))}
-                      style={{ width: '80px' }}
+                      style={{ width: '70px', height: '28px', fontSize: '0.85rem' }}
                     />
                   </InputGroup>
-                </div>
-                <div className="text-end fw-bold">
-                  Rs. {(item.subtotal - item.discount).toFixed(2)}
+                  <Button
+                    variant="outline-danger"
+                    size="sm"
+                    className="rounded-circle p-1 d-flex align-items-center justify-content-center"
+                    style={{ width: '28px', height: '28px' }}
+                    onClick={() => removeCartItem(index)}
+                  >
+                    <>{BsTrash({ size: 14 })}</>
+                  </Button>
                 </div>
               </div>
             </ListGroup.Item>
@@ -1088,8 +1095,11 @@ const POS: React.FC = () => {
   // Error Alert component
   const ErrorAlert = () => {
     return error ? (
-      <div className="alert alert-danger alert-dismissible fade show mt-2" role="alert">
-        {error}
+      <div className="alert alert-danger alert-dismissible fade show mt-2 shadow-sm" role="alert">
+        <div className="d-flex align-items-center">
+          <i className="bi bi-exclamation-triangle-fill me-2"></i>
+          <div>{error}</div>
+        </div>
         <button type="button" className="btn-close" onClick={() => setError(null)}></button>
       </div>
     ) : null;
@@ -1098,8 +1108,11 @@ const POS: React.FC = () => {
   // Success Alert component
   const SuccessAlert = () => {
     return successMessage ? (
-      <div className="alert alert-success alert-dismissible fade show mt-2" role="alert">
-        {successMessage}
+      <div className="alert alert-success alert-dismissible fade show mt-2 shadow-sm" role="alert">
+        <div className="d-flex align-items-center">
+          <i className="bi bi-check-circle-fill me-2"></i>
+          <div>{successMessage}</div>
+        </div>
         <button type="button" className="btn-close" onClick={() => setSuccessMessage(null)}></button>
       </div>
     ) : null;
@@ -1109,10 +1122,13 @@ const POS: React.FC = () => {
     <Container fluid className="vh-100 p-0">
       <Row className="h-100 g-0">
         {/* QR Scanner Section - Collapsed on mobile, visible on larger screens */}
-        <Col lg={3} className="d-none d-lg-block h-100 border-end">
+        <Col lg={3} className="d-none d-lg-block h-100 border-end bg-light">
           <div className="d-flex flex-column h-100 p-3">
-            <h5 className="mb-3">QR Scanner</h5>
-            <div className="flex-grow-1 position-relative qr-scanner-container">
+            <h5 className="mb-3 d-flex align-items-center">
+              <i className="bi bi-qr-code-scan me-2"></i>
+              QR Scanner
+            </h5>
+            <div className="flex-grow-1 position-relative qr-scanner-container rounded shadow-sm overflow-hidden">
               <QRScanner
                 onScanSuccess={handleQRScanSuccess}
                 onScanError={(error) => setScanningMessage(error)}
@@ -1120,24 +1136,28 @@ const POS: React.FC = () => {
               />
             </div>
             {scanningMessage && (
-              <div className="alert alert-info mt-3 mb-0">
-                {scanningMessage}
+              <div className="alert alert-info mt-3 mb-0 shadow-sm">
+                <small>{scanningMessage}</small>
               </div>
             )}
           </div>
         </Col>
 
         {/* Main Content Section */}
-        <Col xs={12} lg={9} className="h-100 d-flex flex-column">
-          <div className="p-3 border-bottom d-flex justify-content-between align-items-center">
-            <h4 className="m-0">Point of Sale</h4>
+        <Col xs={12} lg={9} className="h-100 d-flex flex-column bg-body-tertiary">
+          <div className="p-3 border-bottom bg-white shadow-sm d-flex justify-content-between align-items-center">
+            <h4 className="m-0 d-flex align-items-center">
+              <i className="bi bi-bag me-2"></i>
+              Point of Sale
+            </h4>
             
             {/* Mobile QR Button - Shows QR scanner in modal on small screens */}
             <Button 
               variant="outline-primary" 
-              className="d-lg-none"
+              className="d-lg-none rounded-pill"
               onClick={() => {/* Code to open QR scanner modal */}}
             >
+              <i className="bi bi-qr-code-scan me-1"></i>
               Scan QR
             </Button>
           </div>
@@ -1146,8 +1166,8 @@ const POS: React.FC = () => {
             <Row>
               {/* Product Search and Grid Section */}
               <Col lg={8} className="mb-4 mb-lg-0">
-                <Card className="shadow-sm mb-4">
-                  <Card.Body>
+                <Card className="shadow-sm mb-4 border-0">
+                  <Card.Body className="pb-2">
                     <Row className="mb-3">
                       {/* Toggle between product search and manual entry */}
                       <Col md={6} className="mb-3 mb-md-0">
@@ -1155,16 +1175,16 @@ const POS: React.FC = () => {
                           <Button 
                             variant={isManualMode ? "outline-primary" : "primary"}
                             onClick={() => setIsManualMode(false)}
-                            className="flex-grow-1"
+                            className="flex-grow-1 rounded-start"
                           >
-                            Products
+                            <i className="bi bi-grid me-1"></i> Products
                           </Button>
                           <Button 
                             variant={isManualMode ? "primary" : "outline-primary"}
                             onClick={() => setIsManualMode(true)}
-                            className="flex-grow-1"
+                            className="flex-grow-1 rounded-end"
                           >
-                            Manual Entry
+                            <i className="bi bi-pencil-square me-1"></i> Manual Entry
                           </Button>
                         </div>
                       </Col>
@@ -1172,20 +1192,24 @@ const POS: React.FC = () => {
                       {/* Product Search or Manual Entry Form */}
                       <Col md={6}>
                         {isManualMode ? (
-                          <Form onSubmit={handleManualItemSubmit}>
+                          <Form onSubmit={handleManualItemSubmit} className="manual-entry-form">
                             <InputGroup className="mb-2">
+                              <InputGroup.Text className="bg-white">
+                                <i className="bi bi-tag"></i>
+                              </InputGroup.Text>
                               <Form.Control
                                 type="text"
                                 placeholder="Item name"
                                 value={manualItemName}
                                 onChange={(e) => setManualItemName(e.target.value)}
                                 required
+                                className="border-start-0"
                               />
                             </InputGroup>
                             <Row>
                               <Col xs={7}>
                                 <InputGroup className="mb-2">
-                                  <InputGroup.Text>Rs.</InputGroup.Text>
+                                  <InputGroup.Text className="bg-white">Rs.</InputGroup.Text>
                                   <Form.Control
                                     type="number"
                                     step="0.01"
@@ -1194,11 +1218,15 @@ const POS: React.FC = () => {
                                     value={manualItemPrice}
                                     onChange={(e) => setManualItemPrice(e.target.value)}
                                     required
+                                    className="border-start-0"
                                   />
                                 </InputGroup>
                               </Col>
                               <Col xs={5}>
                                 <InputGroup className="mb-2">
+                                  <InputGroup.Text className="bg-white">
+                                    <i className="bi bi-123"></i>
+                                  </InputGroup.Text>
                                   <Form.Control
                                     type="number"
                                     min="1"
@@ -1206,17 +1234,18 @@ const POS: React.FC = () => {
                                     value={manualItemQuantity}
                                     onChange={(e) => setManualItemQuantity(e.target.value)}
                                     required
+                                    className="border-start-0"
                                   />
                                 </InputGroup>
                               </Col>
                             </Row>
-                            <Button type="submit" variant="success" className="w-100">
+                            <Button type="submit" variant="success" className="w-100 rounded-pill">
                               <>{BsPlus({ size: 16, className: "me-1" })}</>Add to Cart
                             </Button>
                           </Form>
                         ) : (
-                          <InputGroup>
-                            <InputGroup.Text>
+                          <InputGroup className="search-bar shadow-sm rounded">
+                            <InputGroup.Text className="bg-white border-end-0">
                               <>{BsSearch({ size: 16 })}</>
                             </InputGroup.Text>
                             <Form.Control
@@ -1224,9 +1253,10 @@ const POS: React.FC = () => {
                               placeholder="Search Products"
                               value={searchQuery}
                               onChange={(e) => setSearchQuery(e.target.value)}
+                              className="border-start-0"
                             />
                             {searchQuery && (
-                              <Button variant="outline-secondary" onClick={() => setSearchQuery('')}>
+                              <Button variant="outline-secondary" onClick={() => setSearchQuery('')} className="border-start-0">
                                 <>{BsX({ size: 16 })}</>
                               </Button>
                             )}
@@ -1240,9 +1270,12 @@ const POS: React.FC = () => {
                     
                     {/* Products Grid or Manual Entry Instructions */}
                     {!isManualMode ? renderProductGrid() : (
-                      <div className="text-center my-5 py-5">
+                      <div className="text-center my-5 py-4 rounded bg-light">
+                        <div className="mb-3">
+                          <i className="bi bi-pencil-square fs-1 text-primary"></i>
+                        </div>
                         <h5>Manual Item Entry Mode</h5>
-                        <p className="text-muted">
+                        <p className="text-muted mb-0">
                           Use the form above to add custom items to your cart.<br/>
                           These items will be included in the bill but won't affect inventory.
                         </p>
@@ -1254,18 +1287,24 @@ const POS: React.FC = () => {
 
               {/* Cart Section */}
               <Col lg={4} className="d-flex flex-column h-100">
-                <Card className="shadow-sm h-100 d-flex flex-column">
-                  <Card.Header className="bg-primary text-white">
-                    <h5 className="mb-0">Shopping Cart</h5>
+                <Card className="shadow-sm h-100 d-flex flex-column border-0">
+                  <Card.Header className="bg-primary text-white py-3">
+                    <h5 className="mb-0 d-flex align-items-center">
+                      <i className="bi bi-cart me-2"></i>
+                      Shopping Cart
+                      {cartItems.length > 0 && (
+                        <Badge bg="light" text="dark" className="ms-2 rounded-pill">{cartItems.length}</Badge>
+                      )}
+                    </h5>
                   </Card.Header>
                   <div className="flex-grow-1 overflow-auto">
                     {renderCartItems()}
                   </div>
-                  <Card.Footer className="bg-white">
+                  <Card.Footer className="bg-white py-3">
                     {/* Cart Summary */}
                     <div className="mb-3">
                       <div className="d-flex justify-content-between mb-2">
-                        <span>Subtotal:</span>
+                        <span className="text-muted">Subtotal:</span>
                         <span>Rs. {cartSubtotal.toFixed(2)}</span>
                       </div>
                       
@@ -1277,9 +1316,9 @@ const POS: React.FC = () => {
                       )}
                       
                       <div className="d-flex justify-content-between mb-2 align-items-center">
-                        <span>Additional Discount:</span>
+                        <span className="text-muted">Additional Discount:</span>
                         <InputGroup size="sm" style={{ maxWidth: "140px" }}>
-                          <InputGroup.Text>Rs.</InputGroup.Text>
+                          <InputGroup.Text className="bg-light">Rs.</InputGroup.Text>
                           <Form.Control
                             type="number"
                             value={manualDiscount}
@@ -1306,14 +1345,14 @@ const POS: React.FC = () => {
                       
                       {cartTax > 0 && (
                         <div className="d-flex justify-content-between mb-2">
-                          <span>Tax:</span>
+                          <span className="text-muted">Tax:</span>
                           <span>Rs. {cartTax.toFixed(2)}</span>
                         </div>
                       )}
                       
-                      <div className="d-flex justify-content-between mt-3">
+                      <div className="d-flex justify-content-between pt-3 mt-2 border-top">
                         <h5 className="mb-0">Total:</h5>
-                        <h5 className="mb-0">Rs. {cartTotal.toFixed(2)}</h5>
+                        <h5 className="mb-0 text-primary">Rs. {cartTotal.toFixed(2)}</h5>
                       </div>
                     </div>
                     
@@ -1321,19 +1360,20 @@ const POS: React.FC = () => {
                     <div className="d-grid gap-2 d-md-flex justify-content-md-between">
                       <Button
                         variant="outline-danger"
-                        className="flex-fill"
+                        className="flex-fill rounded-pill"
                         onClick={clearCart}
                         disabled={cartItems.length === 0}
                       >
-                        Clear Cart
+                        <i className="bi bi-trash me-1"></i>
+                        Clear
                       </Button>
                       <Button
                         variant="success"
-                        className="flex-fill"
+                        className="flex-fill rounded-pill"
                         onClick={handleCheckout}
                         disabled={cartItems.length === 0}
                       >
-                        <>{BsPlus({ size: 16, className: "me-1" })}</>
+                        <i className="bi bi-credit-card me-1"></i>
                         Checkout
                       </Button>
                     </div>

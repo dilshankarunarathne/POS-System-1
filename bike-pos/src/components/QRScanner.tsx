@@ -338,7 +338,7 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
       isMounted.current = false;
       cleanupAllCameras();
     };
-  }, []); // Empty dependency array means this runs once on mount
+  }, [autoStart,startScanning]); // Empty dependency array means this runs once on mount
 
   return (
     <Container className="d-flex flex-column align-items-center p-0">

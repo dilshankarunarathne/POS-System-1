@@ -623,7 +623,7 @@ const POS: React.FC = () => {
         total: typeof item.total === 'number' ? item.total : 0
       }));
       
-      // Generate receipt HTML content specifically optimized for XP-365B 80mm thermal printer
+      // Generate receipt HTML content optimized for XP-365B 80mm thermal printer
       const receiptHtml = `
         <html>
           <head>
@@ -636,7 +636,7 @@ const POS: React.FC = () => {
               body { 
                 font-family: 'Arial', sans-serif; 
                 font-size: 12px; 
-                width: 72mm;      /* Slightly less than paper width to avoid cutoff */
+                width: 72mm;      /* Slightly less than paper width to ensure proper printing */
                 margin: 4mm;
                 padding: 0;
                 -webkit-print-color-adjust: exact;
@@ -650,7 +650,7 @@ const POS: React.FC = () => {
               }
               hr { 
                 border: none; 
-                border-top: 1px dashed #000; /* Dashed lines for easier tear-off */
+                border-top: 1px dashed #000; 
                 margin: 5px 0; 
               }
               table { 
@@ -682,18 +682,24 @@ const POS: React.FC = () => {
                 font-size: 10px;
                 margin-top: 10px;
               }
-              /* Ensure text doesn't overflow the paper width */
               .truncate {
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
-                max-width: 38mm; /* XP-365B specific width adjustment */
+                max-width: 35mm; /* XP-365B specific width adjustment */
               }
-              /* Add spacing for thermal printer cut marks */
+              /* Add extra space at the bottom for printer cutting */
               .paper-cut-space {
-                height: 15mm;
+                height: 20mm;
               }
             </style>
+            <script>
+              // Auto-close print dialog after printing
+              window.addEventListener('afterprint', function() {
+                // Signal back to parent that printing is complete
+                window.parent.postMessage('printComplete', '*');
+              });
+            </script>
           </head>
           <body>
             <div class="receipt">
@@ -784,6 +790,20 @@ const POS: React.FC = () => {
         iframeDoc.write(receiptHtml);
         iframeDoc.close();
 
+        // Add listener for when printing completes
+        window.addEventListener('message', function onPrintComplete(event) {
+          if (event.data === 'printComplete') {
+            // Remove the event listener
+            window.removeEventListener('message', onPrintComplete);
+            
+            // Cleanup iframe after printing
+            setTimeout(() => {
+              document.body.removeChild(printIframe);
+              setPrintingReceipt(false);
+            }, 500);
+          }
+        });
+
         // Trigger print once content is loaded
         const onIframeLoad = () => {
           try {
@@ -797,11 +817,13 @@ const POS: React.FC = () => {
             setTimeout(() => {
               printIframe.contentWindow?.print();
               
-              // Set a timeout to remove the iframe after printing
+              // Fallback cleanup in case the afterprint event doesn't fire
               setTimeout(() => {
-                document.body.removeChild(printIframe);
-                setPrintingReceipt(false);
-              }, 500);
+                if (document.body.contains(printIframe)) {
+                  document.body.removeChild(printIframe);
+                  setPrintingReceipt(false);
+                }
+              }, 3000);
             }, 200);
           } catch (err) {
             console.error('Error during iframe print:', err);
@@ -815,9 +837,8 @@ const POS: React.FC = () => {
       } else {
         throw new Error('Could not access iframe document');
       }
-    } catch (err) {
-      console.error('Error printing receipt:', err);
-      setError('Failed to print receipt. Please try again.');
+    } catch (error) {
+      console.error('Error printing receipt:', error);
       setPrintingReceipt(false);
     }
   };

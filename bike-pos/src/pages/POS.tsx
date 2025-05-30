@@ -601,6 +601,10 @@ const POS: React.FC = () => {
     try {
       setPrintingReceipt(true);
 
+      // Get the current shop from Auth context
+      const currentShop = user?.shopId ? { name: user.shopId.name } : null;
+      const shopName = currentShop?.name || "Bike Shop";
+
       // Create a hidden iframe for printing
       const printIframe = document.createElement('iframe');
       printIframe.style.position = 'fixed';
@@ -694,6 +698,7 @@ const POS: React.FC = () => {
           <body>
             <div class="receipt">
               <div class="text-center">
+                <h2 style="margin: 0px 0 4px 0; font-size: 18px;">${shopName}</h2>
                 <h3 style="margin: 0px 0 4px 0; font-size: 16px;">RECEIPT</h3>
                 <p style="margin: 3px 0; font-size: 11px;">${receiptToPrint.date}</p>
                 <p style="margin: 3px 0; font-size: 11px;">Invoice: ${receiptToPrint.invoiceNumber}</p>

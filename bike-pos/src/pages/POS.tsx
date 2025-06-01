@@ -1171,8 +1171,12 @@ const POS: React.FC = () => {
   };
 
   return (
-    <Container fluid className="vh-100 p-0">
+    <Container fluid className="py-4 px-3 px-md-4">
+       <Col>
+                  <h4 className="fw-bold mb-0">Point of sale</h4>
+                </Col>
       <Row className="h-100 g-0">
+        
         {/* QR Scanner Section - Always visible but responsive */}
         <Col xs={12} lg={2} className="h-auto h-lg-100 border-bottom border-lg-end border-lg-bottom-0 bg-light">
           <div className="d-flex flex-column p-2" style={{ height: '200px', maxHeight: '200px' }}>
@@ -1280,8 +1284,8 @@ const POS: React.FC = () => {
                                 />
                               </InputGroup>
                               <Row>
-                                <Col xs={7}>
-                                  <InputGroup className="mb-2">
+                                <Col xs={12} sm={7} className="mb-2 mb-sm-0">
+                                  <InputGroup>
                                     <InputGroup.Text className="bg-white">Rs.</InputGroup.Text>
                                     <Form.Control
                                       type="number"
@@ -1292,11 +1296,12 @@ const POS: React.FC = () => {
                                       onChange={(e) => setManualItemPrice(e.target.value)}
                                       required
                                       className="border-start-0"
+                                      style={{ height: '42px' }}
                                     />
                                   </InputGroup>
                                 </Col>
-                                <Col xs={5}>
-                                  <InputGroup className="mb-2">
+                                <Col xs={12} sm={5}>
+                                  <InputGroup>
                                     <InputGroup.Text className="bg-white">
                                       <i className="bi bi-123"></i>
                                     </InputGroup.Text>

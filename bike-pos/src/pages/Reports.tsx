@@ -275,20 +275,20 @@ const Reports = () => {
         return;
       }
       
-      const response = await reportsApi.generateSalesReport({
+      console.log('Generating PDF report for shop:', currentShop._id);
+      
+      // Make sure we're using the correct function from reportsApi
+      await reportsApi.generateSalesReport({
         startDate: formatDateForApi(startDate),
         endDate: formatDateForApi(endDate),
         shopId: currentShop._id
       });
       
-      // Open PDF in new tab
-      window.open(`http://localhost:5000${response.data.downloadUrl}`, '_blank');
+      setSuccessMessage('Sales report generated and downloaded successfully');
       
-      setSuccessMessage('Sales report generated successfully');
-      
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error generating PDF report:', err);
-      setError('Failed to generate PDF report');
+      setError(`Failed to generate PDF report: ${err.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }

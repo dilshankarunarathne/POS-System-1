@@ -378,21 +378,308 @@ const getInventoryStatusReport = async (req, res) => {
   }
 };
 
-// Generate PDF sales report - stub function
 const generateSalesReport = async (req, res) => {
   try {
-    // In a real implementation, you would:
-    // 1. Generate the data similar to getSalesSummary
-    // 2. Use a PDF library like PDFKit to create a PDF
-    // 3. Stream the PDF to the response
+    console.log('Generate sales report endpoint called with query:', req.query);
     
-    res.status(200).json({ 
-      message: 'PDF report functionality will be implemented here',
-      note: 'This would generate and return a PDF in a complete implementation'
-    });
+    const { startDate, endDate } = req.query;
+    const shopId = req.user.shopId._id;
+    
+    console.log('Starting report generation with params:', { startDate, endDate, shopId });
+
+    // Default to last 30 days if no dates provided
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const end = endDate ? new Date(endDate) : new Date();
+    
+    // Set end date to end of day
+    end.setHours(23, 59, 59, 999);
+    start.setHours(0, 0, 0, 0);
+
+    // Get shop information for the report header
+    const shop = req.user.shopId;
+
+    // Base match condition with shop filter
+    const matchCondition = { 
+      createdAt: { $gte: start, $lte: end },
+      status: { $ne: 'cancelled' },
+      shopId: new mongoose.Types.ObjectId(shopId)
+    };
+
+    console.log('Fetching sales data with matchCondition:', matchCondition);
+    
+    // Get sales summary data
+    const dailySalesAggregation = await Sale.aggregate([
+      { $match: matchCondition },
+      {
+        $addFields: {
+          saleDate: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }
+        }
+      },
+      {
+        $group: {
+          _id: "$saleDate",
+          total: { $sum: "$total" },
+          salesCount: { $sum: 1 },
+          itemCount: { $sum: { $size: "$items" } }
+        }
+      },
+      { $sort: { _id: 1 } },
+      {
+        $project: {
+          _id: 0,
+          date: "$_id",
+          total: { $round: ["$total", 2] },
+          salesCount: 1,
+          itemCount: 1
+        }
+      }
+    ]);
+
+    console.log(`Found ${dailySalesAggregation.length} daily sales records`);
+
+    // Get total sales within period
+    const totalStats = await Sale.aggregate([
+      { $match: matchCondition },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$total" },
+          subtotal: { $sum: "$subtotal" },
+          tax: { $sum: "$tax" },
+          discount: { $sum: "$discount" },
+          totalSales: { $sum: 1 },
+          totalItems: { $sum: { $size: "$items" } }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          total: { $round: ["$total", 2] },
+          subtotal: { $round: ["$subtotal", 2] },
+          tax: { $round: ["$tax", 2] },
+          discount: { $round: ["$discount", 2] },
+          totalSales: 1,
+          totalItems: 1,
+          averageSale: { $round: [{ $divide: ["$total", { $cond: [{ $eq: ["$totalSales", 0] }, 1, "$totalSales"] }] }, 2] }
+        }
+      }
+    ]);
+
+    // Get payment method statistics
+    const paymentMethodStats = await Sale.aggregate([
+      { $match: matchCondition },
+      {
+        $group: {
+          _id: "$paymentMethod",
+          total: { $sum: "$total" },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          method: "$_id",
+          total: { $round: ["$total", 2] },
+          count: 1
+        }
+      }
+    ]);
+
+    // Get top selling products
+    const topProducts = await Sale.aggregate([
+      { $match: matchCondition },
+      { $unwind: '$items' },
+      {
+        $group: {
+          _id: '$items.product',
+          name: { $first: '$items.name' },
+          quantity: { $sum: '$items.quantity' },
+          revenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } }
+        }
+      },
+      { $sort: { quantity: -1 } },
+      { $limit: 10 },
+      {
+        $project: {
+          _id: 0,
+          name: 1,
+          quantity: 1,
+          revenue: { $round: ["$revenue", 2] }
+        }
+      }
+    ]);
+
+    // Create a unique filename for the report
+    const timestamp = new Date().getTime();
+    const filename = `sales_report_${timestamp}.pdf`;
+    
+    try {
+      // Initialize PDFKit
+      const PDFDocument = require('pdfkit');
+      console.log('PDFKit loaded successfully');
+      
+      const doc = new PDFDocument({ margin: 50 });
+      console.log('PDF document created');
+      
+      // Set response headers for direct download
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+      
+      // Pipe the PDF directly to the response
+      doc.pipe(res);
+
+      // Add report header
+      doc.fontSize(20).text('Sales Report', { align: 'center' });
+      doc.moveDown();
+      doc.fontSize(12).text(`${shop.name}`, { align: 'center' });
+      doc.fontSize(10).text(`Report generated on: ${new Date().toLocaleString()}`, { align: 'center' });
+      doc.fontSize(10).text(`Period: ${start.toLocaleDateString()} to ${end.toLocaleDateString()}`, { align: 'center' });
+      doc.moveDown(2);
+
+      // Add summary section
+      const totals = totalStats.length > 0 ? totalStats[0] : {
+        total: 0,
+        subtotal: 0,
+        tax: 0,
+        discount: 0,
+        totalSales: 0,
+        totalItems: 0,
+        averageSale: 0
+      };
+
+      doc.fontSize(14).text('Summary', { underline: true });
+      doc.moveDown(0.5);
+      
+      // Summary table
+      doc.fontSize(10);
+      
+      // Draw summary table
+      doc.text('Total Revenue:', 50, doc.y);
+      doc.text(`Rs. ${totals.total.toFixed(2)}`, 200, doc.y);
+      doc.moveDown(0.5);
+      
+      doc.text('Total Sales:', 50, doc.y);
+      doc.text(`${totals.totalSales}`, 200, doc.y);
+      doc.moveDown(0.5);
+      
+      doc.text('Total Items:', 50, doc.y);
+      doc.text(`${totals.totalItems}`, 200, doc.y);
+      doc.moveDown(0.5);
+      
+      doc.text('Average Sale:', 50, doc.y);
+      doc.text(`Rs. ${totals.averageSale.toFixed(2)}`, 200, doc.y);
+      doc.moveDown(0.5);
+      
+      doc.text('Subtotal:', 50, doc.y);
+      doc.text(`Rs. ${totals.subtotal.toFixed(2)}`, 200, doc.y);
+      doc.moveDown(0.5);
+      
+      doc.text('Tax:', 50, doc.y);
+      doc.text(`Rs. ${totals.tax.toFixed(2)}`, 200, doc.y);
+      doc.moveDown(0.5);
+      
+      doc.text('Discount:', 50, doc.y);
+      doc.text(`Rs. ${totals.discount.toFixed(2)}`, 200, doc.y);
+      doc.moveDown(2);
+
+      // Payment methods section
+      doc.fontSize(14).text('Payment Methods', { underline: true });
+      doc.moveDown(0.5);
+      
+      if (paymentMethodStats.length > 0) {
+        // Headers
+        doc.fontSize(10);
+        doc.text('Method', 50, doc.y, { width: 100 });
+        doc.text('Count', 150, doc.y, { width: 100 });
+        doc.text('Total', 250, doc.y, { width: 100 });
+        doc.moveDown(0.5);
+        
+        // Data rows
+        paymentMethodStats.forEach((method) => {
+          doc.text(method.method || 'Unknown', 50, doc.y, { width: 100 });
+          doc.text(method.count.toString(), 150, doc.y, { width: 100 });
+          doc.text(`Rs. ${method.total.toFixed(2)}`, 250, doc.y, { width: 100 });
+          doc.moveDown(0.5);
+        });
+      } else {
+        doc.text('No payment method data available');
+      }
+      doc.moveDown(2);
+
+      // Daily sales section
+      doc.fontSize(14).text('Daily Sales', { underline: true });
+      doc.moveDown(0.5);
+      
+      if (dailySalesAggregation.length > 0) {
+        // Headers
+        doc.fontSize(10);
+        doc.text('Date', 50, doc.y, { width: 100 });
+        doc.text('Sales Count', 150, doc.y, { width: 100 });
+        doc.text('Items', 250, doc.y, { width: 100 });
+        doc.text('Total', 350, doc.y, { width: 100 });
+        doc.moveDown(0.5);
+        
+        // Data rows
+        dailySalesAggregation.forEach((day) => {
+          doc.text(new Date(day.date).toLocaleDateString(), 50, doc.y, { width: 100 });
+          doc.text(day.salesCount.toString(), 150, doc.y, { width: 100 });
+          doc.text(day.itemCount.toString(), 250, doc.y, { width: 100 });
+          doc.text(`Rs. ${day.total.toFixed(2)}`, 350, doc.y, { width: 100 });
+          doc.moveDown(0.5);
+        });
+      } else {
+        doc.text('No daily sales data available');
+      }
+      doc.moveDown(2);
+
+      // Top products section
+      if (doc.y > 650) doc.addPage(); // Add page if needed
+      
+      doc.fontSize(14).text('Top Selling Products', { underline: true });
+      doc.moveDown(0.5);
+      
+      if (topProducts.length > 0) {
+        // Headers
+        doc.fontSize(10);
+        doc.text('Product', 50, doc.y, { width: 200 });
+        doc.text('Quantity', 250, doc.y, { width: 100 });
+        doc.text('Revenue', 350, doc.y, { width: 100 });
+        doc.moveDown(0.5);
+        
+        // Data rows
+        topProducts.forEach((product) => {
+          doc.text(product.name, 50, doc.y, { width: 200 });
+          doc.text(product.quantity.toString(), 250, doc.y, { width: 100 });
+          doc.text(`Rs. ${product.revenue.toFixed(2)}`, 350, doc.y, { width: 100 });
+          doc.moveDown(0.5);
+        });
+      } else {
+        doc.text('No product data available');
+      }
+
+      // Finalize the PDF
+      doc.end();
+      console.log('PDF document finalized and sent to client');
+      
+    } catch (pdfError) {
+      console.error('Error creating PDF:', pdfError);
+      return res.status(500).json({ 
+        success: false,
+        message: 'Error creating PDF report', 
+        error: pdfError.message 
+      });
+    }
+
   } catch (error) {
     console.error('Error generating PDF report:', error);
-    res.status(500).json({ message: 'Server error generating PDF report' });
+    // Only send error if headers haven't been sent yet
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        success: false, 
+        message: 'Server error generating PDF report', 
+        error: error.toString() 
+      });
+    }
   }
 };
 

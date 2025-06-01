@@ -249,7 +249,7 @@ export const reportsApi = {
     endDate?: string; 
     groupBy?: 'day' | 'week' | 'month';
     shopId?: string;
-  }) => api.get('/reports/sales-summary', { params }),
+  }) => api.get('/reports/sales/summary', { params }),
   
   getProductSalesReport: (params: { 
     startDate?: string;
@@ -257,7 +257,7 @@ export const reportsApi = {
     categoryId?: string | number;
     limit?: number;
     shopId?: string;
-  }) => api.get('/reports/product-sales', { params }),
+  }) => api.get('/reports/sales/products', { params }),
   
   // Ensure there's only one implementation for inventory status report
   getInventoryStatusReport: (params: { 
@@ -266,15 +266,50 @@ export const reportsApi = {
     shopId: string;
   }) => {
     console.log('Calling inventory status API with params:', params);
-    return api.get('/reports/inventory-status', { params });
+    return api.get('/reports/inventory/status', { params });
   },
   
+  // Fix this function - ensure it's properly defined and exported
   generateSalesReport: (params: { 
     startDate?: string; 
     endDate?: string;
     shopId?: string;
-  }) => api.get('/reports/generate-sales-report', { params }),
-
+  }) => {
+    console.log('Calling generateSalesReport API with params:', params);
+    return api.get('/reports/sales-report', { 
+      params,
+      responseType: 'blob' // Set response type to blob for direct file download
+    })
+    .then(response => {
+      // Create a blob from the response data
+      const blob = new Blob([response.data], { type: 'application/pdf' });
+      
+      // Create a link element to trigger download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `sales_report_${new Date().getTime()}.pdf`;
+      
+      // Append to body, click and remove
+      document.body.appendChild(link);
+      link.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+      
+      return { success: true, message: 'Report generated successfully' };
+    })
+    .catch(error => {
+      console.error('Error generating sales report:', error);
+      if (error.response) {
+        throw new Error(`Server error (${error.response.status}): ${error.response.data?.message || 'Unknown error'}`);
+      } else if (error.request) {
+        throw new Error('No response received from server. Check server connection.');
+      } else {
+        throw new Error(`Request error: ${error.message}`);
+      }
+    });
+  },
+  
   getDailySales: (params: {
     startDate?: string;
     endDate?: string;

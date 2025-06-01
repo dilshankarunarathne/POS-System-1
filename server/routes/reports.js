@@ -9,6 +9,7 @@ router.get('/sales/summary', authenticate, authorize('admin', 'manager', 'develo
 router.get('/sales/products', authenticate, authorize('admin', 'manager', 'developer'), checkShopAccess, reportController.getProductSalesReport);
 router.get('/inventory/status', authenticate, authorize('admin', 'manager', 'developer'), checkShopAccess, reportController.getInventoryStatusReport);
 router.get('/sales/daily', authenticate, authorize('admin', 'manager', 'developer'), checkShopAccess, reportController.getDailySales);
-router.get('/sales/generate', authenticate, authorize('admin', 'manager', 'developer'), checkShopAccess, reportController.generateSalesReport);
+// Use consistent naming - keep only one route for generating reports
+router.get('/sales-report', authenticate, authorize('admin', 'manager', 'developer'), checkShopAccess, reportController.generateSalesReport);
 
 module.exports = router;

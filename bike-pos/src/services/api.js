@@ -50,15 +50,18 @@ export const reportsApi = {
     return api.get('/reports/sales/products', { params });
   },
   
-  // Get inventory status report
+  // Get inventory status report - consolidate the two functions to one consistent endpoint
   getInventoryReport: (params = {}) => {
-    return api.get('/reports/inventory', { params });
+    return api.get('/reports/inventory/status', { params });
   },
 
   // Get daily sales data
   getDailySales: (params = {}) => {
     return api.get('/reports/sales/daily', { params });
-  }
+  },
+
+  // Update this function to use the correct inventory endpoint
+  getInventoryStatusReport: (params) => api.get('/reports/inventory/status', { params }),
 };
 
 // Add stats API endpoints

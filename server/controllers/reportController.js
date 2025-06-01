@@ -1,5 +1,5 @@
 const Sale = require('../models/Sale');
-const Product = require('../models/Product');
+const Product = require('../models/Product');  // Make sure this exists
 const mongoose = require('mongoose');
 
 // Get sales summary report
@@ -194,7 +194,7 @@ const getDailySales = async (req, res) => {
 // Get product sales report
 const getProductSalesReport = async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, categoryId, limit = 10 } = req.query;
 
     // Default to last 30 days if no dates provided
     const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -209,6 +209,12 @@ const getProductSalesReport = async (req, res) => {
       shopId: new mongoose.Types.ObjectId(req.user.shopId._id)
     };
 
+    // Add category filter if provided
+    const categoryFilter = {};
+    if (categoryId) {
+      categoryFilter['product.category'] = new mongoose.Types.ObjectId(categoryId);
+    }
+
     // Aggregate product sales
     const productSales = await Sale.aggregate([
       {
@@ -218,70 +224,23 @@ const getProductSalesReport = async (req, res) => {
         $unwind: '$items'
       },
       {
-        $group: {
-          _id: '$items.product',
-          totalQuantity: { $sum: '$items.quantity' },
-          totalRevenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } }
-        }
-      },
-      {
         $lookup: {
           from: 'products',
-          localField: '_id',
+          localField: 'items.product',
           foreignField: '_id',
-          as: 'product'
+          as: 'productInfo'
         }
       },
       {
-        $unwind: '$product'
-      },
-      {
-        $match: {
-          'product.shopId': new mongoose.Types.ObjectId(req.user.shopId._id)
+        $unwind: {
+          path: '$productInfo',
+          preserveNullAndEmptyArrays: false // Skip items with no matching product
         }
-      },
-      {
-        $project: {
-          productName: '$product.name',
-          sku: '$product.sku',
-          totalQuantity: 1,
-          totalRevenue: 1,
-          averagePrice: { $divide: ['$totalRevenue', '$totalQuantity'] }
-        }
-      },
-      {
-        $sort: { totalQuantity: -1 }
-      }
-    ]);
-
-    res.status(200).json({
-      startDate: start,
-      endDate: end,
-      products: productSales
-    });
-  } catch (error) {
-    console.error('Error generating product sales report:', error);
-    res.status(500).json({ message: 'Server error generating report' });
-  }
-};
-
-// Get inventory status report
-const getInventoryStatusReport = async (req, res) => {
-  try {
-    // Match condition with shop filter
-    const matchCondition = { 
-      shopId: new mongoose.Types.ObjectId(req.user.shopId._id)
-    };
-
-    // Get inventory status
-    const inventoryStatus = await Product.aggregate([
-      {
-        $match: matchCondition
       },
       {
         $lookup: {
           from: 'categories',
-          localField: 'category',
+          localField: 'productInfo.category',
           foreignField: '_id',
           as: 'categoryInfo'
         }
@@ -292,58 +251,129 @@ const getInventoryStatusReport = async (req, res) => {
           preserveNullAndEmptyArrays: true
         }
       },
+      // Apply category filter if provided
+      ...(categoryId ? [{ $match: categoryFilter }] : []),
       {
         $group: {
-          _id: '$categoryInfo.name',
-          totalProducts: { $sum: 1 },
-          totalValue: { $sum: { $multiply: ['$price', '$quantity'] } },
-          lowStock: {
-            $sum: {
-              $cond: [
-                { $lte: ['$quantity', '$reorderLevel'] },
-                1,
-                0
-              ]
-            }
-          },
-          outOfStock: {
-            $sum: {
-              $cond: [
-                { $eq: ['$quantity', 0] },
-                1,
-                0
-              ]
-            }
+          _id: '$productInfo._id',
+          name: { $first: '$productInfo.name' },
+          category: { $first: { $ifNull: ['$categoryInfo.name', 'Uncategorized'] } },
+          quantitySold: { $sum: '$items.quantity' },
+          totalRevenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } },
+          // Calculate profit based on cost price and selling price
+          profit: { 
+            $sum: { 
+              $multiply: [
+                { $subtract: ['$items.price', { $ifNull: ['$productInfo.cost', 0] }] },
+                '$items.quantity'
+              ] 
+            } 
           }
         }
       },
       {
         $project: {
-          category: { $ifNull: ['$_id', 'Uncategorized'] },
-          totalProducts: 1,
-          totalValue: { $round: ['$totalValue', 2] },
-          lowStock: 1,
-          outOfStock: 1,
-          _id: 0
+          _id: 0,
+          name: 1,
+          category: 1,
+          quantitySold: 1,
+          totalRevenue: { $round: ['$totalRevenue', 2] },
+          profit: { $round: ['$profit', 2] },
+          profitMargin: { 
+            $concat: [
+              { 
+                $toString: { 
+                  $round: [
+                    { 
+                      $multiply: [
+                        { 
+                          $cond: [
+                            { $eq: ['$totalRevenue', 0] },
+                            0,
+                            { $divide: ['$profit', '$totalRevenue'] }
+                          ]
+                        }, 
+                        100
+                      ] 
+                    },
+                    1
+                  ] 
+                } 
+              },
+              '%'
+            ]
+          }
         }
       },
       {
-        $sort: { totalProducts: -1 }
+        $sort: { totalRevenue: -1 }
+      },
+      {
+        $limit: parseInt(limit)
       }
     ]);
 
-    res.status(200).json({
-      categories: inventoryStatus,
-      summary: {
-        totalCategories: inventoryStatus.length,
-        totalProducts: inventoryStatus.reduce((sum, cat) => sum + cat.totalProducts, 0),
-        totalValue: inventoryStatus.reduce((sum, cat) => sum + cat.totalValue, 0),
-        lowStockItems: inventoryStatus.reduce((sum, cat) => sum + cat.lowStock, 0),
-        outOfStockItems: inventoryStatus.reduce((sum, cat) => sum + cat.outOfStock, 0)
-      }
-    });
+    // Return the array directly instead of wrapping in an object
+    res.status(200).json(productSales);
+    
   } catch (error) {
-    console.error('Error generating inventory report:', error);
+    console.error('Error generating product sales report:', error);
+    res.status(500).json({ message: 'Server error generating report' });
+  }
+};
+
+// Get inventory status report - make sure this function is correctly exported
+const getInventoryStatusReport = async (req, res) => {
+  try {
+    const { lowStock, categoryId } = req.query;
+    const shopId = req.query.shopId || req.user.shopId;
+
+    if (!shopId) {
+      return res.status(400).json({ message: 'Shop ID is required' });
+    }
+
+    // Build filter condition
+    const filter = { shopId: new mongoose.Types.ObjectId(shopId) };
+    
+    // Add category filter if provided
+    if (categoryId) {
+      filter.category = new mongoose.Types.ObjectId(categoryId);
+    }
+    
+    // Add low stock filter if requested
+    if (lowStock === 'true') {
+      filter.$expr = { $lte: ["$quantity", "$reorderLevel"] };
+    }
+    
+    const products = await Product.find(filter)
+      .populate('category', 'name')
+      .lean();
+    
+    // Transform products for the report
+    const inventoryItems = products.map(product => ({
+      name: product.name,
+      category: product.category ? product.category.name : 'Uncategorized',
+      quantity: product.quantity || 0,
+      reorderLevel: product.reorderLevel || 10,
+      value: ((product.cost || 0) * (product.quantity || 0)).toFixed(2),
+      barcode: product.barcode || product.sku || ''
+    }));
+    
+    // Calculate summary statistics
+    const summary = {
+      totalProducts: inventoryItems.length,
+      totalItems: inventoryItems.reduce((sum, item) => sum + item.quantity, 0),
+      totalValue: inventoryItems.reduce((sum, item) => sum + parseFloat(item.value), 0).toFixed(2),
+      lowStockItems: inventoryItems.filter(item => item.quantity <= item.reorderLevel).length
+    };
+    
+    res.status(200).json({
+      inventory: inventoryItems,
+      summary
+    });
+    
+  } catch (error) {
+    console.error('Error generating inventory status report:', error);
     res.status(500).json({ message: 'Server error generating report' });
   }
 };

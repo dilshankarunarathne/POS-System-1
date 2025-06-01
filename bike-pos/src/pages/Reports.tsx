@@ -177,11 +177,19 @@ const Reports = () => {
         shopId: currentShop._id
       });
       
-      setProductSales(response.data);
+      // Ensure response.data is an array before setting state
+      if (Array.isArray(response.data)) {
+        setProductSales(response.data);
+      } else {
+        console.error('Expected array for product sales data but got:', response.data);
+        setProductSales([]);
+        setError('Invalid data format received for product sales');
+      }
       
     } catch (err) {
       console.error('Error fetching product sales:', err);
       setError('Failed to load product sales data');
+      setProductSales([]); // Reset to empty array on error
     } finally {
       setLoading(false);
     }
@@ -201,18 +209,52 @@ const Reports = () => {
         setLoading(false);
         return;
       }
-      
-      const response = await reportsApi.getInventoryStatusReport({
+
+      console.log('Fetching inventory data with params:', {
         lowStock: showLowStock,
-        categoryId: categoryFilter,
+        categoryId: categoryFilter, // Add categoryId to the params
         shopId: currentShop._id
       });
       
-      setInventoryData(response.data);
+      const response = await reportsApi.getInventoryStatusReport({
+        lowStock: showLowStock,
+        categoryId: categoryFilter, // Include category filter in the request
+        shopId: currentShop._id
+      });
       
-    } catch (err) {
+      console.log('Inventory data received:', response.data);
+      
+      // Improved handling of response data format
+      if (!response.data) {
+        setError('No data received from server');
+        setInventoryData({ inventory: [], summary: {} });
+      } 
+      // Handle both possible response formats (array or object with inventory property)
+      else if (Array.isArray(response.data)) {
+        // If the response is a direct array, adapt it to expected format
+        setInventoryData({ 
+          inventory: response.data,
+          summary: {
+            totalProducts: response.data.length,
+            totalItems: response.data.reduce((sum, item) => sum + item.quantity, 0),
+            totalValue: response.data.reduce((sum, item) => sum + (item.value || 0), 0),
+            lowStockItems: response.data.filter(item => item.quantity <= item.reorderLevel).length
+          }
+        });
+      }
+      else if (response.data.inventory || Array.isArray(response.data.inventory)) {
+        // Standard expected format
+        setInventoryData(response.data);
+      }
+      else {
+        setError('Invalid inventory data format received from server');
+        setInventoryData({ inventory: [], summary: {} });
+      }
+      
+    } catch (err: any) {
       console.error('Error fetching inventory data:', err);
-      setError('Failed to load inventory data');
+      setError(`Failed to load inventory data: ${err.message || 'Unknown error'}`);
+      setInventoryData({ inventory: [], summary: {} });
     } finally {
       setLoading(false);
     }
@@ -261,7 +303,7 @@ const Reports = () => {
     } else if (activeTab === 'inventory') {
       fetchInventoryData();
     }
-  }, [activeTab, startDate, endDate, groupBy, categoryFilter, topProductsLimit, showLowStock]);
+  }, [activeTab, startDate, endDate, groupBy, showLowStock]);
   
   // Format date for display
   const formatDate = (dateString: string) => {
@@ -293,11 +335,11 @@ const Reports = () => {
   
   // Prepare data for product sales chart
   const productSalesChartData = {
-    labels: productSales.map(item => item.name),
+    labels: Array.isArray(productSales) ? productSales.map(item => item.name) : [],
     datasets: [
       {
         label: 'Quantity Sold',
-        data: productSales.map(item => item.quantitySold),
+        data: Array.isArray(productSales) ? productSales.map(item => item.quantitySold) : [],
         backgroundColor: 'rgba(54, 162, 235, 0.6)',
         borderColor: 'rgba(54, 162, 235, 1)',
         borderWidth: 1,
@@ -653,7 +695,7 @@ const Reports = () => {
                         <h5 className="card-title mb-3">Top {topProductsLimit} Products by Sales</h5>
                         <hr className="mb-4" />
                         
-                        {productSales.length > 0 ? (
+                        {Array.isArray(productSales) && productSales.length > 0 ? (
                           <div style={{ height: 400 }}>
                             <Bar
                               data={productSalesChartData}
@@ -712,7 +754,7 @@ const Reports = () => {
                               </tr>
                             </thead>
                             <tbody>
-                              {productSales.length > 0 ? (
+                              {Array.isArray(productSales) && productSales.length > 0 ? (
                                 productSales.map((product, index) => (
                                   <tr key={index}>
                                     <td>{product.name}</td>

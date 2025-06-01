@@ -259,11 +259,15 @@ export const reportsApi = {
     shopId?: string;
   }) => api.get('/reports/product-sales', { params }),
   
+  // Ensure there's only one implementation for inventory status report
   getInventoryStatusReport: (params: { 
-    lowStock?: boolean; 
-    categoryId?: string | number;
-    shopId?: string;
-  }) => api.get('/reports/inventory-status', { params }),
+    lowStock?: boolean;   
+    categoryId?: string;
+    shopId: string;
+  }) => {
+    console.log('Calling inventory status API with params:', params);
+    return api.get('/reports/inventory-status', { params });
+  },
   
   generateSalesReport: (params: { 
     startDate?: string; 

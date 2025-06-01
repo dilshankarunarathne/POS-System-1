@@ -143,7 +143,7 @@ const POS: React.FC = () => {
   const [manualItemName, setManualItemName] = useState('');
   const [manualItemPrice, setManualItemPrice] = useState('');
   const [manualItemQuantity, setManualItemQuantity] = useState('1');
-
+  
   // Load products on mount
   useEffect(() => {
     const fetchProducts = async () => {
@@ -1169,13 +1169,13 @@ const POS: React.FC = () => {
       </div>
     ) : null;
   };
-  
+
   return (
-    <Container fluid className="vh-100 p-0"> {/* Fixed to vh-100 (was vh-90) */}
+    <Container fluid className="vh-100 p-0">
       <Row className="h-100 g-0">
-        {/* QR Scanner Section - Reduced width from lg={3} to lg={2} */}
-        <Col lg={2} className="d-none d-lg-block h-100 border-end bg-light">
-          <div className="d-flex flex-column h-100 p-2">
+        {/* QR Scanner Section - Always visible but responsive */}
+        <Col xs={12} lg={2} className="h-auto h-lg-100 border-bottom border-lg-end border-lg-bottom-0 bg-light">
+          <div className="d-flex flex-column p-2" style={{ height: '200px', maxHeight: '200px' }}>
             <h5 className="mb-2 d-flex align-items-center">
               <i className="bi bi-qr-code-scan me-2"></i>
               QR Scanner
@@ -1229,24 +1229,15 @@ const POS: React.FC = () => {
           </div>
         </Col>
 
-        {/* Main Content Section - Increased width from lg={9} to lg={10} */}
+        {/* Main Content Section */}
         <Col xs={12} lg={10} className="h-100 d-flex flex-column bg-body-tertiary">
-            
-            {/* Mobile QR Button - Shows QR scanner in modal on small screens */}
-            <Button 
-              variant="outline-primary" 
-              className="d-lg-none rounded-pill"
-              onClick={() => {/* Code to open QR scanner modal */}}
-            >
-              <i className="bi bi-qr-code-scan me-1"></i>
-              Scan QR
-            </Button>
+          {/* Remove mobile QR button since QR scanner is always visible */}
           
           {/* Main content area with equal height columns */}
           <div className="p-3 flex-grow-1 d-flex overflow-hidden">
-            <Row className="w-100 g-4 h-100"> {/* Added h-100 to ensure row takes full height */}
+            <Row className="w-100 g-4 h-100">
               {/* Product Search and Grid Section */}
-              <Col lg={8} className="h-100"> {/* Fixed height to 100% */}
+              <Col lg={8} className="h-100">
                 <div className="d-flex flex-column h-100"> {/* Wrapper div for flex column */}
                   <Card className="shadow-sm mb-3 border-0"> {/* Reduced margin bottom */}
                     <Card.Body className="pb-2">
@@ -1386,8 +1377,8 @@ const POS: React.FC = () => {
                   </Card.Header>
                   
                   {/* Cart items with flex-grow-1 instead of hardcoded height */}
-                  <div className="flex-grow-1 overflow-auto">
-                    {renderCartItems()}
+                  <div className="overflow-auto" style={{ maxHeight: '50vh' }}>
+                    {renderCartItems()} 
                   </div>
                   
                   <Card.Footer className="bg-white py-3">
@@ -1397,13 +1388,6 @@ const POS: React.FC = () => {
                         <span className="text-muted">Subtotal:</span>
                         <span>Rs. {cartSubtotal.toFixed(2)}</span>
                       </div>
-                      
-                      {cartDiscount > 0 && (
-                        <div className="d-flex justify-content-between mb-2 text-danger">
-                          <span>Item Discounts:</span>
-                          <span>-Rs. {cartDiscount.toFixed(2)}</span>
-                        </div>
-                      )}
                       
                       <div className="d-flex justify-content-between mb-2 align-items-center">
                         <span className="text-muted">Additional Discount:</span>
@@ -1426,12 +1410,12 @@ const POS: React.FC = () => {
                         </InputGroup>
                       </div>
                       
-                      {(cartDiscount > 0 || manualDiscount > 0) && (
-                        <div className="d-flex justify-content-between mb-2 text-primary">
-                          <span>Total Discount:</span>
-                          <span>-Rs. {(cartDiscount + manualDiscount).toFixed(2)}</span>
-                        </div>
-                      )}
+                      
+                      
+                      <div className="d-flex justify-content-between mb-2 text-primary">
+                        <span>Total Discount:</span>
+                        <span>-Rs. {(cartDiscount + manualDiscount).toFixed(2)}</span>
+                      </div>
                       
                       {cartTax > 0 && (
                         <div className="d-flex justify-content-between mb-2">
@@ -1446,27 +1430,59 @@ const POS: React.FC = () => {
                       </div>
                     </div>
                     
-                    {/* Cart Actions */}
-                    <div className="d-grid gap-2 d-md-flex justify-content-md-between">
+                    {/* Cart Actions - Modified for better mobile responsiveness with 3 columns */}
+                    <div className="d-flex justify-content-between gap-2">
                       <Button
                         variant="outline-danger"
-                        className="flex-fill rounded-pill"
+                        className="flex-1 rounded-pill"
                         onClick={clearCart}
                         disabled={cartItems.length === 0}
                       >
-                        <i className="bi bi-trash me-1"></i>
-                        Clear
+                        <i className="bi bi-trash d-block d-sm-none"></i>
+                        <span className="d-none d-sm-inline"><i className="bi bi-trash me-1"></i>Clear</span>
                       </Button>
+                      
+                      {/* Added third button for mobile view to show cart */}
+                      <Button
+                        variant="outline-primary"
+                        className="flex-1 rounded-pill d-block d-lg-none"
+                        onClick={() => {
+                          // Implement logic to show cart in mobile view
+                          // This could be a modal or slide-in panel
+                          // For now it's just a placeholder
+                          alert('View Cart: This would show the cart in a modal on mobile');
+                        }}
+                        disabled={cartItems.length === 0}
+                      >
+                        <i className="bi bi-eye d-block d-sm-none"></i>
+                        <span className="d-none d-sm-inline"><i className="bi bi-eye me-1"></i>View</span>
+                      </Button>
+                      
                       <Button
                         variant="success"
-                        className="flex-fill rounded-pill"
+                        className="flex-1 rounded-pill"
                         onClick={handleCheckout}
                         disabled={cartItems.length === 0}
                       >
-                        <i className="bi bi-credit-card me-1"></i>
-                        Checkout
+                        <i className="bi bi-credit-card d-block d-sm-none"></i>
+                        <span className="d-none d-sm-inline"><i className="bi bi-credit-card me-1"></i>Checkout</span>
                       </Button>
                     </div>
+
+                    {/* Add responsive styles to ensure equal-width buttons */}
+                    <style>{`
+                      .flex-1 {
+                        flex: 1;
+                        min-width: 0;
+                      }
+                      
+                      @media (max-width: 576px) {
+                        .flex-1 {
+                          padding-left: 0.5rem;
+                          padding-right: 0.5rem;
+                        }
+                      }
+                    `}</style>
                   </Card.Footer>
                 </Card>
               </Col>

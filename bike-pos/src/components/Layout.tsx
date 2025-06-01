@@ -7,14 +7,14 @@ import {
   Offcanvas
 } from 'react-bootstrap';
 import {
-  BarChart,
   BoxArrowRight,
   BoxSeam,
-  Cart,
-  Diagram3,
-  House,
+  Cart3,
+  ClipboardData,
+  Gear,
+  PeopleFill,
   Receipt,
-  Truck
+  Speedometer2
 } from 'react-bootstrap-icons';
 import { LinkContainer } from 'react-router-bootstrap';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
@@ -24,46 +24,49 @@ import { useAuth } from '../contexts/AuthContext';
 const getMenuItems = (role: string) => {
   const items = [
     {
-      name: 'Dashboard',
-      path: '/dashboard', 
-      icon: <House size={18} />,
-      roles: [ 'admin', 'manager', 'cashier']
+      category: 'Main',
+      items: [
+        {
+          name: 'Dashboard',
+          path: '/dashboard', 
+          icon: <Speedometer2 size={18} />,
+          roles: ['admin', 'manager', 'cashier']
+        },
+        {
+          name: 'POS',
+          path: '/pos',
+          icon: <Cart3 size={18} />,
+          roles: ['admin', 'manager', 'cashier']
+        },
+      ]
     },
     {
-      name: 'POS',
-      path: '/pos',
-      icon: <Cart size={18} />,
-      roles: ['admin', 'manager', 'cashier']
+      category: 'Inventory',
+      items: [
+        {
+          name: 'Products',
+          path: '/products',
+          icon: <BoxSeam size={18} />,
+          roles: ['admin', 'manager']
+        },
+      ]
     },
     {
-      name: 'Products',
-      path: '/products',
-      icon: <BoxSeam size={18} />,
-      roles: ['admin', 'manager']
-    },
-    {
-      name: 'Categories',
-      path: '/categories',
-      icon: <Diagram3 size={18} />,
-      roles: ['admin', 'manager']
-    },
-    {
-      name: 'Suppliers',
-      path: '/suppliers',
-      icon: <Truck size={18} />,
-      roles: ['admin', 'manager']
-    },
-    {
-      name: 'Sales',
-      path: '/sales',
-      icon: <Receipt size={18} />,
-      roles: ['admin', 'manager']
-    },
-    {
-      name: 'Reports',
-      path: '/reports',
-      icon: <BarChart size={18} />,
-      roles: ['admin', 'manager']
+      category: 'Sales',
+      items: [
+        {
+          name: 'Sales History',
+          path: '/sales',
+          icon: <Receipt size={18} />,
+          roles: ['admin', 'manager']
+        },
+        {
+          name: 'Reports',
+          path: '/reports',
+          icon: <ClipboardData size={18} />,
+          roles: ['admin', 'manager']
+        }
+      ]
     }
   ];
 
@@ -71,21 +74,30 @@ const getMenuItems = (role: string) => {
   if (role === 'developer') {
     items.unshift(
       {
-        name: 'Developer Dashboard',
-        path: '/developer/dashboard',
-        icon: <House size={18} />,
-        roles: ['developer']
-      },
-      {
-        name: 'User Management',
-        path: '/developer/users',
-        icon: <House size={18} />,
-        roles: ['developer']
+        category: 'Developer',
+        items: [
+          {
+            name: 'Developer Dashboard',
+            path: '/developer/dashboard',
+            icon: <Gear size={18} />,
+            roles: ['developer']
+          },
+          {
+            name: 'User Management',
+            path: '/developer/users',
+            icon: <PeopleFill size={18} />,
+            roles: ['developer']
+          }
+        ]
       }
     );
   }
 
-  return items.filter(item => item.roles.includes(role));
+  // Filter items based on user role
+  return items.map(category => ({
+    ...category,
+    items: category.items.filter(item => item.roles.includes(role))
+  })).filter(category => category.items.length > 0);
 };
 
 const Layout = () => {
@@ -119,11 +131,14 @@ const Layout = () => {
   };
 
   // Get menu items based on user role
-  const menuItems = getMenuItems(user?.role || 'cashier');
+  const menuCategories = getMenuItems(user?.role || 'cashier');
+  
+  // Flatten menu items for simpler access when needed
+  const flatMenuItems = menuCategories.flatMap(category => category.items);
 
   // Get current page title
   const getCurrentPageTitle = () => {
-    const currentItem = menuItems.find(item => item.path === location.pathname);
+    const currentItem = flatMenuItems.find(item => item.path === location.pathname);
     return currentItem ? currentItem.name : 'Dashboard';
   };
 
@@ -162,9 +177,7 @@ const Layout = () => {
             
             <LinkContainer to="/dashboard">
               <Navbar.Brand className="fw-bold fs-4 text-white d-flex align-items-center">
-                <div className="brand-icon me-2 bg-white bg-opacity-10 rounded-circle p-2">
-                  <BoxSeam size={20} />
-                </div>
+                
                 <span className="d-none d-sm-inline">
                   {user?.role === 'developer' ? 'Bike Parts POS' : currentShop?.name || 'Bike Parts POS'}
                 </span>
@@ -178,7 +191,7 @@ const Layout = () => {
              {/* Desktop Navigation */}
           {!isMobile && (
             <Nav className="mx-auto d-none d-lg-flex">
-              {menuItems.map((item) => {
+              {flatMenuItems.map((item) => {
                 const isActive = location.pathname === item.path;
                 
                 return (
@@ -206,14 +219,10 @@ const Layout = () => {
                   <div className="fw-bold">{user?.name}</div>
                   <div className="small text-white-50">
                     <span className="text-capitalize">{user?.role}</span>
-                    {currentShop && user?.role !== 'developer' && (
-                      <> • {currentShop.name}</>
-                    )}
+                    
                   </div>
                 </div>
-                <div className="user-avatar bg-white bg-opacity-10 rounded-circle p-2">
                   <BoxArrowRight size={20} />
-                </div>
               </Dropdown.Toggle>
               <Dropdown.Menu>
                 <Dropdown.Item onClick={handleLogout}>Logout</Dropdown.Item>
@@ -237,13 +246,18 @@ const Layout = () => {
         </Offcanvas.Header>
         <Offcanvas.Body>
           <Nav className="flex-column">
-            {menuItems.map((item) => (
-                <LinkContainer key={item.name} to={item.path} onClick={handleNavigation}>
-                <Nav.Link className="py-2">
-                  <span className="me-3">{item.icon}</span>
-                  {item.name}
-                  </Nav.Link>
-                </LinkContainer>
+            {menuCategories.map((category, idx) => (
+              <div key={idx} className="mb-3">
+                <div className="sidebar-category">{category.category}</div>
+                {category.items.map((item) => (
+                  <LinkContainer key={item.name} to={item.path} onClick={handleNavigation}>
+                    <Nav.Link className={`py-2 ${location.pathname === item.path ? 'active' : ''}`}>
+                      <span className="me-3">{item.icon}</span>
+                      {item.name}
+                    </Nav.Link>
+                  </LinkContainer>
+                ))}
+              </div>
             ))}
           </Nav>
         </Offcanvas.Body>
@@ -379,6 +393,59 @@ const Layout = () => {
           background-color: #e9ecef;
           color: #0d6efd;
           font-weight: 500;
+        }
+
+        .sidebar-category {
+          font-size: 0.8rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          color: #6c757d;
+          padding: 0.5rem 1rem;
+          margin-bottom: 0.25rem;
+          letter-spacing: 0.5px;
+        }
+
+        /* Offcanvas Navigation Styles */
+        .offcanvas-body .nav-link {
+          padding: 0.75rem 1rem;
+          color: #495057;
+          border-radius: 0.25rem;
+          margin-bottom: 0.25rem;
+          transition: all 0.2s ease;
+        }
+
+        .offcanvas-body .nav-link:hover {
+          background-color: #f0f7ff;
+          color: #0d6efd;
+        }
+
+        .offcanvas-body .nav-link.active {
+          background-color: #e7f1ff;
+          color: #0d6efd;
+          font-weight: 500;
+          border-left: 3px solid #0d6efd;
+        }
+        
+        /* Enhanced nav items */
+        .nav-item-custom {
+          color: rgba(255, 255, 255, 0.85) !important;
+          transition: all 0.3s ease;
+          border: 1px solid transparent;
+          font-weight: 500;
+        }
+
+        .nav-item-custom:hover {
+          color: white !important;
+          background: rgba(255, 255, 255, 0.15);
+          transform: translateY(-2px);
+          box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .active-nav-item {
+          color: white !important;
+          background: rgba(255, 255, 255, 0.25);
+          border: 1px solid rgba(255, 255, 255, 0.4);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         }
       `}</style>
     </div>

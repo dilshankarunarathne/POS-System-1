@@ -11,7 +11,9 @@ router.get('/inventory/status', authenticate, authorize('admin', 'manager', 'dev
 router.get('/sales/daily', authenticate, authorize('admin', 'manager', 'developer'), checkShopAccess, reportController.getDailySales);
 // Add the new route for profit distribution
 router.get('/sales/profit', authenticate, authorize('admin', 'manager', 'developer'), checkShopAccess, reportController.getProfitDistribution);
-// Use consistent naming - keep only one route for generating reports
+// Ensure the PDF generation route uses the correct controller method
 router.get('/sales-report', authenticate, authorize('admin', 'manager', 'developer'), checkShopAccess, reportController.generateSalesReport);
+// Add detailed profit distribution report route
+router.get('/sales/profit-detailed', authenticate, authorize('admin', 'manager', 'developer'), checkShopAccess, reportController.getProfitDistributionDetailed);
 
 module.exports = router;

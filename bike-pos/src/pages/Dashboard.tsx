@@ -424,7 +424,7 @@ const Dashboard: React.FC = () => {
           {/* Charts */}
           <Row className="mb-4 g-4">
             {/* Sales Trend Chart */}
-            <Col lg={8} md={12}>
+           
               <Card className="h-100 shadow-sm border-0">
                 <Card.Body className="p-4">
                   <Card.Title as="h5" className="mb-3">Sales Trend</Card.Title>
@@ -443,62 +443,8 @@ const Dashboard: React.FC = () => {
                   )}
                 </Card.Body>
               </Card>
-            </Col>
             
-            {/* Top Selling Products Chart */}
-            <Col lg={4} md={12}>
-              <Card className="h-100 shadow-sm border-0">
-                <Card.Body className="p-4">
-                  <Card.Title as="h5" className="mb-3">Top Selling Products</Card.Title>
-                  
-                  {topProducts.length > 0 ? (
-                    <div style={{ height: '350px' }}>
-                      <Bar
-                        data={categoryChartData}
-                        options={{
-                          indexAxis: 'y',
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: {
-                              display: false,
-                            },
-                            tooltip: {
-                              callbacks: {
-                                label: function(context) {
-                                  return `Sold: ${context.raw} units`;
-                                },
-                                afterLabel: function(context) {
-                                  const product = topProducts[context.dataIndex];
-                                  return `Revenue: Rs. ${product.revenue.toLocaleString()}`;
-                                }
-                              }
-                            }
-                          },
-                          scales: {
-                            x: {
-                              beginAtZero: true,
-                              grid: {
-                                color: 'rgba(0, 0, 0, 0.05)'
-                              }
-                            },
-                            y: {
-                              grid: {
-                                display: false
-                              }
-                            }
-                          },
-                        }}
-                      />
-                    </div>
-                  ) : (
-                    <div className="text-center py-5">
-                      <p className="text-muted">No product sales data available</p>
-                    </div>
-                  )}
-                </Card.Body>
-              </Card>
-            </Col>
+           
           </Row>
           
           {/* Additional Dashboard Content */}
@@ -515,7 +461,6 @@ const Dashboard: React.FC = () => {
                         <thead className="table-light">
                           <tr>
                             <th>Product</th>
-                            <th>Category</th>
                             <th>Stock</th>
                             <th>Status</th>
                           </tr>
@@ -524,7 +469,6 @@ const Dashboard: React.FC = () => {
                           {lowStockProducts.map((product) => (
                             <tr key={product.id}>
                               <td>{product.name}</td>
-                              <td>{product.category}</td>
                               <td>{product.stock}</td>
                               <td>
                                 <ProgressBar 

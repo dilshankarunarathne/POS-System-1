@@ -300,41 +300,7 @@ const Reports = () => {
       setLoading(false);
     }
   };
-  
-  // Generate PDF report
-  const generatePdfReport = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      
-      const currentShop = getCurrentShop();
-      if (!currentShop) {
-        if (user?.role !== 'developer') {
-          setError('No shop selected. Please contact your administrator.');
-        }
-        setLoading(false);
-        return;
-      }
-      
-      console.log('Generating PDF report for shop:', currentShop._id);
-      
-      // Make sure we're using the correct function from reportsApi
-      await reportsApi.generateSalesReport({
-        startDate: formatDateForApi(startDate),
-        endDate: formatDateForApi(endDate),
-        shopId: currentShop._id
-      });
-      
-      setSuccessMessage('Sales report generated and downloaded successfully');
-      
-    } catch (err: any) {
-      console.error('Error generating PDF report:', err);
-      setError(`Failed to generate PDF report: ${err.message || 'Unknown error'}`);
-    } finally {
-      setLoading(false);
-    }
-  };
-  
+
   // Load data when tab changes or filters change
   useEffect(() => {
     if (activeTab === 'sales') {
@@ -456,60 +422,56 @@ const Reports = () => {
     <Container fluid className="py-4">
       <Row className="mb-4 align-items-center">
         <Col>
-          <h2 className="mb-3">Reports</h2>
+          <h2 className="mb-3 fw-bold">
+            <FileEarmarkText className="me-2 mb-1" /> 
+            Reports Dashboard
+          </h2>
         </Col>
         <Col xs="auto">
-          <Button 
-            variant="primary"
-            onClick={generatePdfReport}
-            disabled={loading}
-            className="d-flex align-items-center"
-          >
-            <Printer className="me-2" /> Generate PDF Report
-          </Button>
         </Col>
       </Row>
       
-      <Card className="mb-4">
-        <Card.Header>
-          <Nav variant="tabs" 
+      <Card className="mb-4 border-0 shadow-sm">
+        <Card.Header className="bg-white py-3">
+          <Nav 
+            variant="pills" 
             activeKey={activeTab} 
             onSelect={(key) => key && setActiveTab(key)}
-            className="flex-nowrap"
+            className="flex-nowrap overflow-auto pb-2"
           >
             <Nav.Item>
-              <Nav.Link eventKey="sales" className="d-flex align-items-center">
+              <Nav.Link eventKey="sales" className="d-flex align-items-center px-3 me-2">
                 <FileEarmarkText className="me-2" /> Sales Summary
               </Nav.Link>
             </Nav.Item>
             <Nav.Item>
-              <Nav.Link eventKey="products" className="d-flex align-items-center">
+              <Nav.Link eventKey="products" className="d-flex align-items-center px-3 me-2">
                 <BarChart className="me-2" /> Product Sales
               </Nav.Link>
             </Nav.Item>
             <Nav.Item>
-              <Nav.Link eventKey="profit" className="d-flex align-items-center">
+              <Nav.Link eventKey="profit" className="d-flex align-items-center px-3 me-2">
                 <Download className="me-2" /> Profit Distribution
               </Nav.Link>
             </Nav.Item>
             <Nav.Item>
-              <Nav.Link eventKey="inventory" className="d-flex align-items-center">
+              <Nav.Link eventKey="inventory" className="d-flex align-items-center px-3">
                 <Download className="me-2" /> Inventory Status
               </Nav.Link>
             </Nav.Item>
           </Nav>
         </Card.Header>
         
-        <Card.Body>
+        <Card.Body className="p-4">
           {/* Date Range Selector */}
-          <Row className="g-3 mb-4">
+          <Row className="g-4 mb-4 bg-light p-3 rounded">
             <Col md={6} lg={3}>
               <Form.Group>
-                <Form.Label>Start Date</Form.Label>
+                <Form.Label className="fw-semibold">Start Date</Form.Label>
                 <DatePicker
                   selected={startDate}
                   onChange={date => date && setStartDate(date)}
-                  className="form-control"
+                  className="form-control shadow-sm"
                   dateFormat="MM/dd/yyyy"
                 />
               </Form.Group>
@@ -517,11 +479,11 @@ const Reports = () => {
             
             <Col md={6} lg={3}>
               <Form.Group>
-                <Form.Label>End Date</Form.Label>
+                <Form.Label className="fw-semibold">End Date</Form.Label>
                 <DatePicker
                   selected={endDate}
                   onChange={date => date && setEndDate(date)}
-                  className="form-control"
+                  className="form-control shadow-sm"
                   dateFormat="MM/dd/yyyy"
                 />
               </Form.Group>
@@ -530,7 +492,7 @@ const Reports = () => {
             {(activeTab === 'sales' || activeTab === 'profit') && (
               <Col md={6} lg={3}>
                 <Form.Group>
-                  <Form.Label>Group By</Form.Label>
+                  <Form.Label className="fw-semibold">Group By</Form.Label>
                   <Form.Select
                     value={activeTab === 'profit' ? profitGroupBy : groupBy}
                     onChange={(e) => {
@@ -541,6 +503,7 @@ const Reports = () => {
                         setGroupBy(value);
                       }
                     }}
+                    className="shadow-sm"
                   >
                     <option value="day">Day</option>
                     <option value="week">Week</option>
@@ -554,10 +517,11 @@ const Reports = () => {
               <>
                 <Col md={6} lg={3}>
                   <Form.Group>
-                    <Form.Label>Category</Form.Label>
+                    <Form.Label className="fw-semibold">Category</Form.Label>
                     <Form.Select
                       value={categoryFilter}
                       onChange={(e) => setCategoryFilter(e.target.value)}
+                      className="shadow-sm"
                     >
                       <option value="">All Categories</option>
                       {categories.map((category) => (
@@ -571,13 +535,14 @@ const Reports = () => {
                 
                 <Col md={6} lg={3}>
                   <Form.Group>
-                    <Form.Label>Top Products Limit</Form.Label>
+                    <Form.Label className="fw-semibold">Top Products Limit</Form.Label>
                     <Form.Control
                       type="number"
                       value={topProductsLimit}
                       onChange={(e) => setTopProductsLimit(Math.max(1, parseInt(e.target.value) || 10))}
                       min={1}
                       max={100}
+                      className="shadow-sm"
                     />
                   </Form.Group>
                 </Col>
@@ -588,10 +553,11 @@ const Reports = () => {
               <>
                 <Col md={6} lg={3}>
                   <Form.Group>
-                    <Form.Label>Category</Form.Label>
+                    <Form.Label className="fw-semibold">Category</Form.Label>
                     <Form.Select
                       value={categoryFilter}
                       onChange={(e) => setCategoryFilter(e.target.value)}
+                      className="shadow-sm"
                     >
                       <option value="">All Categories</option>
                       {categories.map((category) => (
@@ -605,27 +571,41 @@ const Reports = () => {
                 
                 <Col md={6} lg={3}>
                   <Form.Group>
-                    <Form.Label>&nbsp;</Form.Label>
-                    <div className="d-grid">
-                      <Button
-                        variant={showLowStock ? "warning" : "outline-primary"}
-                        onClick={() => setShowLowStock(!showLowStock)}
-                        className="w-100"
-                      >
-                        {showLowStock ? "All Stock" : "Low Stock Only"}
-                      </Button>
-                    </div>
+                    <Form.Label className="d-block opacity-0">Filter</Form.Label>
+                    <Button
+                      variant={showLowStock ? "warning" : "outline-primary"}
+                      onClick={() => setShowLowStock(!showLowStock)}
+                      className="w-100 shadow-sm"
+                    >
+                      {showLowStock ? "Show All Stock" : "Show Low Stock Only"}
+                    </Button>
                   </Form.Group>
                 </Col>
               </>
             )}
+            
+            <Col md={6} lg={3} className="d-flex align-items-end">
+              <Button 
+                variant="success" 
+                className="w-100 shadow-sm"
+                onClick={() => {
+                  if (activeTab === 'sales') fetchSalesSummary();
+                  else if (activeTab === 'products') fetchProductSales();
+                  else if (activeTab === 'inventory') fetchInventoryData();
+                  else if (activeTab === 'profit') fetchProfitDistribution();
+                }}
+              >
+                Apply Filters
+              </Button>
+            </Col>
           </Row>
           
           {loading ? (
             <div className="text-center py-5">
-              <Spinner animation="border" role="status" variant="primary">
+              <Spinner animation="border" role="status" variant="primary" style={{ width: '3rem', height: '3rem' }}>
                 <span className="visually-hidden">Loading...</span>
               </Spinner>
+              <p className="mt-3 text-muted">Loading report data...</p>
             </div>
           ) : (
             <>
@@ -633,9 +613,11 @@ const Reports = () => {
               {activeTab === 'sales' && (
                 <Row className="g-4">
                   <Col lg={8}>
-                    <Card className="h-100">
-                      <Card.Body>
-                        <h5 className="card-title mb-3">Sales Trend</h5>
+                    <Card className="h-100 border-0 shadow-sm">
+                      <Card.Body className="p-4">
+                        <h5 className="card-title fw-bold text-primary mb-3">
+                          <BarChart className="me-2 mb-1" /> Sales Trend
+                        </h5>
                         <hr className="mb-4" />
                         
                         {salesSummary.summary.length > 0 ? (
@@ -666,10 +648,13 @@ const Reports = () => {
                             />
                           </div>
                         ) : (
-                          <div className="text-center d-flex justify-content-center align-items-center h-100">
-                            <p className="text-muted">
-                              No sales data available for the selected period
-                            </p>
+                          <div className="text-center d-flex justify-content-center align-items-center h-100 bg-light rounded py-5">
+                            <div>
+                              <FileEarmarkText size={40} className="text-muted mb-3" />
+                              <p className="text-muted">
+                                No sales data available for the selected period
+                              </p>
+                            </div>
                           </div>
                         )}
                       </Card.Body>
@@ -677,46 +662,48 @@ const Reports = () => {
                   </Col>
                   
                   <Col lg={4}>
-                    <Card className="mb-4">
-                      <Card.Body>
-                        <h5 className="card-title mb-3">Summary</h5>
+                    <Card className="mb-4 border-0 shadow-sm">
+                      <Card.Body className="p-4">
+                        <h5 className="card-title fw-bold text-primary mb-3">
+                          <FileEarmarkText className="me-2 mb-1" /> Summary
+                        </h5>
                         <hr className="mb-4" />
                         
-                        <Table hover size="sm" responsive>
+                        <Table hover size="sm" responsive className="table-borderless">
                           <tbody>
                             <tr>
-                              <td>Date Range</td>
+                              <td className="fw-semibold">Date Range</td>
                               <td className="text-end">
                                 {startDate?.toLocaleDateString()} - {endDate?.toLocaleDateString()}
                               </td>
                             </tr>
                             <tr>
-                              <td>Total Sales</td>
+                              <td className="fw-semibold">Total Sales</td>
                               <td className="text-end">
                                 {salesSummary.totals?.totalSales || 0}
                               </td>
                             </tr>
                             <tr>
-                              <td>Subtotal</td>
+                              <td className="fw-semibold">Subtotal</td>
                               <td className="text-end">
                                 Rs. {parseFloat(salesSummary.totals?.subtotal || 0).toFixed(2)}
                               </td>
                             </tr>
                             <tr>
-                              <td>Discount</td>
+                              <td className="fw-semibold">Discount</td>
                               <td className="text-end">
                                 Rs. {parseFloat(salesSummary.totals?.discount || 0).toFixed(2)}
                               </td>
                             </tr>
                             <tr>
-                              <td>Tax</td>
+                              <td className="fw-semibold">Tax</td>
                               <td className="text-end">
                                 Rs. {parseFloat(salesSummary.totals?.tax || 0).toFixed(2)}
                               </td>
                             </tr>
-                            <tr>
-                              <td className="fw-bold">Total Revenue</td>
-                              <td className="text-end fw-bold">
+                            <tr className="bg-light rounded">
+                              <td className="fw-bold px-2 py-2">Total Revenue</td>
+                              <td className="text-end fw-bold px-2 py-2 text-success">
                                 Rs. {parseFloat(salesSummary.totals?.total || 0).toFixed(2)}
                               </td>
                             </tr>
@@ -725,14 +712,16 @@ const Reports = () => {
                       </Card.Body>
                     </Card>
                     
-                    <Card>
-                      <Card.Body>
-                        <h5 className="card-title mb-3">Sales by Day</h5>
+                    <Card className="border-0 shadow-sm">
+                      <Card.Body className="p-4">
+                        <h5 className="card-title fw-bold text-primary mb-3">
+                          <BarChart className="me-2 mb-1" /> Sales by Day
+                        </h5>
                         <hr className="mb-4" />
                         
-                        <div style={{ maxHeight: 300, overflowY: 'auto' }}>
-                          <Table hover size="sm" responsive>
-                            <thead className="sticky-top bg-white">
+                        <div style={{ maxHeight: 300, overflowY: 'auto' }} className="custom-scrollbar">
+                          <Table hover size="sm" responsive className="table-striped">
+                            <thead className="sticky-top bg-white text-primary">
                               <tr>
                                 <th>Date</th>
                                 <th className="text-end">Sales</th>
@@ -751,13 +740,13 @@ const Reports = () => {
                                         : new Date(item.date).toLocaleString('default', { month: 'long', year: 'numeric' })}
                                     </td>
                                     <td className="text-end">{item.salesCount || 0}</td>
-                                    <td className="text-end">Rs. {parseFloat(item.total).toFixed(2)}</td>
+                                    <td className="text-end fw-semibold">Rs. {parseFloat(item.total).toFixed(2)}</td>
                                   </tr>
                                 ))
                               ) : (
                                 <tr>
-                                  <td colSpan={3} className="text-center">
-                                    No data available
+                                  <td colSpan={3} className="text-center py-3">
+                                    <p className="text-muted mb-0">No data available</p>
                                   </td>
                                 </tr>
                               )}
@@ -774,9 +763,11 @@ const Reports = () => {
               {activeTab === 'products' && (
                 <Row className="g-4">
                   <Col lg={7}>
-                    <Card className="h-100">
-                      <Card.Body>
-                        <h5 className="card-title mb-3">Top {topProductsLimit} Products by Sales</h5>
+                    <Card className="h-100 border-0 shadow-sm">
+                      <Card.Body className="p-4">
+                        <h5 className="card-title fw-bold text-primary mb-3">
+                          <BarChart className="me-2 mb-1" /> Top {topProductsLimit} Products by Sales
+                        </h5>
                         <hr className="mb-4" />
                         
                         {Array.isArray(productSales) && productSales.length > 0 ? (
@@ -810,10 +801,13 @@ const Reports = () => {
                             />
                           </div>
                         ) : (
-                          <div className="text-center d-flex justify-content-center align-items-center h-100">
-                            <p className="text-muted">
-                              No product sales data available for the selected period
-                            </p>
+                          <div className="text-center d-flex justify-content-center align-items-center h-100 bg-light rounded py-5">
+                            <div>
+                              <BarChart size={40} className="text-muted mb-3" />
+                              <p className="text-muted">
+                                No product sales data available for the selected period
+                              </p>
+                            </div>
                           </div>
                         )}
                       </Card.Body>
@@ -821,17 +815,18 @@ const Reports = () => {
                   </Col>
                   
                   <Col lg={5}>
-                    <Card>
-                      <Card.Body>
-                        <h5 className="card-title mb-3">Product Sales Details</h5>
+                    <Card className="border-0 shadow-sm">
+                      <Card.Body className="p-4">
+                        <h5 className="card-title fw-bold text-primary mb-3">
+                          <FileEarmarkText className="me-2 mb-1" /> Product Sales Details
+                        </h5>
                         <hr className="mb-4" />
                         
-                        <div style={{ maxHeight: 400, overflowY: 'auto' }}>
-                          <Table hover size="sm" responsive>
-                            <thead className="sticky-top bg-white">
+                        <div style={{ maxHeight: 400, overflowY: 'auto' }} className="custom-scrollbar">
+                          <Table hover size="sm" responsive className="table-striped">
+                            <thead className="sticky-top bg-white text-primary">
                               <tr>
                                 <th>Product</th>
-                                <th>Category</th>
                                 <th className="text-end">Quantity</th>
                                 <th className="text-end">Revenue</th>
                                 <th className="text-end">Profit</th>
@@ -841,19 +836,18 @@ const Reports = () => {
                               {Array.isArray(productSales) && productSales.length > 0 ? (
                                 productSales.map((product, index) => (
                                   <tr key={index}>
-                                    <td>{product.name}</td>
-                                    <td>{product.category}</td>
+                                    <td className="fw-semibold">{product.name}</td>
                                     <td className="text-end">{product.quantitySold}</td>
                                     <td className="text-end">Rs. {product.totalRevenue}</td>
-                                    <td className="text-end">
+                                    <td className="text-end fw-semibold text-success">
                                       Rs. {product.profit} ({product.profitMargin})
                                     </td>
                                   </tr>
                                 ))
                               ) : (
                                 <tr>
-                                  <td colSpan={5} className="text-center">
-                                    No data available
+                                  <td colSpan={5} className="text-center py-3">
+                                    <p className="text-muted mb-0">No data available</p>
                                   </td>
                                 </tr>
                               )}
@@ -870,9 +864,11 @@ const Reports = () => {
               {activeTab === 'profit' && (
                 <Row className="g-4">
                   <Col lg={8}>
-                    <Card className="h-100">
-                      <Card.Body>
-                        <h5 className="card-title mb-3">Profit Distribution</h5>
+                    <Card className="h-100 border-0 shadow-sm">
+                      <Card.Body className="p-4">
+                        <h5 className="card-title fw-bold text-primary mb-3">
+                          <Download className="me-2 mb-1" /> Profit Distribution
+                        </h5>
                         <hr className="mb-4" />
                         
                         {profitDistribution.summary.length > 0 ? (
@@ -903,10 +899,13 @@ const Reports = () => {
                             />
                           </div>
                         ) : (
-                          <div className="text-center d-flex justify-content-center align-items-center h-100">
-                            <p className="text-muted">
-                              No profit data available for the selected period
-                            </p>
+                          <div className="text-center d-flex justify-content-center align-items-center h-100 bg-light rounded py-5">
+                            <div>
+                              <Download size={40} className="text-muted mb-3" />
+                              <p className="text-muted">
+                                No profit data available for the selected period
+                              </p>
+                            </div>
                           </div>
                         )}
                       </Card.Body>
@@ -914,40 +913,42 @@ const Reports = () => {
                   </Col>
                   
                   <Col lg={4}>
-                    <Card className="mb-4">
-                      <Card.Body>
-                        <h5 className="card-title mb-3">Profit Summary</h5>
+                    <Card className="mb-4 border-0 shadow-sm">
+                      <Card.Body className="p-4">
+                        <h5 className="card-title fw-bold text-primary mb-3">
+                          <FileEarmarkText className="me-2 mb-1" /> Profit Summary
+                        </h5>
                         <hr className="mb-4" />
                         
-                        <Table hover size="sm" responsive>
+                        <Table hover size="sm" responsive className="table-borderless">
                           <tbody>
                             <tr>
-                              <td>Date Range</td>
+                              <td className="fw-semibold">Date Range</td>
                               <td className="text-end">
                                 {startDate?.toLocaleDateString()} - {endDate?.toLocaleDateString()}
                               </td>
                             </tr>
                             <tr>
-                              <td>Total Revenue</td>
+                              <td className="fw-semibold">Total Revenue</td>
                               <td className="text-end">
                                 Rs. {parseFloat(profitDistribution.totals?.total || 0).toFixed(2)}
                               </td>
                             </tr>
                             <tr>
-                              <td>Cost of Goods</td>
+                              <td className="fw-semibold">Cost of Goods</td>
                               <td className="text-end">
                                 Rs. {parseFloat(profitDistribution.totals?.cost || 0).toFixed(2)}
                               </td>
                             </tr>
-                            <tr>
-                              <td className="fw-bold">Total Profit</td>
-                              <td className="text-end fw-bold">
+                            <tr className="bg-light rounded">
+                              <td className="fw-bold px-2 py-2">Total Profit</td>
+                              <td className="text-end fw-bold px-2 py-2 text-success">
                                 Rs. {parseFloat(profitDistribution.totals?.profit || 0).toFixed(2)}
                               </td>
                             </tr>
                             <tr>
-                              <td>Profit Margin</td>
-                              <td className="text-end">
+                              <td className="fw-semibold">Profit Margin</td>
+                              <td className="text-end fw-semibold">
                                 {profitDistribution.totals?.profitMargin || '0%'}
                               </td>
                             </tr>
@@ -956,14 +957,16 @@ const Reports = () => {
                       </Card.Body>
                     </Card>
                     
-                    <Card>
-                      <Card.Body>
-                        <h5 className="card-title mb-3">Profit by {profitGroupBy}</h5>
+                    <Card className="border-0 shadow-sm">
+                      <Card.Body className="p-4">
+                        <h5 className="card-title fw-bold text-primary mb-3">
+                          <Download className="me-2 mb-1" /> Profit by {profitGroupBy}
+                        </h5>
                         <hr className="mb-4" />
                         
-                        <div style={{ maxHeight: 300, overflowY: 'auto' }}>
-                          <Table hover size="sm" responsive>
-                            <thead className="sticky-top bg-white">
+                        <div style={{ maxHeight: 300, overflowY: 'auto' }} className="custom-scrollbar">
+                          <Table hover size="sm" responsive className="table-striped">
+                            <thead className="sticky-top bg-white text-primary">
                               <tr>
                                 <th>Period</th>
                                 <th className="text-end">Revenue</th>
@@ -983,14 +986,14 @@ const Reports = () => {
                                         : new Date(item.date).toLocaleString('default', { month: 'long', year: 'numeric' })}
                                     </td>
                                     <td className="text-end">Rs. {parseFloat(item.total).toFixed(2)}</td>
-                                    <td className="text-end">Rs. {parseFloat(item.profit).toFixed(2)}</td>
+                                    <td className="text-end text-success fw-semibold">Rs. {parseFloat(item.profit).toFixed(2)}</td>
                                     <td className="text-end">{item.profitMargin}</td>
                                   </tr>
                                 ))
                               ) : (
                                 <tr>
-                                  <td colSpan={4} className="text-center">
-                                    No data available
+                                  <td colSpan={4} className="text-center py-3">
+                                    <p className="text-muted mb-0">No data available</p>
                                   </td>
                                 </tr>
                               )}
@@ -1007,16 +1010,18 @@ const Reports = () => {
               {activeTab === 'inventory' && (
                 <Row className="g-4">
                   <Col lg={5}>
-                    <Card className="mb-4">
-                      <Card.Body>
-                        <h5 className="card-title mb-3">Inventory Summary</h5>
+                    <Card className="mb-4 border-0 shadow-sm">
+                      <Card.Body className="p-4">
+                        <h5 className="card-title fw-bold text-primary mb-3">
+                          <Download className="me-2 mb-1" /> Inventory Summary
+                        </h5>
                         <hr className="mb-4" />
                         
                         <Row className="g-3 mb-4">
                           <Col sm={6}>
-                            <Card className="h-100 bg-light">
+                            <Card className="h-100 bg-light border-0 shadow-sm">
                               <Card.Body className="text-center py-3">
-                                <h3 className="text-primary mb-1">
+                                <h3 className="text-primary mb-1 fw-bold">
                                   {inventoryData.summary?.totalProducts || 0}
                                 </h3>
                                 <p className="text-muted small mb-0">Total Products</p>
@@ -1025,9 +1030,9 @@ const Reports = () => {
                           </Col>
                           
                           <Col sm={6}>
-                            <Card className="h-100 bg-light">
+                            <Card className="h-100 bg-light border-0 shadow-sm">
                               <Card.Body className="text-center py-3">
-                                <h3 className="text-primary mb-1">
+                                <h3 className="text-primary mb-1 fw-bold">
                                   {inventoryData.summary?.totalItems || 0}
                                 </h3>
                                 <p className="text-muted small mb-0">Total Items in Stock</p>
@@ -1036,9 +1041,9 @@ const Reports = () => {
                           </Col>
                           
                           <Col sm={6}>
-                            <Card className="h-100 bg-light">
+                            <Card className="h-100 bg-light border-0 shadow-sm">
                               <Card.Body className="text-center py-3">
-                                <h3 className="text-primary mb-1">
+                                <h3 className="text-primary mb-1 fw-bold">
                                   Rs. {parseFloat(inventoryData.summary?.totalValue || 0).toFixed(2)}
                                 </h3>
                                 <p className="text-muted small mb-0">Total Inventory Value</p>
@@ -1047,9 +1052,9 @@ const Reports = () => {
                           </Col>
                           
                           <Col sm={6}>
-                            <Card className="h-100 bg-light">
+                            <Card className="h-100 bg-light border-0 shadow-sm">
                               <Card.Body className="text-center py-3">
-                                <h3 className="text-danger mb-1">
+                                <h3 className="text-danger mb-1 fw-bold">
                                   {inventoryData.summary?.lowStockItems || 0}
                                 </h3>
                                 <p className="text-muted small mb-0">Low Stock Items</p>
@@ -1058,46 +1063,25 @@ const Reports = () => {
                           </Col>
                         </Row>
                         
-                        {inventoryData.inventory.length > 0 && (
-                          <div className="mt-4">
-                            <h6 className="mb-3">Category Distribution</h6>
-                            <div style={{ height: 300 }}>
-                              <Pie
-                                data={getInventoryCategoryData()}
-                                options={{
-                                  responsive: true,
-                                  maintainAspectRatio: false,
-                                  plugins: {
-                                    legend: {
-                                      position: 'right',
-                                      labels: {
-                                        boxWidth: 15,
-                                        font: { size: 11 }
-                                      }
-                                    },
-                                  },
-                                }}
-                              />
-                            </div>
-                          </div>
-                        )}
+                       
                       </Card.Body>
                     </Card>
                   </Col>
                   
                   <Col lg={7}>
-                    <Card>
-                      <Card.Body>
-                        <h5 className="card-title mb-3">Inventory Details</h5>
+                    <Card className="border-0 shadow-sm">
+                      <Card.Body className="p-4">
+                        <h5 className="card-title fw-bold text-primary mb-3">
+                          <FileEarmarkText className="me-2 mb-1" /> Inventory Details
+                        </h5>
                         <hr className="mb-4" />
                         
-                        <div style={{ maxHeight: 600, overflowY: 'auto' }}>
-                          <Table hover size="sm" responsive>
-                            <thead className="sticky-top bg-white">
+                        <div style={{ maxHeight: 600, overflowY: 'auto' }} className="custom-scrollbar">
+                          <Table hover size="sm" responsive className="table-striped">
+                            <thead className="sticky-top bg-white text-primary">
                               <tr>
                                 <th>Product</th>
                                 <th>Barcode</th>
-                                <th>Category</th>
                                 <th className="text-end">Stock</th>
                                 <th className="text-end">Reorder Level</th>
                                 <th className="text-end">Value</th>
@@ -1108,10 +1092,9 @@ const Reports = () => {
                               {inventoryData.inventory.length > 0 ? (
                                 inventoryData.inventory.map((item, index) => (
                                   <tr key={index}>
-                                    <td>{item.name}</td>
-                                    <td>{item.barcode}</td>
-                                    <td>{item.category}</td>
-                                    <td className="text-end">{item.quantity}</td>
+                                    <td className="fw-semibold">{item.name}</td>
+                                    <td>{item.barcode || 'N/A'}</td>
+                                      <td className="text-end">{item.quantity}</td>
                                     <td className="text-end">{item.reorderLevel}</td>
                                     <td className="text-end">Rs. {item.value}</td>
                                     <td>
@@ -1123,8 +1106,8 @@ const Reports = () => {
                                 ))
                               ) : (
                                 <tr>
-                                  <td colSpan={7} className="text-center">
-                                    No data available
+                                  <td colSpan={7} className="text-center py-3">
+                                    <p className="text-muted mb-0">No data available</p>
                                   </td>
                                 </tr>
                               )}
@@ -1142,7 +1125,7 @@ const Reports = () => {
       </Card>
       
       {/* Error and Success Messages */}
-      <ToastContainer position="bottom-center" className="p-3">
+      <ToastContainer position="bottom-end" className="p-3">
         {error && (
           <Toast 
             onClose={() => setError(null)} 
@@ -1150,6 +1133,7 @@ const Reports = () => {
             delay={6000} 
             autohide 
             bg="danger"
+            className="shadow"
           >
             <Toast.Header closeButton>
               <strong className="me-auto">Error</strong>
@@ -1165,6 +1149,7 @@ const Reports = () => {
             delay={6000} 
             autohide 
             bg="success"
+            className="shadow"
           >
             <Toast.Header closeButton>
               <strong className="me-auto">Success</strong>
@@ -1173,6 +1158,32 @@ const Reports = () => {
           </Toast>
         )}
       </ToastContainer>
+
+      {/* Add CSS for custom scrollbar */}
+      <style>{`
+        .custom-scrollbar::-webkit-scrollbar {
+          width: 8px;
+          height: 8px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-track {
+          background: #f1f1f1;
+          border-radius: 4px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+          background: #c1c1c1;
+          border-radius: 4px;
+        }
+        
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+          background: #a8a8a8;
+        }
+        
+        .table-striped > tbody > tr:nth-of-type(odd) {
+          background-color: rgba(0, 0, 0, 0.02);
+        }
+      `}</style>
     </Container>
   );
 };

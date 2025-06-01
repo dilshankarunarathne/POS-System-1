@@ -306,7 +306,7 @@ export const reportsApi = {
     return api.get('/reports/inventory/status', { params });
   },
   
-  // Fix this function - ensure it's properly defined and exported
+  // Fix the generateSalesReport function - correctly implement it
   generateSalesReport: (params: { 
     startDate?: string; 
     endDate?: string;

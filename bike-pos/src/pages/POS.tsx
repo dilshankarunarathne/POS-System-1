@@ -143,7 +143,7 @@ const POS: React.FC = () => {
   const [manualItemName, setManualItemName] = useState('');
   const [manualItemPrice, setManualItemPrice] = useState('');
   const [manualItemQuantity, setManualItemQuantity] = useState('1');
-
+  
   // Load products on mount
   useEffect(() => {
     const fetchProducts = async () => {
@@ -705,6 +705,14 @@ const POS: React.FC = () => {
               .item-row td {
                 font-size: 12px;
                 padding: 2px 0;
+                vertical-align: top; /* Align to top for multi-line text */
+              }
+              .item-name {
+                word-wrap: break-word; /* Allow long words to break */
+                word-break: break-word; /* Break words that are too long */
+                white-space: normal; /* Allow text to wrap */
+                max-width: 35mm; /* Set maximum width */
+                padding-right: 4px; /* Add some spacing from price */
               }
               .summary-row {
                 display: flex;
@@ -720,12 +728,6 @@ const POS: React.FC = () => {
               .store-info {
                 font-size: 10px;
                 margin-top: 10px;
-              }
-              .truncate {
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                max-width: 35mm; /* XP-365B specific width adjustment */
               }
               /* Add extra space at the bottom for printer cutting */
               .paper-cut-space {
@@ -770,7 +772,7 @@ const POS: React.FC = () => {
                 <tbody>
                   ${safeItems.map(item => `
                     <tr class="item-row">
-                      <td class="truncate">${item.name}</td>
+                      <td class="item-name">${item.name}</td>
                       <td style="text-align: center;">${item.quantity}</td>
                       <td style="text-align: right;">${item.price.toFixed(2)}</td>
                       <td style="text-align: right;">${item.total.toFixed(2)}</td>
@@ -929,77 +931,90 @@ const POS: React.FC = () => {
     setSuccessMessage('Manual item added to cart');
   };
 
-  // Render product grid
+  // Render product grid - updated to use table view with proper height
   const renderProductGrid = () => {
     const productsToRender = filteredProducts || [];
     
     return (
-      <div className="w-100">
+      <div className="w-100 h-100"> {/* Added h-100 for full height */}
         {loadingProducts ? (
-          <div className="d-flex justify-content-center my-5">
+          <div className="d-flex justify-content-center align-items-center h-100">
             <Spinner animation="border" role="status">
               <span className="visually-hidden">Loading...</span>
             </Spinner>
           </div>
         ) : productsToRender.length === 0 ? (
-          <div className="text-center my-5">
+          <div className="text-center d-flex justify-content-center align-items-center h-100">
             <p className="text-muted">No products found. Try a different search.</p>
           </div>
         ) : (
-          <div className="product-grid">
-            <Row xs={1} md={2} xl={3} className="g-3">
-              {productsToRender.map(product => (
-                <Col key={product.id}>
-                  <Card 
-                    className={`h-100 product-card ${product.stockQuantity <= 0 ? 'bg-light' : ''}`}
-                    style={{ transition: 'all 0.2s ease' }}
-                  >
-                    <Card.Body className="d-flex flex-column">
-                      <div className="d-flex justify-content-between align-items-start mb-2">
-                        <Card.Title className="mb-0 fs-6 text-truncate" style={{ maxWidth: '80%' }}>
+          <div className="table-responsive h-100">
+            <table className="table table-hover mb-0">
+              <thead className="table-light sticky-top">
+                <tr>
+                  <th scope="col">Name</th>
+                  <th scope="col">Price</th>
+                  <th scope="col" className="text-center">Stock</th>
+                  <th scope="col" className="text-end">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {productsToRender.map(product => (
+                  <tr key={product.id} className={product.stockQuantity <= 0 ? 'table-secondary' : ''}>
+                    <td>
+                      <div className="d-flex flex-column">
+                        <span className="fw-medium text-truncate" 
+                          style={{ maxWidth: '200px' }} 
+                          title={product.name}>
                           {product.name}
-                        </Card.Title>
-                        <Badge bg={product.stockQuantity > 10 ? "success" : 
+                        </span>
+                        {product.description && (
+                          <small className="text-muted text-truncate" 
+                            style={{ maxWidth: '250px' }}
+                            title={product.description}>
+                            {product.description}
+                          </small>
+                        )}
+                      </div>
+                    </td>
+                    <td className="fw-bold">Rs. {product.price.toFixed(2)}</td>
+                    <td className="text-center">
+                      <Badge bg={product.stockQuantity > 10 ? "success" : 
                                 product.stockQuantity > 0 ? "warning" : "danger"}
-                               className="rounded-pill px-2">
-                          {product.stockQuantity}
-                        </Badge>
-                      </div>
-                      <Card.Text className="text-muted small mb-2 flex-grow-1" style={{ fontSize: '0.85rem' }}>
-                        {product.description || 'No description'}
-                      </Card.Text>
-                      <div className="d-flex justify-content-between align-items-center mt-auto">
-                        <span className="fw-bold">Rs. {product.price.toFixed(2)}</span>
-                        <Button
-                          variant={product.stockQuantity <= 0 ? "outline-secondary" : "primary"}
-                          size="sm"
-                          disabled={product.stockQuantity <= 0}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            e.nativeEvent.stopImmediatePropagation();
-                            if (product.stockQuantity > 0) {
-                              addToCart(product);
-                            } else {
-                              setError('Product is out of stock.');
-                            }
-                          }}
-                          className="rounded-pill d-flex align-items-center"
-                        >
-                          <>{BsPlus({ size: 16, className: "me-1" })}</>Add
-                        </Button>
-                      </div>
-                    </Card.Body>
-                  </Card>
-                </Col>
-              ))}
-            </Row>
+                             className="rounded-pill px-2">
+                        {product.stockQuantity}
+                      </Badge>
+                    </td>
+                    <td className="text-end">
+                      <Button
+                        variant={product.stockQuantity <= 0 ? "outline-secondary" : "primary"}
+                        size="sm"
+                        disabled={product.stockQuantity <= 0}
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          e.nativeEvent.stopImmediatePropagation();
+                          if (product.stockQuantity > 0) {
+                            addToCart(product);
+                          } else {
+                            setError('Product is out of stock.');
+                          }
+                        }}
+                        className="rounded-pill d-flex align-items-center ms-auto"
+                      >
+                        <>{BsPlus({ size: 16, className: "me-1" })}</>Add
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
     );
   };
-  
+
   // Render cart items
   const renderCartItems = () => {
     return (
@@ -1029,7 +1044,7 @@ const POS: React.FC = () => {
                   </h6>
                   <div className="d-flex justify-content-between mt-1">
                     <small className="text-muted">
-                      Rs. {item.product ? item.product.price.toFixed(2) : item.price?.toFixed(2)} each
+                      Rs. {item.product ? item.product.price.toFixed(2) : item.price?.toFixed(2)}
                     </small>
                     <span className="fw-bold text-primary">
                       Rs. {(item.subtotal - item.discount).toFixed(2)}
@@ -1154,14 +1169,18 @@ const POS: React.FC = () => {
       </div>
     ) : null;
   };
-  
+
   return (
-    <Container fluid className="vh-100 p-0">
+    <Container fluid className="py-4 px-3 px-md-4">
+       <Col>
+                  <h4 className="fw-bold mb-0">Point of sale</h4>
+                </Col>
       <Row className="h-100 g-0">
-        {/* QR Scanner Section - Collapsed on mobile, visible on larger screens */}
-        <Col lg={3} className="d-none d-lg-block h-100 border-end bg-light">
-          <div className="d-flex flex-column h-100 p-3">
-            <h5 className="mb-3 d-flex align-items-center">
+        
+        {/* QR Scanner Section - Always visible but responsive */}
+        <Col xs={12} lg={2} className="h-auto h-lg-100 border-bottom border-lg-end border-lg-bottom-0 bg-light">
+          <div className="d-flex flex-column p-2" style={{ height: '200px', maxHeight: '200px' }}>
+            <h5 className="mb-2 d-flex align-items-center">
               <i className="bi bi-qr-code-scan me-2"></i>
               QR Scanner
               <Button 
@@ -1201,7 +1220,7 @@ const POS: React.FC = () => {
               )}
             </div>
             {scanningMessage && (
-              <div className="alert alert-info mt-3 mb-0 shadow-sm">
+              <div className="alert alert-info mt-2 mb-0 shadow-sm py-2">
                 <small>{scanningMessage}</small>
                 <button 
                   type="button" 
@@ -1215,149 +1234,142 @@ const POS: React.FC = () => {
         </Col>
 
         {/* Main Content Section */}
-        <Col xs={12} lg={9} className="h-100 d-flex flex-column bg-body-tertiary">
-          <div className="p-3 border-bottom bg-white shadow-sm d-flex justify-content-between align-items-center">
-            <h4 className="m-0 d-flex align-items-center">
-              <i className="bi bi-bag me-2"></i>
-              Point of Sale
-            </h4>
-            
-            {/* Mobile QR Button - Shows QR scanner in modal on small screens */}
-            <Button 
-              variant="outline-primary" 
-              className="d-lg-none rounded-pill"
-              onClick={() => {/* Code to open QR scanner modal */}}
-            >
-              <i className="bi bi-qr-code-scan me-1"></i>
-              Scan QR
-            </Button>
-          </div>
+        <Col xs={12} lg={10} className="h-100 d-flex flex-column bg-body-tertiary">
+          {/* Remove mobile QR button since QR scanner is always visible */}
           
-          <div className="p-3 flex-grow-1 overflow-auto">
-            <Row>
+          {/* Main content area with equal height columns */}
+          <div className="p-3 flex-grow-1 d-flex overflow-hidden">
+            <Row className="w-100 g-4 h-100">
               {/* Product Search and Grid Section */}
-              <Col lg={8} className="mb-4 mb-lg-0">
-                <Card className="shadow-sm mb-4 border-0">
-                  <Card.Body className="pb-2">
-                    <Row className="mb-3">
-                      {/* Toggle between product search and manual entry */}
-                      <Col md={6} className="mb-3 mb-md-0">
-                        <div className="btn-group w-100">
-                          <Button 
-                            variant={isManualMode ? "outline-primary" : "primary"}
-                            onClick={() => setIsManualMode(false)}
-                            className="flex-grow-1 rounded-start"
-                          >
-                            <i className="bi bi-grid me-1"></i> Products
-                          </Button>
-                          <Button 
-                            variant={isManualMode ? "primary" : "outline-primary"}
-                            onClick={() => setIsManualMode(true)}
-                            className="flex-grow-1 rounded-end"
-                          >
-                            <i className="bi bi-pencil-square me-1"></i> Manual Entry
-                          </Button>
-                        </div>
-                      </Col>
-                      
-                      {/* Product Search or Manual Entry Form */}
-                      <Col md={6}>
-                        {isManualMode ? (
-                          <Form onSubmit={handleManualItemSubmit} className="manual-entry-form">
-                            <InputGroup className="mb-2">
-                              <InputGroup.Text className="bg-white">
-                                <i className="bi bi-tag"></i>
+              <Col lg={8} className="h-100">
+                <div className="d-flex flex-column h-100"> {/* Wrapper div for flex column */}
+                  <Card className="shadow-sm mb-3 border-0"> {/* Reduced margin bottom */}
+                    <Card.Body className="pb-2">
+                      <Row className="mb-3">
+                        {/* Toggle between product search and manual entry */}
+                        <Col md={6} className="mb-3 mb-md-0">
+                          <div className="btn-group w-100">
+                            <Button 
+                              variant={isManualMode ? "outline-primary" : "primary"}
+                              onClick={() => setIsManualMode(false)}
+                              className="flex-grow-1 rounded-start"
+                            >
+                              <i className="bi bi-grid me-1"></i> Products
+                            </Button>
+                            <Button 
+                              variant={isManualMode ? "primary" : "outline-primary"}
+                              onClick={() => setIsManualMode(true)}
+                              className="flex-grow-1 rounded-end"
+                            >
+                              <i className="bi bi-pencil-square me-1"></i> Manual Entry
+                            </Button>
+                          </div>
+                        </Col>
+                        
+                        {/* Product Search or Manual Entry Form */}
+                        <Col md={6}>
+                          {isManualMode ? (
+                            <Form onSubmit={handleManualItemSubmit} className="manual-entry-form">
+                              <InputGroup className="mb-2">
+                                <InputGroup.Text className="bg-white">
+                                  <i className="bi bi-tag"></i>
+                                </InputGroup.Text>
+                                <Form.Control
+                                  type="text"
+                                  placeholder="Item name"
+                                  value={manualItemName}
+                                  onChange={(e) => setManualItemName(e.target.value)}
+                                  required
+                                  className="border-start-0"
+                                />
+                              </InputGroup>
+                              <Row>
+                                <Col xs={12} sm={7} className="mb-2 mb-sm-0">
+                                  <InputGroup>
+                                    <InputGroup.Text className="bg-white">Rs.</InputGroup.Text>
+                                    <Form.Control
+                                      type="number"
+                                      step="0.01"
+                                      min="0"
+                                      placeholder="Price"
+                                      value={manualItemPrice}
+                                      onChange={(e) => setManualItemPrice(e.target.value)}
+                                      required
+                                      className="border-start-0"
+                                      style={{ height: '42px' }}
+                                    />
+                                  </InputGroup>
+                                </Col>
+                                <Col xs={12} sm={5}>
+                                  <InputGroup>
+                                    <InputGroup.Text className="bg-white">
+                                      <i className="bi bi-123"></i>
+                                    </InputGroup.Text>
+                                    <Form.Control
+                                      type="number"
+                                      min="1"
+                                      placeholder="Qty"
+                                      value={manualItemQuantity}
+                                      onChange={(e) => setManualItemQuantity(e.target.value)}
+                                      required
+                                      className="border-start-0"
+                                    />
+                                  </InputGroup>
+                                </Col>
+                              </Row>
+                              <Button type="submit" variant="success" className="w-100 rounded-pill">
+                                <>{BsPlus({ size: 16, className: "me-1" })}</>Add to Cart
+                              </Button>
+                            </Form>
+                          ) : (
+                            <InputGroup className="search-bar shadow-sm rounded">
+                              <InputGroup.Text className="bg-white border-end-0">
+                                <>{BsSearch({ size: 16 })}</>
                               </InputGroup.Text>
                               <Form.Control
                                 type="text"
-                                placeholder="Item name"
-                                value={manualItemName}
-                                onChange={(e) => setManualItemName(e.target.value)}
-                                required
+                                placeholder="Search Products"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
                                 className="border-start-0"
                               />
+                              {searchQuery && (
+                                <Button variant="outline-secondary" onClick={() => setSearchQuery('')} className="border-start-0">
+                                  <>{BsX({ size: 16 })}</>
+                                </Button>
+                              )}
                             </InputGroup>
-                            <Row>
-                              <Col xs={7}>
-                                <InputGroup className="mb-2">
-                                  <InputGroup.Text className="bg-white">Rs.</InputGroup.Text>
-                                  <Form.Control
-                                    type="number"
-                                    step="0.01"
-                                    min="0"
-                                    placeholder="Price"
-                                    value={manualItemPrice}
-                                    onChange={(e) => setManualItemPrice(e.target.value)}
-                                    required
-                                    className="border-start-0"
-                                  />
-                                </InputGroup>
-                              </Col>
-                              <Col xs={5}>
-                                <InputGroup className="mb-2">
-                                  <InputGroup.Text className="bg-white">
-                                    <i className="bi bi-123"></i>
-                                  </InputGroup.Text>
-                                  <Form.Control
-                                    type="number"
-                                    min="1"
-                                    placeholder="Qty"
-                                    value={manualItemQuantity}
-                                    onChange={(e) => setManualItemQuantity(e.target.value)}
-                                    required
-                                    className="border-start-0"
-                                  />
-                                </InputGroup>
-                              </Col>
-                            </Row>
-                            <Button type="submit" variant="success" className="w-100 rounded-pill">
-                              <>{BsPlus({ size: 16, className: "me-1" })}</>Add to Cart
-                            </Button>
-                          </Form>
-                        ) : (
-                          <InputGroup className="search-bar shadow-sm rounded">
-                            <InputGroup.Text className="bg-white border-end-0">
-                              <>{BsSearch({ size: 16 })}</>
-                            </InputGroup.Text>
-                            <Form.Control
-                              type="text"
-                              placeholder="Search Products"
-                              value={searchQuery}
-                              onChange={(e) => setSearchQuery(e.target.value)}
-                              className="border-start-0"
-                            />
-                            {searchQuery && (
-                              <Button variant="outline-secondary" onClick={() => setSearchQuery('')} className="border-start-0">
-                                <>{BsX({ size: 16 })}</>
-                              </Button>
-                            )}
-                          </InputGroup>
-                        )}
-                      </Col>
-                    </Row>
-                    
-                    <ErrorAlert />
-                    <SuccessAlert />
-                    
-                    {/* Products Grid or Manual Entry Instructions */}
-                    {!isManualMode ? renderProductGrid() : (
-                      <div className="text-center my-5 py-4 rounded bg-light">
-                        <div className="mb-3">
-                          <i className="bi bi-pencil-square fs-1 text-primary"></i>
+                          )}
+                        </Col>
+                      </Row>
+                      
+                      <ErrorAlert />
+                      <SuccessAlert />
+                    </Card.Body>
+                  </Card>
+                  
+                  {/* Products Grid with proper flex-grow */}
+                  <Card className="shadow-sm flex-grow-1 d-flex flex-column border-0 overflow-hidden">
+                    <div className="flex-grow-1 overflow-auto">
+                      {!isManualMode ? renderProductGrid() : (
+                        <div className="text-center my-5 py-4 rounded bg-light">
+                          <div className="mb-3">
+                            <i className="bi bi-pencil-square fs-1 text-primary"></i>
+                          </div>
+                          <h5>Manual Item Entry Mode</h5>
+                          <p className="text-muted mb-0">
+                            Use the form above to add custom items to your cart.<br/>
+                            These items will be included in the bill but won't affect inventory.
+                          </p>
                         </div>
-                        <h5>Manual Item Entry Mode</h5>
-                        <p className="text-muted mb-0">
-                          Use the form above to add custom items to your cart.<br/>
-                          These items will be included in the bill but won't affect inventory.
-                        </p>
-                      </div>
-                    )}
-                  </Card.Body>
-                </Card>
+                      )}
+                    </div>
+                  </Card>
+                </div>
               </Col>
 
               {/* Cart Section */}
-              <Col lg={4} className="d-flex flex-column h-100">
+              <Col lg={4} className="h-100">
                 <Card className="shadow-sm h-100 d-flex flex-column border-0">
                   <Card.Header className="bg-primary text-white py-3">
                     <h5 className="mb-0 d-flex align-items-center">
@@ -1368,9 +1380,12 @@ const POS: React.FC = () => {
                       )}
                     </h5>
                   </Card.Header>
-                  <div className="flex-grow-1 overflow-auto">
-                    {renderCartItems()}
+                  
+                  {/* Cart items with flex-grow-1 instead of hardcoded height */}
+                  <div className="overflow-auto" style={{ maxHeight: '50vh' }}>
+                    {renderCartItems()} 
                   </div>
+                  
                   <Card.Footer className="bg-white py-3">
                     {/* Cart Summary */}
                     <div className="mb-3">
@@ -1378,13 +1393,6 @@ const POS: React.FC = () => {
                         <span className="text-muted">Subtotal:</span>
                         <span>Rs. {cartSubtotal.toFixed(2)}</span>
                       </div>
-                      
-                      {cartDiscount > 0 && (
-                        <div className="d-flex justify-content-between mb-2 text-danger">
-                          <span>Item Discounts:</span>
-                          <span>-Rs. {cartDiscount.toFixed(2)}</span>
-                        </div>
-                      )}
                       
                       <div className="d-flex justify-content-between mb-2 align-items-center">
                         <span className="text-muted">Additional Discount:</span>
@@ -1407,12 +1415,12 @@ const POS: React.FC = () => {
                         </InputGroup>
                       </div>
                       
-                      {(cartDiscount > 0 || manualDiscount > 0) && (
-                        <div className="d-flex justify-content-between mb-2 text-primary">
-                          <span>Total Discount:</span>
-                          <span>-Rs. {(cartDiscount + manualDiscount).toFixed(2)}</span>
-                        </div>
-                      )}
+                      
+                      
+                      <div className="d-flex justify-content-between mb-2 text-primary">
+                        <span>Total Discount:</span>
+                        <span>-Rs. {(cartDiscount + manualDiscount).toFixed(2)}</span>
+                      </div>
                       
                       {cartTax > 0 && (
                         <div className="d-flex justify-content-between mb-2">
@@ -1427,27 +1435,59 @@ const POS: React.FC = () => {
                       </div>
                     </div>
                     
-                    {/* Cart Actions */}
-                    <div className="d-grid gap-2 d-md-flex justify-content-md-between">
+                    {/* Cart Actions - Modified for better mobile responsiveness with 3 columns */}
+                    <div className="d-flex justify-content-between gap-2">
                       <Button
                         variant="outline-danger"
-                        className="flex-fill rounded-pill"
+                        className="flex-1 rounded-pill"
                         onClick={clearCart}
                         disabled={cartItems.length === 0}
                       >
-                        <i className="bi bi-trash me-1"></i>
-                        Clear
+                        <i className="bi bi-trash d-block d-sm-none"></i>
+                        <span className="d-none d-sm-inline"><i className="bi bi-trash me-1"></i>Clear</span>
                       </Button>
+                      
+                      {/* Added third button for mobile view to show cart */}
+                      <Button
+                        variant="outline-primary"
+                        className="flex-1 rounded-pill d-block d-lg-none"
+                        onClick={() => {
+                          // Implement logic to show cart in mobile view
+                          // This could be a modal or slide-in panel
+                          // For now it's just a placeholder
+                          alert('View Cart: This would show the cart in a modal on mobile');
+                        }}
+                        disabled={cartItems.length === 0}
+                      >
+                        <i className="bi bi-eye d-block d-sm-none"></i>
+                        <span className="d-none d-sm-inline"><i className="bi bi-eye me-1"></i>View</span>
+                      </Button>
+                      
                       <Button
                         variant="success"
-                        className="flex-fill rounded-pill"
+                        className="flex-1 rounded-pill"
                         onClick={handleCheckout}
                         disabled={cartItems.length === 0}
                       >
-                        <i className="bi bi-credit-card me-1"></i>
-                        Checkout
+                        <i className="bi bi-credit-card d-block d-sm-none"></i>
+                        <span className="d-none d-sm-inline"><i className="bi bi-credit-card me-1"></i>Checkout</span>
                       </Button>
                     </div>
+
+                    {/* Add responsive styles to ensure equal-width buttons */}
+                    <style>{`
+                      .flex-1 {
+                        flex: 1;
+                        min-width: 0;
+                      }
+                      
+                      @media (max-width: 576px) {
+                        .flex-1 {
+                          padding-left: 0.5rem;
+                          padding-right: 0.5rem;
+                        }
+                      }
+                    `}</style>
                   </Card.Footer>
                 </Card>
               </Col>

@@ -14,17 +14,35 @@ const getAllUsers = async (req, res) => {
       }
       users = await User.find(filter)
         .select('-password')
-        .populate('shopId', 'name')
+        .populate('shopId', 'name address phone email')  // Fully populate shop fields
         .populate('createdBy', 'name username');
     } else {
       // Non-developers can only see users from their own shop
       users = await User.find({ shopId: req.user.shopId })
         .select('-password')
-        .populate('shopId', 'name')
+        .populate('shopId', 'name address phone email')  // Fully populate shop fields
         .populate('createdBy', 'name username');
     }
     
-    res.status(200).json(users);
+    // Transform the user data to ensure consistent shop representation
+    const transformedUsers = users.map(user => {
+      const userData = user.toObject();
+      
+      // Add shop property for frontend compatibility
+      if (userData.shopId) {
+        userData.shop = {
+          _id: userData.shopId._id,
+          name: userData.shopId.name,
+          address: userData.shopId.address,
+          phone: userData.shopId.phone,
+          email: userData.shopId.email
+        };
+      }
+      
+      return userData;
+    });
+    
+    res.status(200).json(transformedUsers);
   } catch (error) {
     console.error('Error fetching users:', error);
     res.status(500).json({ message: 'Server error fetching users' });

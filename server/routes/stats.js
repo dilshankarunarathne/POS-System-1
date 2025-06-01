@@ -7,4 +7,7 @@ const router = express.Router();
 // Developer stats route
 router.get('/developer', authenticate, developerOnly, statsController.getDeveloperStats);
 
-module.exports = router; 
+// Shop stats route (protected to admin and above)
+router.get('/shop', authenticate, statsController.getShopStats);
+
+module.exports = router;

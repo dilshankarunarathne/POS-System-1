@@ -36,6 +36,7 @@ const printRoutes = require('./routes/print');
 const userRoutes = require('./routes/users');
 const orderRoutes = require('./routes/orders');
 const shopRoutes = require('./routes/shops');
+const statsRoutes = require('./routes/stats'); // Add this line to import stats routes
 
 // Use routes
 app.use('/api/auth', authRoutes);
@@ -48,6 +49,7 @@ app.use('/api/print', printRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/shops', shopRoutes);
+app.use('/api/stats', statsRoutes); // Add this line to use stats routes
 
 // Root route
 app.get('/', (req, res) => {

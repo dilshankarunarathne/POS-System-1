@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Card, Col, Container, Row } from 'react-bootstrap';
 import { Building, People } from 'react-bootstrap-icons';
 import { useAuth } from '../contexts/AuthContext';
-import api from '../services/api';
+import { statsApi } from '../services/api'; // Using named import
 
 interface DashboardStats {
   totalShops: number;
@@ -25,7 +25,8 @@ const DeveloperDashboard: React.FC = () => {
   useEffect(() => {
     const fetchStats = async () => {
       try {
-        const response = await api.get('/stats/developer');
+        // Use the correct method without parameters
+        const response = await statsApi.getDeveloperStats();
         setStats(response.data);
       } catch (error) {
         console.error('Error fetching developer stats:', error);
@@ -160,4 +161,4 @@ const DeveloperDashboard: React.FC = () => {
   );
 };
 
-export default DeveloperDashboard; 
+export default DeveloperDashboard;

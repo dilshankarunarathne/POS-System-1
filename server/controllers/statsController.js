@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const Shop = require('../models/Shop');
+const Sale = require('../models/Sale'); // Add Sale model for additional stats
 
 // Get developer dashboard stats
 exports.getDeveloperStats = async (req, res) => {
@@ -25,15 +26,46 @@ exports.getDeveloperStats = async (req, res) => {
       cashier: await User.countDocuments({ role: 'cashier' })
     };
 
+    // Get total sales for basic stats
+    const totalSales = await Sale.countDocuments();
+    const totalRevenue = await Sale.aggregate([
+      { $match: { status: { $ne: 'cancelled' } } },
+      { $group: { _id: null, total: { $sum: "$total" } } }
+    ]);
+
     res.json({
       totalShops,
       activeShops,
       inactiveShops,
       totalUsers,
-      usersByRole
+      usersByRole,
+      totalSales,
+      totalRevenue: totalRevenue.length > 0 ? totalRevenue[0].total : 0
     });
   } catch (error) {
     console.error('Error getting developer stats:', error);
     res.status(500).json({ message: 'Server error getting stats' });
   }
-}; 
+};
+
+// Add a method for shop-specific stats that might be useful later
+exports.getShopStats = async (req, res) => {
+  try {
+    const { shopId } = req.query;
+    
+    // Verify user has access to this shop
+    if (req.user.role !== 'developer' && 
+        (!req.user.shopId || req.user.shopId.toString() !== shopId)) {
+      return res.status(403).json({ message: 'Access denied' });
+    }
+    
+    // Implement shop-specific stats here
+    
+    res.json({
+      message: 'Shop stats endpoint ready for implementation'
+    });
+  } catch (error) {
+    console.error('Error getting shop stats:', error);
+    res.status(500).json({ message: 'Server error getting shop stats' });
+  }
+};

@@ -1,5 +1,5 @@
 const Sale = require('../models/Sale');
-const Product = require('../models/Product');
+const Product = require('../models/Product');  // Make sure this exists
 const mongoose = require('mongoose');
 
 // Get sales summary report
@@ -194,7 +194,7 @@ const getDailySales = async (req, res) => {
 // Get product sales report
 const getProductSalesReport = async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
+    const { startDate, endDate, categoryId, limit = 10 } = req.query;
 
     // Default to last 30 days if no dates provided
     const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
@@ -209,6 +209,12 @@ const getProductSalesReport = async (req, res) => {
       shopId: new mongoose.Types.ObjectId(req.user.shopId._id)
     };
 
+    // Add category filter if provided
+    const categoryFilter = {};
+    if (categoryId) {
+      categoryFilter['product.category'] = new mongoose.Types.ObjectId(categoryId);
+    }
+
     // Aggregate product sales
     const productSales = await Sale.aggregate([
       {
@@ -218,70 +224,23 @@ const getProductSalesReport = async (req, res) => {
         $unwind: '$items'
       },
       {
-        $group: {
-          _id: '$items.product',
-          totalQuantity: { $sum: '$items.quantity' },
-          totalRevenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } }
-        }
-      },
-      {
         $lookup: {
           from: 'products',
-          localField: '_id',
+          localField: 'items.product',
           foreignField: '_id',
-          as: 'product'
+          as: 'productInfo'
         }
       },
       {
-        $unwind: '$product'
-      },
-      {
-        $match: {
-          'product.shopId': new mongoose.Types.ObjectId(req.user.shopId._id)
+        $unwind: {
+          path: '$productInfo',
+          preserveNullAndEmptyArrays: false // Skip items with no matching product
         }
-      },
-      {
-        $project: {
-          productName: '$product.name',
-          sku: '$product.sku',
-          totalQuantity: 1,
-          totalRevenue: 1,
-          averagePrice: { $divide: ['$totalRevenue', '$totalQuantity'] }
-        }
-      },
-      {
-        $sort: { totalQuantity: -1 }
-      }
-    ]);
-
-    res.status(200).json({
-      startDate: start,
-      endDate: end,
-      products: productSales
-    });
-  } catch (error) {
-    console.error('Error generating product sales report:', error);
-    res.status(500).json({ message: 'Server error generating report' });
-  }
-};
-
-// Get inventory status report
-const getInventoryStatusReport = async (req, res) => {
-  try {
-    // Match condition with shop filter
-    const matchCondition = { 
-      shopId: new mongoose.Types.ObjectId(req.user.shopId._id)
-    };
-
-    // Get inventory status
-    const inventoryStatus = await Product.aggregate([
-      {
-        $match: matchCondition
       },
       {
         $lookup: {
           from: 'categories',
-          localField: 'category',
+          localField: 'productInfo.category',
           foreignField: '_id',
           as: 'categoryInfo'
         }
@@ -292,77 +251,851 @@ const getInventoryStatusReport = async (req, res) => {
           preserveNullAndEmptyArrays: true
         }
       },
+      // Apply category filter if provided
+      ...(categoryId ? [{ $match: categoryFilter }] : []),
       {
         $group: {
-          _id: '$categoryInfo.name',
-          totalProducts: { $sum: 1 },
-          totalValue: { $sum: { $multiply: ['$price', '$quantity'] } },
-          lowStock: {
-            $sum: {
-              $cond: [
-                { $lte: ['$quantity', '$reorderLevel'] },
-                1,
-                0
-              ]
-            }
-          },
-          outOfStock: {
-            $sum: {
-              $cond: [
-                { $eq: ['$quantity', 0] },
-                1,
-                0
-              ]
-            }
+          _id: '$productInfo._id',
+          name: { $first: '$productInfo.name' },
+          category: { $first: { $ifNull: ['$categoryInfo.name', 'Uncategorized'] } },
+          quantitySold: { $sum: '$items.quantity' },
+          totalRevenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } },
+          // Calculate profit based on cost price and selling price
+          profit: { 
+            $sum: { 
+              $multiply: [
+                { $subtract: ['$items.price', { $ifNull: ['$productInfo.cost', 0] }] },
+                '$items.quantity'
+              ] 
+            } 
           }
         }
       },
       {
         $project: {
-          category: { $ifNull: ['$_id', 'Uncategorized'] },
-          totalProducts: 1,
-          totalValue: { $round: ['$totalValue', 2] },
-          lowStock: 1,
-          outOfStock: 1,
-          _id: 0
+          _id: 0,
+          name: 1,
+          category: 1,
+          quantitySold: 1,
+          totalRevenue: { $round: ['$totalRevenue', 2] },
+          profit: { $round: ['$profit', 2] },
+          profitMargin: { 
+            $concat: [
+              { 
+                $toString: { 
+                  $round: [
+                    { 
+                      $multiply: [
+                        { 
+                          $cond: [
+                            { $eq: ['$totalRevenue', 0] },
+                            0,
+                            { $divide: ['$profit', '$totalRevenue'] }
+                          ]
+                        }, 
+                        100
+                      ] 
+                    },
+                    1
+                  ] 
+                } 
+              },
+              '%'
+            ]
+          }
         }
       },
       {
-        $sort: { totalProducts: -1 }
+        $sort: { totalRevenue: -1 }
+      },
+      {
+        $limit: parseInt(limit)
       }
     ]);
 
-    res.status(200).json({
-      categories: inventoryStatus,
-      summary: {
-        totalCategories: inventoryStatus.length,
-        totalProducts: inventoryStatus.reduce((sum, cat) => sum + cat.totalProducts, 0),
-        totalValue: inventoryStatus.reduce((sum, cat) => sum + cat.totalValue, 0),
-        lowStockItems: inventoryStatus.reduce((sum, cat) => sum + cat.lowStock, 0),
-        outOfStockItems: inventoryStatus.reduce((sum, cat) => sum + cat.outOfStock, 0)
-      }
-    });
+    // Return the array directly instead of wrapping in an object
+    res.status(200).json(productSales);
+    
   } catch (error) {
-    console.error('Error generating inventory report:', error);
+    console.error('Error generating product sales report:', error);
     res.status(500).json({ message: 'Server error generating report' });
   }
 };
 
-// Generate PDF sales report - stub function
-const generateSalesReport = async (req, res) => {
+// Get profit distribution report
+const getProfitDistribution = async (req, res) => {
   try {
-    // In a real implementation, you would:
-    // 1. Generate the data similar to getSalesSummary
-    // 2. Use a PDF library like PDFKit to create a PDF
-    // 3. Stream the PDF to the response
+    const { startDate, endDate, groupBy = 'day' } = req.query;
+
+    // Default to last 30 days if no dates provided
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const end = endDate ? new Date(endDate) : new Date();
     
-    res.status(200).json({ 
-      message: 'PDF report functionality will be implemented here',
-      note: 'This would generate and return a PDF in a complete implementation'
+    // Set end date to end of day
+    end.setHours(23, 59, 59, 999);
+
+    // Format for aggregation
+    start.setHours(0, 0, 0, 0);
+
+    // Base match condition with shop filter
+    const matchCondition = { 
+      createdAt: { $gte: start, $lte: end },
+      status: { $ne: 'cancelled' }, // Exclude cancelled sales
+      shopId: new mongoose.Types.ObjectId(req.user.shopId._id)
+    };
+
+    // Define grouping based on groupBy parameter
+    let dateFormat;
+    if (groupBy === 'day') {
+      dateFormat = '%Y-%m-%d';
+    } else if (groupBy === 'week') {
+      dateFormat = '%G-%V'; // ISO year and week
+    } else if (groupBy === 'month') {
+      dateFormat = '%Y-%m';
+    }
+
+    // Aggregate profit data
+    const profitDistribution = await Sale.aggregate([
+      {
+        $match: matchCondition
+      },
+      {
+        $unwind: '$items'
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'items.product',
+          foreignField: '_id',
+          as: 'productInfo'
+        }
+      },
+      {
+        $unwind: {
+          path: '$productInfo',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $addFields: {
+          date: { 
+            $dateToString: { format: dateFormat, date: "$createdAt" } 
+          },
+          itemCost: {
+            $multiply: [
+              { $ifNull: ['$productInfo.cost', 0] },
+              '$items.quantity'
+            ]
+          },
+          itemRevenue: {
+            $multiply: ['$items.price', '$items.quantity']
+          }
+        }
+      },
+      {
+        $group: {
+          _id: "$date",
+          total: { $sum: "$itemRevenue" },
+          cost: { $sum: "$itemCost" },
+          salesCount: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { _id: 1 } // Sort by date
+      },
+      {
+        $project: {
+          _id: 0,
+          date: "$_id",
+          total: { $round: ["$total", 2] },
+          cost: { $round: ["$cost", 2] },
+          profit: { $round: [{ $subtract: ["$total", "$cost"] }, 2] },
+          profitMargin: {
+            $concat: [
+              { 
+                $toString: { 
+                  $round: [
+                    { 
+                      $multiply: [
+                        { 
+                          $cond: [
+                            { $eq: ['$total', 0] },
+                            0,
+                            { $divide: [{ $subtract: ["$total", "$cost"] }, '$total'] }
+                          ]
+                        }, 
+                        100
+                      ] 
+                    },
+                    1
+                  ] 
+                } 
+              },
+              '%'
+            ]
+          }
+        }
+      }
+    ]);
+
+    // Calculate overall totals
+    const totalStats = await Sale.aggregate([
+      {
+        $match: matchCondition
+      },
+      {
+        $unwind: '$items'
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'items.product',
+          foreignField: '_id',
+          as: 'productInfo'
+        }
+      },
+      {
+        $unwind: {
+          path: '$productInfo',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: { $multiply: ['$items.price', '$items.quantity'] } },
+          cost: { $sum: { $multiply: [{ $ifNull: ['$productInfo.cost', 0] }, '$items.quantity'] } },
+          salesCount: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          total: { $round: ["$total", 2] },
+          cost: { $round: ["$cost", 2] },
+          profit: { $round: [{ $subtract: ["$total", "$cost"] }, 2] },
+          profitMargin: {
+            $concat: [
+              { 
+                $toString: { 
+                  $round: [
+                    { 
+                      $multiply: [
+                        { 
+                          $cond: [
+                            { $eq: ['$total', 0] },
+                            0,
+                            { $divide: [{ $subtract: ["$total", "$cost"] }, '$total'] }
+                          ]
+                        }, 
+                        100
+                      ] 
+                    },
+                    1
+                  ] 
+                } 
+              },
+              '%'
+            ]
+          }
+        }
+      }
+    ]);
+
+    res.status(200).json({
+      startDate: start,
+      endDate: end,
+      summary: profitDistribution,
+      totals: totalStats.length > 0 ? totalStats[0] : {
+        total: 0,
+        cost: 0,
+        profit: 0,
+        profitMargin: '0%'
+      }
     });
   } catch (error) {
+    console.error('Error generating profit distribution:', error);
+    res.status(500).json({ message: 'Server error generating profit report', error: error.message });
+  }
+};
+
+// Get inventory status report - make sure this function is correctly exported
+const getInventoryStatusReport = async (req, res) => {
+  try {
+    const { lowStock, categoryId } = req.query;
+    const shopId = req.query.shopId || req.user.shopId;
+
+    if (!shopId) {
+      return res.status(400).json({ message: 'Shop ID is required' });
+    }
+
+    // Build filter condition
+    const filter = { shopId: new mongoose.Types.ObjectId(shopId) };
+    
+    // Add category filter if provided
+    if (categoryId) {
+      filter.category = new mongoose.Types.ObjectId(categoryId);
+    }
+    
+    // Add low stock filter if requested
+    if (lowStock === 'true') {
+      filter.$expr = { $lte: ["$quantity", "$reorderLevel"] };
+    }
+    
+    const products = await Product.find(filter)
+      .populate('category', 'name')
+      .lean();
+    
+    // Transform products for the report
+    const inventoryItems = products.map(product => ({
+      name: product.name,
+      category: product.category ? product.category.name : 'Uncategorized',
+      quantity: product.quantity || 0,
+      reorderLevel: product.reorderLevel || 10,
+      value: ((product.cost || 0) * (product.quantity || 0)).toFixed(2),
+      barcode: product.barcode || product.sku || ''
+    }));
+    
+    // Calculate summary statistics
+    const summary = {
+      totalProducts: inventoryItems.length,
+      totalItems: inventoryItems.reduce((sum, item) => sum + item.quantity, 0),
+      totalValue: inventoryItems.reduce((sum, item) => sum + parseFloat(item.value), 0).toFixed(2),
+      lowStockItems: inventoryItems.filter(item => item.quantity <= item.reorderLevel).length
+    };
+    
+    res.status(200).json({
+      inventory: inventoryItems,
+      summary
+    });
+    
+  } catch (error) {
+    console.error('Error generating inventory status report:', error);
+    res.status(500).json({ message: 'Server error generating report' });
+  }
+};
+
+const generateSalesReport = async (req, res) => {
+  try {
+    console.log('Generate sales report endpoint called with query:', req.query);
+    
+    const { startDate, endDate } = req.query;
+    const shopId = req.user.shopId._id;
+    
+    console.log('Starting report generation with params:', { startDate, endDate, shopId });
+
+    // Default to last 30 days if no dates provided
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const end = endDate ? new Date(endDate) : new Date();
+    
+    // Set end date to end of day
+    end.setHours(23, 59, 59, 999);
+    start.setHours(0, 0, 0, 0);
+
+    // Get shop information for the report header
+    const shop = req.user.shopId;
+
+    // Base match condition with shop filter
+    const matchCondition = { 
+      createdAt: { $gte: start, $lte: end },
+      status: { $ne: 'cancelled' },
+      shopId: new mongoose.Types.ObjectId(shopId)
+    };
+
+    console.log('Fetching sales data with matchCondition:', matchCondition);
+    
+    // Get sales summary data
+    const dailySalesAggregation = await Sale.aggregate([
+      { $match: matchCondition },
+      {
+        $addFields: {
+          saleDate: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } }
+        }
+      },
+      {
+        $group: {
+          _id: "$saleDate",
+          total: { $sum: "$total" },
+          salesCount: { $sum: 1 },
+          itemCount: { $sum: { $size: "$items" } }
+        }
+      },
+      { $sort: { _id: 1 } },
+      {
+        $project: {
+          _id: 0,
+          date: "$_id",
+          total: { $round: ["$total", 2] },
+          salesCount: 1,
+          itemCount: 1
+        }
+      }
+    ]);
+
+    console.log(`Found ${dailySalesAggregation.length} daily sales records`);
+
+    // Get total sales within period
+    const totalStats = await Sale.aggregate([
+      { $match: matchCondition },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$total" },
+          subtotal: { $sum: "$subtotal" },
+          tax: { $sum: "$tax" },
+          discount: { $sum: "$discount" },
+          totalSales: { $sum: 1 },
+          totalItems: { $sum: { $size: "$items" } }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          total: { $round: ["$total", 2] },
+          subtotal: { $round: ["$subtotal", 2] },
+          tax: { $round: ["$tax", 2] },
+          discount: { $round: ["$discount", 2] },
+          totalSales: 1,
+          totalItems: 1,
+          averageSale: { $round: [{ $divide: ["$total", { $cond: [{ $eq: ["$totalSales", 0] }, 1, "$totalSales"] }] }, 2] }
+        }
+      }
+    ]);
+
+    // Get payment method statistics
+    const paymentMethodStats = await Sale.aggregate([
+      { $match: matchCondition },
+      {
+        $group: {
+          _id: "$paymentMethod",
+          total: { $sum: "$total" },
+          count: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          method: "$_id",
+          total: { $round: ["$total", 2] },
+          count: 1
+        }
+      }
+    ]);
+
+    // Get top selling products
+    const topProducts = await Sale.aggregate([
+      { $match: matchCondition },
+      { $unwind: '$items' },
+      {
+        $group: {
+          _id: '$items.product',
+          name: { $first: '$items.name' },
+          quantity: { $sum: '$items.quantity' },
+          revenue: { $sum: { $multiply: ['$items.price', '$items.quantity'] } }
+        }
+      },
+      { $sort: { quantity: -1 } },
+      { $limit: 10 },
+      {
+        $project: {
+          _id: 0,
+          name: 1,
+          quantity: 1,
+          revenue: { $round: ["$revenue", 2] }
+        }
+      }
+    ]);
+
+    // Create a unique filename for the report
+    const timestamp = new Date().getTime();
+    const filename = `sales_report_${timestamp}.pdf`;
+    
+    try {
+      // Initialize PDFKit
+      const PDFDocument = require('pdfkit');
+      console.log('PDFKit loaded successfully');
+      
+      const doc = new PDFDocument({ margin: 50 });
+      console.log('PDF document created');
+      
+      // Set response headers for direct download
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename=${filename}`);
+      
+      // Pipe the PDF directly to the response
+      doc.pipe(res);
+
+      // Add report header
+      doc.fontSize(20).text('Sales Report', { align: 'center' });
+      doc.moveDown();
+      doc.fontSize(12).text(`${shop.name}`, { align: 'center' });
+      doc.fontSize(10).text(`Report generated on: ${new Date().toLocaleString()}`, { align: 'center' });
+      doc.fontSize(10).text(`Period: ${start.toLocaleDateString()} to ${end.toLocaleDateString()}`, { align: 'center' });
+      doc.moveDown(2);
+
+      // Add summary section
+      const totals = totalStats.length > 0 ? totalStats[0] : {
+        total: 0,
+        subtotal: 0,
+        tax: 0,
+        discount: 0,
+        totalSales: 0,
+        totalItems: 0,
+        averageSale: 0
+      };
+
+      doc.fontSize(14).text('Summary', { underline: true });
+      doc.moveDown(0.5);
+      
+      // Summary table
+      doc.fontSize(10);
+      
+      // Draw summary table
+      doc.text('Total Revenue:', 50, doc.y);
+      doc.text(`Rs. ${totals.total.toFixed(2)}`, 200, doc.y);
+      doc.moveDown(0.5);
+      
+      doc.text('Total Sales:', 50, doc.y);
+      doc.text(`${totals.totalSales}`, 200, doc.y);
+      doc.moveDown(0.5);
+      
+      doc.text('Total Items:', 50, doc.y);
+      doc.text(`${totals.totalItems}`, 200, doc.y);
+      doc.moveDown(0.5);
+      
+      doc.text('Average Sale:', 50, doc.y);
+      doc.text(`Rs. ${totals.averageSale.toFixed(2)}`, 200, doc.y);
+      doc.moveDown(0.5);
+      
+      doc.text('Subtotal:', 50, doc.y);
+      doc.text(`Rs. ${totals.subtotal.toFixed(2)}`, 200, doc.y);
+      doc.moveDown(0.5);
+      
+      doc.text('Tax:', 50, doc.y);
+      doc.text(`Rs. ${totals.tax.toFixed(2)}`, 200, doc.y);
+      doc.moveDown(0.5);
+      
+      doc.text('Discount:', 50, doc.y);
+      doc.text(`Rs. ${totals.discount.toFixed(2)}`, 200, doc.y);
+      doc.moveDown(2);
+
+      // Payment methods section
+      doc.fontSize(14).text('Payment Methods', { underline: true });
+      doc.moveDown(0.5);
+      
+      if (paymentMethodStats.length > 0) {
+        // Headers
+        doc.fontSize(10);
+        doc.text('Method', 50, doc.y, { width: 100 });
+        doc.text('Count', 150, doc.y, { width: 100 });
+        doc.text('Total', 250, doc.y, { width: 100 });
+        doc.moveDown(0.5);
+        
+        // Data rows
+        paymentMethodStats.forEach((method) => {
+          doc.text(method.method || 'Unknown', 50, doc.y, { width: 100 });
+          doc.text(method.count.toString(), 150, doc.y, { width: 100 });
+          doc.text(`Rs. ${method.total.toFixed(2)}`, 250, doc.y, { width: 100 });
+          doc.moveDown(0.5);
+        });
+      } else {
+        doc.text('No payment method data available');
+      }
+      doc.moveDown(2);
+
+      // Daily sales section
+      doc.fontSize(14).text('Daily Sales', { underline: true });
+      doc.moveDown(0.5);
+      
+      if (dailySalesAggregation.length > 0) {
+        // Headers
+        doc.fontSize(10);
+        doc.text('Date', 50, doc.y, { width: 100 });
+        doc.text('Sales Count', 150, doc.y, { width: 100 });
+        doc.text('Items', 250, doc.y, { width: 100 });
+        doc.text('Total', 350, doc.y, { width: 100 });
+        doc.moveDown(0.5);
+        
+        // Data rows
+        dailySalesAggregation.forEach((day) => {
+          doc.text(new Date(day.date).toLocaleDateString(), 50, doc.y, { width: 100 });
+          doc.text(day.salesCount.toString(), 150, doc.y, { width: 100 });
+          doc.text(day.itemCount.toString(), 250, doc.y, { width: 100 });
+          doc.text(`Rs. ${day.total.toFixed(2)}`, 350, doc.y, { width: 100 });
+          doc.moveDown(0.5);
+        });
+      } else {
+        doc.text('No daily sales data available');
+      }
+      doc.moveDown(2);
+
+      // Top products section
+      if (doc.y > 650) doc.addPage(); // Add page if needed
+      
+      doc.fontSize(14).text('Top Selling Products', { underline: true });
+      doc.moveDown(0.5);
+      
+      if (topProducts.length > 0) {
+        // Headers
+        doc.fontSize(10);
+        doc.text('Product', 50, doc.y, { width: 200 });
+        doc.text('Quantity', 250, doc.y, { width: 100 });
+        doc.text('Revenue', 350, doc.y, { width: 100 });
+        doc.moveDown(0.5);
+        
+        // Data rows
+        topProducts.forEach((product) => {
+          doc.text(product.name, 50, doc.y, { width: 200 });
+          doc.text(product.quantity.toString(), 250, doc.y, { width: 100 });
+          doc.text(`Rs. ${product.revenue.toFixed(2)}`, 350, doc.y, { width: 100 });
+          doc.moveDown(0.5);
+        });
+      } else {
+        doc.text('No product data available');
+      }
+
+      // Finalize the PDF
+      doc.end();
+      console.log('PDF document finalized and sent to client');
+      
+    } catch (pdfError) {
+      console.error('Error creating PDF:', pdfError);
+      return res.status(500).json({ 
+        success: false,
+        message: 'Error creating PDF report', 
+        error: pdfError.message 
+      });
+    }
+
+  } catch (error) {
     console.error('Error generating PDF report:', error);
-    res.status(500).json({ message: 'Server error generating PDF report' });
+    // Only send error if headers haven't been sent yet
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        success: false, 
+        message: 'Server error generating PDF report', 
+        error: error.toString() 
+      });
+    }
+  }
+};
+
+// Add new controller method for profit distribution report (detailed version)
+const getProfitDistributionDetailed = async (req, res) => {
+  try {
+    const { startDate, endDate, groupBy = 'day' } = req.query;
+
+    // Default to last 30 days if no dates provided
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const end = endDate ? new Date(endDate) : new Date();
+    
+    // Set end date to end of day
+    end.setHours(23, 59, 59, 999);
+
+    // Format for aggregation
+    start.setHours(0, 0, 0, 0);
+
+    // Base match condition with shop filter
+    const matchCondition = { 
+      createdAt: { $gte: start, $lte: end },
+      status: { $ne: 'cancelled' }, // Exclude cancelled sales
+      shopId: new mongoose.Types.ObjectId(req.user.shopId._id)
+    };
+
+    // Get the time grouping format based on the groupBy parameter
+    let dateFormat;
+    let dateGrouping;
+    
+    switch(groupBy) {
+      case 'week':
+        dateFormat = "%Y-%U"; // Year-Week format
+        dateGrouping = { $week: "$createdAt" };
+        break;
+      case 'month':
+        dateFormat = "%Y-%m"; // Year-Month format
+        dateGrouping = { $month: "$createdAt" };
+        break;
+      case 'day':
+      default:
+        dateFormat = "%Y-%m-%d"; // Year-Month-Day format
+        dateGrouping = { $dayOfMonth: "$createdAt" };
+    }
+
+    // Aggregate profit data by the specified time period
+    const profitAggregation = await Sale.aggregate([
+      {
+        $match: matchCondition
+      },
+      {
+        $unwind: '$items'
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'items.product',
+          foreignField: '_id',
+          as: 'productInfo'
+        }
+      },
+      {
+        $unwind: {
+          path: '$productInfo',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $addFields: {
+          // Create date field for grouping
+          periodDate: { 
+            $dateToString: { format: dateFormat, date: "$createdAt" } 
+          },
+          // Calculate item cost - use 0 if product not found or cost not set
+          itemCost: {
+            $multiply: [
+              { $ifNull: ["$productInfo.cost", 0] },
+              "$items.quantity"
+            ]
+          },
+          // Calculate item revenue
+          itemRevenue: {
+            $multiply: ["$items.price", "$items.quantity"]
+          }
+        }
+      },
+      {
+        $group: {
+          _id: "$periodDate",
+          date: { $first: "$createdAt" }, // Keep a date for sorting and formatting
+          total: { $sum: "$itemRevenue" },
+          cost: { $sum: "$itemCost" },
+          salesCount: { $sum: 1 }
+        }
+      },
+      {
+        $addFields: {
+          profit: { $subtract: ["$total", "$cost"] },
+          profitMargin: {
+            $concat: [
+              { 
+                $toString: { 
+                  $round: [
+                    { 
+                      $multiply: [
+                        { 
+                          $cond: [
+                            { $eq: ["$total", 0] },
+                            0,
+                            { $divide: ["$profit", "$total"] }
+                          ]
+                        }, 
+                        100
+                      ] 
+                    },
+                    1
+                  ] 
+                } 
+              },
+              "%"
+            ]
+          }
+        }
+      },
+      {
+        $sort: { date: 1 } // Sort by date
+      },
+      {
+        $project: {
+          _id: 0,
+          date: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+          total: { $round: ["$total", 2] },
+          cost: { $round: ["$cost", 2] },
+          profit: { $round: ["$profit", 2] },
+          profitMargin: 1,
+          salesCount: 1
+        }
+      }
+    ]);
+
+    // Get total profit statistics
+    const totalStats = await Sale.aggregate([
+      {
+        $match: matchCondition
+      },
+      {
+        $unwind: '$items'
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'items.product',
+          foreignField: '_id',
+          as: 'productInfo'
+        }
+      },
+      {
+        $unwind: {
+          path: '$productInfo',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: { $multiply: ["$items.price", "$items.quantity"] } },
+          cost: { $sum: { $multiply: [{ $ifNull: ["$productInfo.cost", 0] }, "$items.quantity"] } },
+          salesCount: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          total: { $round: ["$total", 2] },
+          cost: { $round: ["$cost", 2] },
+          profit: { $round: [{ $subtract: ["$total", "$cost"] }, 2] },
+          salesCount: 1,
+          profitMargin: {
+            $concat: [
+              { 
+                $toString: { 
+                  $round: [
+                    { 
+                      $multiply: [
+                        { 
+                          $cond: [
+                            { $eq: ["$total", 0] },
+                            0,
+                            { $divide: [{ $subtract: ["$total", "$cost"] }, "$total"] }
+                          ]
+                        }, 
+                        100
+                      ] 
+                    },
+                    1
+                  ] 
+                } 
+              },
+              "%"
+            ]
+          }
+        }
+      }
+    ]);
+
+    res.status(200).json({
+      startDate: start,
+      endDate: end,
+      summary: profitAggregation,
+      totals: totalStats.length > 0 ? totalStats[0] : {
+        total: 0,
+        cost: 0,
+        profit: 0,
+        salesCount: 0,
+        profitMargin: '0%'
+      }
+    });
+  } catch (error) {
+    console.error('Error generating profit distribution report:', error);
+    res.status(500).json({ message: 'Server error generating profit report', error: error.message });
   }
 };
 
@@ -371,5 +1104,7 @@ module.exports = {
   getProductSalesReport,
   getInventoryStatusReport,
   generateSalesReport,
-  getDailySales
+  getDailySales,
+  getProfitDistribution,  // Export the original method
+  getProfitDistributionDetailed  // Export the new method
 };

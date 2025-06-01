@@ -1436,41 +1436,26 @@ const POS: React.FC = () => {
                     </div>
                     
                     {/* Cart Actions - Modified for better mobile responsiveness with 3 columns */}
-                    <div className="d-flex justify-content-between gap-2">
+                    <div className="d-flex flex-wrap justify-content-between gap-2">
                       <Button
                         variant="outline-danger"
                         className="flex-1 rounded-pill"
                         onClick={clearCart}
                         disabled={cartItems.length === 0}
                       >
-                        <i className="bi bi-trash d-block d-sm-none"></i>
-                        <span className="d-none d-sm-inline"><i className="bi bi-trash me-1"></i>Clear</span>
+                        <i className="bi bi-trash me-1"></i>
+                        <span className="d-inline">Clear</span>
                       </Button>
                       
-                      {/* Added third button for mobile view to show cart */}
-                      <Button
-                        variant="outline-primary"
-                        className="flex-1 rounded-pill d-block d-lg-none"
-                        onClick={() => {
-                          // Implement logic to show cart in mobile view
-                          // This could be a modal or slide-in panel
-                          // For now it's just a placeholder
-                          alert('View Cart: This would show the cart in a modal on mobile');
-                        }}
-                        disabled={cartItems.length === 0}
-                      >
-                        <i className="bi bi-eye d-block d-sm-none"></i>
-                        <span className="d-none d-sm-inline"><i className="bi bi-eye me-1"></i>View</span>
-                      </Button>
-                      
+                     
                       <Button
                         variant="success"
                         className="flex-1 rounded-pill"
                         onClick={handleCheckout}
                         disabled={cartItems.length === 0}
                       >
-                        <i className="bi bi-credit-card d-block d-sm-none"></i>
-                        <span className="d-none d-sm-inline"><i className="bi bi-credit-card me-1"></i>Checkout</span>
+                        <i className="bi bi-credit-card me-1"></i>
+                        <span className="d-inline">Checkout</span>
                       </Button>
                     </div>
 
@@ -1478,13 +1463,16 @@ const POS: React.FC = () => {
                     <style>{`
                       .flex-1 {
                         flex: 1;
-                        min-width: 0;
+                        min-width: 100px;
                       }
                       
                       @media (max-width: 576px) {
                         .flex-1 {
-                          padding-left: 0.5rem;
-                          padding-right: 0.5rem;
+                          flex-basis: 100%;
+                          margin-bottom: 0.5rem;
+                        }
+                        .flex-wrap {
+                          flex-direction: column;
                         }
                       }
                     `}</style>

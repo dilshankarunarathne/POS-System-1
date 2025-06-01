@@ -357,9 +357,19 @@ const Sales: React.FC = () => {
                 text-align: left;
                 font-size: 11px;
               }
+
+
               .item-row td {
                 font-size: 12px;
                 padding: 2px 0;
+                vertical-align: top; /* Align to top for multi-line text */
+              }
+              .item-name {
+                word-wrap: break-word; /* Allow long words to break */
+                word-break: break-word; /* Break words that are too long */
+                white-space: normal; /* Allow text to wrap */
+                max-width: 35mm; /* Set maximum width */
+                padding-right: 4px; /* Add some spacing from price */
               }
               .summary-row {
                 display: flex;
@@ -376,12 +386,7 @@ const Sales: React.FC = () => {
                 font-size: 10px;
                 margin-top: 10px;
               }
-              .truncate {
-                white-space: nowrap;
-                overflow: hidden;
-                text-overflow: ellipsis;
-                max-width: 35mm; /* XP-365B specific width adjustment */
-              }
+             
               /* Add extra space at the bottom for printer cutting */
               .paper-cut-space {
                 height: 20mm;
@@ -425,7 +430,7 @@ const Sales: React.FC = () => {
                 <tbody>
                   ${receiptItems.map(item => `
                     <tr class="item-row">
-                      <td class="truncate">${item.name}</td>
+                      <td class="item-name">${item.name}</td>
                       <td style="text-align: center;">${item.quantity}</td>
                       <td style="text-align: right;">${item.price.toFixed(2)}</td>
                       <td style="text-align: right;">${item.total.toFixed(2)}</td>

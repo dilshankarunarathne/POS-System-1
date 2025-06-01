@@ -7,4 +7,4 @@ const router = express.Router();
 // Developer stats route
 router.get('/developer', authenticate, developerOnly, statsController.getDeveloperStats);
 
-module.exports = router; 
+module.exports = router;

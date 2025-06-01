@@ -6,6 +6,8 @@ const QRCode = require('qrcode');
 // const escpos = require('escpos');
 
 // Generate product labels with proper QR code implementation
+
+
 const generateProductLabels = async (req, res) => {
   try {
     const { productIds, quantity = 1 } = req.body;
@@ -27,91 +29,180 @@ const generateProductLabels = async (req, res) => {
     
     console.log(`Found ${products.length} products for label generation`);
     
-    // Create a PDF document
-    const doc = new PDFDocument({ size: 'A4', margin: 10 });
+    // Create a PDF document with custom size for 38mm x 25mm labels
+    // Converting from mm to points (1 mm = 2.83 points)
+    const labelWidthPt = 38 * 2.83;  // 38mm in points (≈107pt)
+    const labelHeightPt = 25 * 2.83; // 25mm in points (≈71pt)
+    const doc = new PDFDocument({ 
+      size: [labelWidthPt, labelHeightPt],
+      margin: 1, // Minimal margins for thermal printer
+      autoFirstPage: false // Don't create first page automatically
+    });
     
     // Set the response headers for PDF download
     res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename=product-labels-${Date.now()}.pdf`);
+    res.setHeader('Content-Disposition', `attachment; filename=thermal-labels-${Date.now()}.pdf`);
     
     // Pipe the PDF directly to the response
     doc.pipe(res);
     
-    // Set up document layout for smaller labels
-    let x = 15;
-    let y = 15;
-    const labelWidth = 100;  // Reduced width for smaller labels
-    const labelHeight = 70;  // Reduced height for smaller labels
-    const colsPerPage = 5;   // More columns due to smaller width
-    const rowsPerPage = 10;  // More rows due to smaller height
-    
-
     // Generate labels for each product
     for (const product of products) {
       for (let i = 0; i < quantity; i++) {
-        // Check if we need to move to next row or page
-        if (x > 15 + (colsPerPage - 1) * labelWidth) {
-          x = 15;
-          y += labelHeight;
-          
-          if (y > 15 + (rowsPerPage - 1) * labelHeight) {
-            y = 15;
-            doc.addPage();
-          }
-        }
-        
-        // Draw label border
-        doc.rect(x, y, labelWidth - 5, labelHeight - 5)
-           .stroke();
-        
-        // Add product information - compact version for small labels
-        doc.fontSize(6)
-           .text(product.name, x + 3, y + 3, { width: labelWidth - 8 });
-        
-        doc.fontSize(5)
-           .text(`Rs. ${product.price?.toFixed(2) || '0.00'}`, x + 3, y + 10);
-        
-        // Show barcode prominently if available
-        if (product.barcode) {
-          doc.fontSize(4)
-             .text(`${product.barcode}`, x + 3, y + 16, { width: labelWidth - 8 });
-        }
-        
-        // Create QR code data - using structured JSON instead of just barcode
-        // This provides richer data that can be properly parsed by scanning systems
-        const qrData = JSON.stringify({
-          id: product._id.toString(),
-          barcode: product.barcode || '',
-          name: product.name,
-          price: product.price?.toFixed(2) || '0.00'
+        // Add a new page for each label
+        doc.addPage({
+          size: [labelWidthPt, labelHeightPt],
+          margin: 1
         });
         
-        // Generate QR code as data URL - optimized for scanning
+        // Define layout areas
+        const qrSize = 50; // Reduced QR code size to fit better
+        const qrMargin = 15; // Increased margin after QR code
+        const textAreaWidth = labelWidthPt - qrSize - qrMargin; // Remaining space for text
+        
+        // Right side - QR Code (with proper margin from edge)
+        const qrX = labelWidthPt - qrSize - qrMargin;
+        const qrY = (labelHeightPt - qrSize) / 2; // Center vertically
+        
+        // Create QR code data
+        const qrData = JSON.stringify({
+          barcode: product.barcode || ''
+        });
+        
+        // Generate QR code
         try {
-          // Using JSON data format for better system integration
           const qrDataUrl = await QRCode.toDataURL(qrData, {
-            errorCorrectionLevel: 'H', // Higher correction level for better scanning
-            margin: 1, // Smaller margin for better recognition on small labels
-            width: 55, // Optimized size for label 
-            scale: 2, // Balance between clarity and scan reliability
-            type: 'image/jpeg', // Sometimes more reliable than default PNG
-            rendererOpts: {
-              quality: 0.8 // Good quality while maintaining clear edges for scanning
-            }
+            errorCorrectionLevel: 'M',
+            margin: 0,
+            width: qrSize * 2, // Higher resolution for better printing
+            scale: 1,
+            type: 'image/png'
           });
           
-          // Add QR code to label - better positioned and sized
-          doc.image(qrDataUrl, x + 25, y + 20, { width: 40 });
+          doc.image(qrDataUrl, qrX, qrY, { width: qrSize, height: qrSize });
           
         } catch (qrErr) {
           console.error('Error generating QR code:', qrErr);
-          // If QR code fails, add a note
-          doc.fontSize(5)
-             .text('QR unavailable', x + 3, y + 30);
+          // Fallback: draw a rectangle where QR would be
+          doc.rect(qrX, qrY, qrSize, qrSize).stroke();
+          doc.fontSize(6).text('QR Error', qrX, qrY + qrSize/2, { 
+            width: qrSize, 
+            align: 'center' 
+          });
         }
         
-        // Move to next label position
-        x += labelWidth;
+        // Left side - Rotated text details
+        const textStartX = 2;
+        const textCenterY = labelHeightPt / 2;
+        
+        // Save the current state
+        doc.save();
+        
+        // Move to the center of the text area and rotate
+        doc.translate(textStartX + 10, textCenterY);
+        doc.rotate(-90); // Rotate 90 degrees counter-clockwise
+        
+        // Calculate available space for all elements
+        const totalAvailableHeight = 70; // Height for all elements in rotated space
+        const minSpaceForOtherElements = 25; // Minimum space needed for price, barcode, category
+        
+        // Calculate maximum space that can be allocated to product name
+        const maxNameSpace = totalAvailableHeight - minSpaceForOtherElements;
+        
+        // Dynamically adjust font size based on product name length
+        let nameFontSize = 8; // Default font size
+        if (product.name.length > 25) nameFontSize = 7;
+        if (product.name.length > 35) nameFontSize = 6;
+        if (product.name.length > 45) nameFontSize = 5;
+        if (product.name.length > 60) nameFontSize = 4;
+        if (product.name.length > 80) nameFontSize = 3;
+        
+        // First, calculate the height that would be taken by the product name
+        doc.fontSize(nameFontSize);
+        const nameHeight = doc.heightOfString(product.name, {
+          width: 70,
+          align: 'center'
+        });
+        
+        // Position product name with adjusted font size and wrapping
+        doc.fontSize(nameFontSize)
+           .font('Helvetica')
+           .text(product.name, -35, -8, { 
+             width: 70, 
+             align: 'center',
+             lineGap: 0,
+             height: Math.min(nameHeight, maxNameSpace) // Prevent overflow
+           });
+        
+        // Get the actual height used by the product name
+        const actualNameHeight = Math.min(nameHeight, maxNameSpace);
+        
+        // Position price after product name
+        const priceY = -8 + actualNameHeight + 2;
+        const priceFontSize = 7;
+        
+        doc.fontSize(priceFontSize)
+           .font('Helvetica')
+           .text(`Rs. ${product.price?.toFixed(2) || '0.00'}`, -35, priceY, { 
+             width: 70, 
+             align: 'center',
+             lineGap: 0
+           });
+        
+        // Calculate price text height
+        const priceHeight = doc.heightOfString(`Rs. ${product.price?.toFixed(2) || '0.00'}`, {
+          width: 70,
+          fontSize: priceFontSize
+        });
+        
+        // Position barcode (if available) after price
+        if (product.barcode) {
+          const barcodeFontSize = 5;
+          const barcodeY = priceY + priceHeight + 2;
+          
+          doc.fontSize(barcodeFontSize)
+             .text(`${product.barcode}`, -35, barcodeY, { 
+               width: 70, 
+               align: 'center',
+               lineGap: 0
+             });
+             
+          // Calculate barcode text height
+          const barcodeHeight = doc.heightOfString(product.barcode, {
+            width: 70,
+            fontSize: barcodeFontSize
+          });
+          
+          // Position category (if available) after barcode
+          if (product.category?.name) {
+            const categoryFontSize = 4;
+            const categoryY = barcodeY + barcodeHeight + 1;
+            
+            // Only add category if there's enough space left
+            if (categoryY + categoryFontSize < 35) {
+              doc.fontSize(categoryFontSize)
+                 .text(product.category.name, -35, categoryY, { 
+                   width: 70, 
+                   align: 'center',
+                   lineGap: 0
+                 });
+            }
+          }
+        } else if (product.category?.name) {
+          // If no barcode, position category directly after price
+          const categoryFontSize = 4;
+          const categoryY = priceY + priceHeight + 2;
+          
+          doc.fontSize(categoryFontSize)
+             .text(product.category.name, -35, categoryY, { 
+               width: 70, 
+               align: 'center',
+               lineGap: 0
+             });
+        }
+        
+        // Restore the previous state (removes rotation and translation)
+        doc.restore();
       }
     }
     

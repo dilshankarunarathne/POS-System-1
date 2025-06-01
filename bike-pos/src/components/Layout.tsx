@@ -270,7 +270,7 @@ const Layout = () => {
 
         .main-content {
           flex: 1;
-          margin-top: 60px;
+          margin-top: 20px;
           background: #f8f9fa;
           min-height: calc(100vh - 60px);
           width: 100%;

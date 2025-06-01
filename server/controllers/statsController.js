@@ -34,6 +34,9 @@ exports.getDeveloperStats = async (req, res) => {
     });
   } catch (error) {
     console.error('Error getting developer stats:', error);
-    res.status(500).json({ message: 'Server error getting stats' });
+    res.status(500).json({ 
+      message: 'Server error getting stats',
+      error: error.message 
+    });
   }
-}; 
+};

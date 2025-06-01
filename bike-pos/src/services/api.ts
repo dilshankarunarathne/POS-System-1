@@ -275,6 +275,27 @@ export const reportsApi = {
     shopId?: string;
   }) => api.get('/reports/sales/products', { params }),
   
+  // Enhanced getProfitDistribution method with better error handling
+  getProfitDistribution: (params: { 
+    startDate?: string; 
+    endDate?: string; 
+    groupBy?: 'day' | 'week' | 'month';
+    shopId?: string;
+  }) => {
+    console.log('Calling profit distribution API with params:', params);
+    return api.get('/reports/sales/profit', { params })
+      .catch(error => {
+        console.error('Profit distribution API error:', error);
+        if (error.response) {
+          throw new Error(`Server error (${error.response.status}): ${error.response.data?.message || 'Unknown error'}`);
+        } else if (error.request) {
+          throw new Error('No response received from server when fetching profit data');
+        } else {
+          throw new Error(`Error fetching profit data: ${error.message}`);
+        }
+      });
+  },
+  
   // Ensure there's only one implementation for inventory status report
   getInventoryStatusReport: (params: { 
     lowStock?: boolean;   

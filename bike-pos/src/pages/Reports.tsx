@@ -68,6 +68,10 @@ const Reports = () => {
   const [salesSummary, setSalesSummary] = useState<{ summary: any[], totals: any }>({ summary: [], totals: {} });
   const [groupBy, setGroupBy] = useState<'day' | 'week' | 'month'>('day');
   
+  // Profit distribution data
+  const [profitDistribution, setProfitDistribution] = useState<{ summary: any[], totals: any }>({ summary: [], totals: {} });
+  const [profitGroupBy, setProfitGroupBy] = useState<'day' | 'week' | 'month'>('day');
+  
   // Product sales data
   interface ProductSale {
     name: string;
@@ -144,11 +148,48 @@ const Reports = () => {
         shopId: currentShop._id
       });
       
+      // Log the data for debugging
+      console.log('Sales summary data:', response.data);
+      
       setSalesSummary(response.data);
       
     } catch (err) {
       console.error('Error fetching sales summary:', err);
       setError('Failed to load sales summary data');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Fetch profit distribution data
+  const fetchProfitDistribution = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      const currentShop = getCurrentShop();
+      if (!currentShop) {
+        if (user?.role !== 'developer') {
+          setError('No shop selected. Please contact your administrator.');
+        }
+        setLoading(false);
+        return;
+      }
+      
+      const response = await reportsApi.getProfitDistribution({
+        startDate: formatDateForApi(startDate),
+        endDate: formatDateForApi(endDate),
+        groupBy: profitGroupBy,
+        shopId: currentShop._id
+      });
+      
+      console.log('Profit distribution data:', response.data);
+      
+      setProfitDistribution(response.data);
+      
+    } catch (err) {
+      console.error('Error fetching profit distribution:', err);
+      setError('Failed to load profit distribution data');
     } finally {
       setLoading(false);
     }
@@ -302,8 +343,10 @@ const Reports = () => {
       fetchProductSales();
     } else if (activeTab === 'inventory') {
       fetchInventoryData();
+    } else if (activeTab === 'profit') {
+      fetchProfitDistribution();
     }
-  }, [activeTab, startDate, endDate, groupBy, showLowStock]);
+  }, [activeTab, startDate, endDate, groupBy, profitGroupBy, showLowStock]);
   
   // Format date for display
   const formatDate = (dateString: string) => {
@@ -380,6 +423,35 @@ const Reports = () => {
     };
   };
   
+  // Prepare data for profit distribution chart
+  const profitChartData = {
+    labels: profitDistribution.summary.map((item: any) => {
+      if (profitGroupBy === 'day') {
+        return formatDate(item.date);
+      } else if (profitGroupBy === 'week') {
+        return `Week of ${formatDate(item.date)}`;
+      } else {
+        return new Date(item.date).toLocaleString('default', { month: 'long', year: 'numeric' });
+      }
+    }),
+    datasets: [
+      {
+        label: 'Profit',
+        data: profitDistribution.summary.map((item) => parseFloat(item.profit)),
+        borderColor: 'rgba(40, 167, 69, 1)',
+        backgroundColor: 'rgba(40, 167, 69, 0.2)',
+        tension: 0.4,
+      },
+      {
+        label: 'Revenue',
+        data: profitDistribution.summary.map((item) => parseFloat(item.total)),
+        borderColor: 'rgba(75, 192, 192, 1)',
+        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+        tension: 0.4,
+      },
+    ],
+  };
+  
   return (
     <Container fluid className="py-4">
       <Row className="mb-4 align-items-center">
@@ -413,6 +485,11 @@ const Reports = () => {
             <Nav.Item>
               <Nav.Link eventKey="products" className="d-flex align-items-center">
                 <BarChart className="me-2" /> Product Sales
+              </Nav.Link>
+            </Nav.Item>
+            <Nav.Item>
+              <Nav.Link eventKey="profit" className="d-flex align-items-center">
+                <Download className="me-2" /> Profit Distribution
               </Nav.Link>
             </Nav.Item>
             <Nav.Item>
@@ -450,13 +527,20 @@ const Reports = () => {
               </Form.Group>
             </Col>
             
-            {activeTab === 'sales' && (
+            {(activeTab === 'sales' || activeTab === 'profit') && (
               <Col md={6} lg={3}>
                 <Form.Group>
                   <Form.Label>Group By</Form.Label>
                   <Form.Select
-                    value={groupBy}
-                    onChange={(e) => setGroupBy(e.target.value as 'day' | 'week' | 'month')}
+                    value={activeTab === 'profit' ? profitGroupBy : groupBy}
+                    onChange={(e) => {
+                      const value = e.target.value as 'day' | 'week' | 'month';
+                      if (activeTab === 'profit') {
+                        setProfitGroupBy(value);
+                      } else {
+                        setGroupBy(value);
+                      }
+                    }}
                   >
                     <option value="day">Day</option>
                     <option value="week">Week</option>
@@ -666,7 +750,7 @@ const Reports = () => {
                                         ? `Week of ${formatDate(item.date)}`
                                         : new Date(item.date).toLocaleString('default', { month: 'long', year: 'numeric' })}
                                     </td>
-                                    <td className="text-end">{item.totalSales}</td>
+                                    <td className="text-end">{item.salesCount || 0}</td>
                                     <td className="text-end">Rs. {parseFloat(item.total).toFixed(2)}</td>
                                   </tr>
                                 ))
@@ -769,6 +853,143 @@ const Reports = () => {
                               ) : (
                                 <tr>
                                   <td colSpan={5} className="text-center">
+                                    No data available
+                                  </td>
+                                </tr>
+                              )}
+                            </tbody>
+                          </Table>
+                        </div>
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                </Row>
+              )}
+              
+              {/* Profit Distribution Tab */}
+              {activeTab === 'profit' && (
+                <Row className="g-4">
+                  <Col lg={8}>
+                    <Card className="h-100">
+                      <Card.Body>
+                        <h5 className="card-title mb-3">Profit Distribution</h5>
+                        <hr className="mb-4" />
+                        
+                        {profitDistribution.summary.length > 0 ? (
+                          <div style={{ height: 400 }}>
+                            <Line
+                              data={profitChartData}
+                              options={{
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: {
+                                  legend: {
+                                    position: 'top',
+                                  },
+                                  title: {
+                                    display: false,
+                                  },
+                                },
+                                scales: {
+                                  y: {
+                                    beginAtZero: true,
+                                    title: {
+                                      display: true,
+                                      text: 'Amount (Rs.)'
+                                    }
+                                  },
+                                },
+                              }}
+                            />
+                          </div>
+                        ) : (
+                          <div className="text-center d-flex justify-content-center align-items-center h-100">
+                            <p className="text-muted">
+                              No profit data available for the selected period
+                            </p>
+                          </div>
+                        )}
+                      </Card.Body>
+                    </Card>
+                  </Col>
+                  
+                  <Col lg={4}>
+                    <Card className="mb-4">
+                      <Card.Body>
+                        <h5 className="card-title mb-3">Profit Summary</h5>
+                        <hr className="mb-4" />
+                        
+                        <Table hover size="sm" responsive>
+                          <tbody>
+                            <tr>
+                              <td>Date Range</td>
+                              <td className="text-end">
+                                {startDate?.toLocaleDateString()} - {endDate?.toLocaleDateString()}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>Total Revenue</td>
+                              <td className="text-end">
+                                Rs. {parseFloat(profitDistribution.totals?.total || 0).toFixed(2)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>Cost of Goods</td>
+                              <td className="text-end">
+                                Rs. {parseFloat(profitDistribution.totals?.cost || 0).toFixed(2)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="fw-bold">Total Profit</td>
+                              <td className="text-end fw-bold">
+                                Rs. {parseFloat(profitDistribution.totals?.profit || 0).toFixed(2)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td>Profit Margin</td>
+                              <td className="text-end">
+                                {profitDistribution.totals?.profitMargin || '0%'}
+                              </td>
+                            </tr>
+                          </tbody>
+                        </Table>
+                      </Card.Body>
+                    </Card>
+                    
+                    <Card>
+                      <Card.Body>
+                        <h5 className="card-title mb-3">Profit by {profitGroupBy}</h5>
+                        <hr className="mb-4" />
+                        
+                        <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+                          <Table hover size="sm" responsive>
+                            <thead className="sticky-top bg-white">
+                              <tr>
+                                <th>Period</th>
+                                <th className="text-end">Revenue</th>
+                                <th className="text-end">Profit</th>
+                                <th className="text-end">Margin</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {profitDistribution.summary.length > 0 ? (
+                                profitDistribution.summary.map((item, index) => (
+                                  <tr key={index}>
+                                    <td>
+                                      {profitGroupBy === 'day'
+                                        ? formatDate(item.date)
+                                        : profitGroupBy === 'week'
+                                        ? `Week of ${formatDate(item.date)}`
+                                        : new Date(item.date).toLocaleString('default', { month: 'long', year: 'numeric' })}
+                                    </td>
+                                    <td className="text-end">Rs. {parseFloat(item.total).toFixed(2)}</td>
+                                    <td className="text-end">Rs. {parseFloat(item.profit).toFixed(2)}</td>
+                                    <td className="text-end">{item.profitMargin}</td>
+                                  </tr>
+                                ))
+                              ) : (
+                                <tr>
+                                  <td colSpan={4} className="text-center">
                                     No data available
                                   </td>
                                 </tr>

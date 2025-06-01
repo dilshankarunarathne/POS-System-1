@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const reportController = require('../controllers/reportController');
-const { protect } = require('../middleware/authMiddleware');
+const { protect, authMiddleware } = require('../middleware/authMiddleware');
 
 // Apply auth protection to all routes
 router.use(protect);
@@ -15,5 +15,8 @@ router.get('/inventory-status', reportController.getInventoryStatusReport);
 
 router.get('/sales/daily', reportController.getDailySales);
 router.get('/generate-sales-report', reportController.generateSalesReport);
+
+// Add the new route for profit distribution report
+router.get('/profit-distribution', authMiddleware, reportController.getProfitDistribution);
 
 module.exports = router;

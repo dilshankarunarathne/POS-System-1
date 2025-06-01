@@ -322,6 +322,203 @@ const getProductSalesReport = async (req, res) => {
   }
 };
 
+// Get profit distribution report
+const getProfitDistribution = async (req, res) => {
+  try {
+    const { startDate, endDate, groupBy = 'day' } = req.query;
+
+    // Default to last 30 days if no dates provided
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const end = endDate ? new Date(endDate) : new Date();
+    
+    // Set end date to end of day
+    end.setHours(23, 59, 59, 999);
+
+    // Format for aggregation
+    start.setHours(0, 0, 0, 0);
+
+    // Base match condition with shop filter
+    const matchCondition = { 
+      createdAt: { $gte: start, $lte: end },
+      status: { $ne: 'cancelled' }, // Exclude cancelled sales
+      shopId: new mongoose.Types.ObjectId(req.user.shopId._id)
+    };
+
+    // Define grouping based on groupBy parameter
+    let dateFormat;
+    if (groupBy === 'day') {
+      dateFormat = '%Y-%m-%d';
+    } else if (groupBy === 'week') {
+      dateFormat = '%G-%V'; // ISO year and week
+    } else if (groupBy === 'month') {
+      dateFormat = '%Y-%m';
+    }
+
+    // Aggregate profit data
+    const profitDistribution = await Sale.aggregate([
+      {
+        $match: matchCondition
+      },
+      {
+        $unwind: '$items'
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'items.product',
+          foreignField: '_id',
+          as: 'productInfo'
+        }
+      },
+      {
+        $unwind: {
+          path: '$productInfo',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $addFields: {
+          date: { 
+            $dateToString: { format: dateFormat, date: "$createdAt" } 
+          },
+          itemCost: {
+            $multiply: [
+              { $ifNull: ['$productInfo.cost', 0] },
+              '$items.quantity'
+            ]
+          },
+          itemRevenue: {
+            $multiply: ['$items.price', '$items.quantity']
+          }
+        }
+      },
+      {
+        $group: {
+          _id: "$date",
+          total: { $sum: "$itemRevenue" },
+          cost: { $sum: "$itemCost" },
+          salesCount: { $sum: 1 }
+        }
+      },
+      {
+        $sort: { _id: 1 } // Sort by date
+      },
+      {
+        $project: {
+          _id: 0,
+          date: "$_id",
+          total: { $round: ["$total", 2] },
+          cost: { $round: ["$cost", 2] },
+          profit: { $round: [{ $subtract: ["$total", "$cost"] }, 2] },
+          profitMargin: {
+            $concat: [
+              { 
+                $toString: { 
+                  $round: [
+                    { 
+                      $multiply: [
+                        { 
+                          $cond: [
+                            { $eq: ['$total', 0] },
+                            0,
+                            { $divide: [{ $subtract: ["$total", "$cost"] }, '$total'] }
+                          ]
+                        }, 
+                        100
+                      ] 
+                    },
+                    1
+                  ] 
+                } 
+              },
+              '%'
+            ]
+          }
+        }
+      }
+    ]);
+
+    // Calculate overall totals
+    const totalStats = await Sale.aggregate([
+      {
+        $match: matchCondition
+      },
+      {
+        $unwind: '$items'
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'items.product',
+          foreignField: '_id',
+          as: 'productInfo'
+        }
+      },
+      {
+        $unwind: {
+          path: '$productInfo',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: { $multiply: ['$items.price', '$items.quantity'] } },
+          cost: { $sum: { $multiply: [{ $ifNull: ['$productInfo.cost', 0] }, '$items.quantity'] } },
+          salesCount: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          total: { $round: ["$total", 2] },
+          cost: { $round: ["$cost", 2] },
+          profit: { $round: [{ $subtract: ["$total", "$cost"] }, 2] },
+          profitMargin: {
+            $concat: [
+              { 
+                $toString: { 
+                  $round: [
+                    { 
+                      $multiply: [
+                        { 
+                          $cond: [
+                            { $eq: ['$total', 0] },
+                            0,
+                            { $divide: [{ $subtract: ["$total", "$cost"] }, '$total'] }
+                          ]
+                        }, 
+                        100
+                      ] 
+                    },
+                    1
+                  ] 
+                } 
+              },
+              '%'
+            ]
+          }
+        }
+      }
+    ]);
+
+    res.status(200).json({
+      startDate: start,
+      endDate: end,
+      summary: profitDistribution,
+      totals: totalStats.length > 0 ? totalStats[0] : {
+        total: 0,
+        cost: 0,
+        profit: 0,
+        profitMargin: '0%'
+      }
+    });
+  } catch (error) {
+    console.error('Error generating profit distribution:', error);
+    res.status(500).json({ message: 'Server error generating profit report', error: error.message });
+  }
+};
+
 // Get inventory status report - make sure this function is correctly exported
 const getInventoryStatusReport = async (req, res) => {
   try {
@@ -683,10 +880,231 @@ const generateSalesReport = async (req, res) => {
   }
 };
 
+// Add new controller method for profit distribution report (detailed version)
+const getProfitDistributionDetailed = async (req, res) => {
+  try {
+    const { startDate, endDate, groupBy = 'day' } = req.query;
+
+    // Default to last 30 days if no dates provided
+    const start = startDate ? new Date(startDate) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    const end = endDate ? new Date(endDate) : new Date();
+    
+    // Set end date to end of day
+    end.setHours(23, 59, 59, 999);
+
+    // Format for aggregation
+    start.setHours(0, 0, 0, 0);
+
+    // Base match condition with shop filter
+    const matchCondition = { 
+      createdAt: { $gte: start, $lte: end },
+      status: { $ne: 'cancelled' }, // Exclude cancelled sales
+      shopId: new mongoose.Types.ObjectId(req.user.shopId._id)
+    };
+
+    // Get the time grouping format based on the groupBy parameter
+    let dateFormat;
+    let dateGrouping;
+    
+    switch(groupBy) {
+      case 'week':
+        dateFormat = "%Y-%U"; // Year-Week format
+        dateGrouping = { $week: "$createdAt" };
+        break;
+      case 'month':
+        dateFormat = "%Y-%m"; // Year-Month format
+        dateGrouping = { $month: "$createdAt" };
+        break;
+      case 'day':
+      default:
+        dateFormat = "%Y-%m-%d"; // Year-Month-Day format
+        dateGrouping = { $dayOfMonth: "$createdAt" };
+    }
+
+    // Aggregate profit data by the specified time period
+    const profitAggregation = await Sale.aggregate([
+      {
+        $match: matchCondition
+      },
+      {
+        $unwind: '$items'
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'items.product',
+          foreignField: '_id',
+          as: 'productInfo'
+        }
+      },
+      {
+        $unwind: {
+          path: '$productInfo',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $addFields: {
+          // Create date field for grouping
+          periodDate: { 
+            $dateToString: { format: dateFormat, date: "$createdAt" } 
+          },
+          // Calculate item cost - use 0 if product not found or cost not set
+          itemCost: {
+            $multiply: [
+              { $ifNull: ["$productInfo.cost", 0] },
+              "$items.quantity"
+            ]
+          },
+          // Calculate item revenue
+          itemRevenue: {
+            $multiply: ["$items.price", "$items.quantity"]
+          }
+        }
+      },
+      {
+        $group: {
+          _id: "$periodDate",
+          date: { $first: "$createdAt" }, // Keep a date for sorting and formatting
+          total: { $sum: "$itemRevenue" },
+          cost: { $sum: "$itemCost" },
+          salesCount: { $sum: 1 }
+        }
+      },
+      {
+        $addFields: {
+          profit: { $subtract: ["$total", "$cost"] },
+          profitMargin: {
+            $concat: [
+              { 
+                $toString: { 
+                  $round: [
+                    { 
+                      $multiply: [
+                        { 
+                          $cond: [
+                            { $eq: ["$total", 0] },
+                            0,
+                            { $divide: ["$profit", "$total"] }
+                          ]
+                        }, 
+                        100
+                      ] 
+                    },
+                    1
+                  ] 
+                } 
+              },
+              "%"
+            ]
+          }
+        }
+      },
+      {
+        $sort: { date: 1 } // Sort by date
+      },
+      {
+        $project: {
+          _id: 0,
+          date: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+          total: { $round: ["$total", 2] },
+          cost: { $round: ["$cost", 2] },
+          profit: { $round: ["$profit", 2] },
+          profitMargin: 1,
+          salesCount: 1
+        }
+      }
+    ]);
+
+    // Get total profit statistics
+    const totalStats = await Sale.aggregate([
+      {
+        $match: matchCondition
+      },
+      {
+        $unwind: '$items'
+      },
+      {
+        $lookup: {
+          from: 'products',
+          localField: 'items.product',
+          foreignField: '_id',
+          as: 'productInfo'
+        }
+      },
+      {
+        $unwind: {
+          path: '$productInfo',
+          preserveNullAndEmptyArrays: true
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: { $multiply: ["$items.price", "$items.quantity"] } },
+          cost: { $sum: { $multiply: [{ $ifNull: ["$productInfo.cost", 0] }, "$items.quantity"] } },
+          salesCount: { $sum: 1 }
+        }
+      },
+      {
+        $project: {
+          _id: 0,
+          total: { $round: ["$total", 2] },
+          cost: { $round: ["$cost", 2] },
+          profit: { $round: [{ $subtract: ["$total", "$cost"] }, 2] },
+          salesCount: 1,
+          profitMargin: {
+            $concat: [
+              { 
+                $toString: { 
+                  $round: [
+                    { 
+                      $multiply: [
+                        { 
+                          $cond: [
+                            { $eq: ["$total", 0] },
+                            0,
+                            { $divide: [{ $subtract: ["$total", "$cost"] }, "$total"] }
+                          ]
+                        }, 
+                        100
+                      ] 
+                    },
+                    1
+                  ] 
+                } 
+              },
+              "%"
+            ]
+          }
+        }
+      }
+    ]);
+
+    res.status(200).json({
+      startDate: start,
+      endDate: end,
+      summary: profitAggregation,
+      totals: totalStats.length > 0 ? totalStats[0] : {
+        total: 0,
+        cost: 0,
+        profit: 0,
+        salesCount: 0,
+        profitMargin: '0%'
+      }
+    });
+  } catch (error) {
+    console.error('Error generating profit distribution report:', error);
+    res.status(500).json({ message: 'Server error generating profit report', error: error.message });
+  }
+};
+
 module.exports = {
   getSalesSummary,
   getProductSalesReport,
   getInventoryStatusReport,
   generateSalesReport,
-  getDailySales
+  getDailySales,
+  getProfitDistribution,  // Export the original method
+  getProfitDistributionDetailed  // Export the new method
 };

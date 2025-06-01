@@ -50,6 +50,16 @@ export const reportsApi = {
     return api.get('/reports/sales/products', { params });
   },
   
+  // Add method for profit distribution report
+  getProfitDistribution: (params = {}) => {
+    console.log('Fetching profit distribution with params:', params);
+    return api.get('/reports/sales/profit', { params })
+      .catch(error => {
+        console.error('Error fetching profit distribution:', error);
+        throw error;
+      });
+  },
+  
   // Get inventory status report - consolidate the two functions to one consistent endpoint
   getInventoryReport: (params = {}) => {
     return api.get('/reports/inventory/status', { params });

@@ -537,11 +537,18 @@ const generateReceipt = async (req, res) => {
   return printController.generateReceipt(req, res);
 };
 
+// Generate sales profit report
+const getSalesProfitReport = async (req, res) => {
+  // Forward to the reportController to handle profit reports
+  return reportController.getProfitDistribution(req, res);
+};
+
 module.exports = {
   createSale,
   getAllSales,
   getSaleById,
   updateSaleStatus,
   getSalesReport,
-  generateReceipt
+  generateReceipt,
+  getSalesProfitReport
 };

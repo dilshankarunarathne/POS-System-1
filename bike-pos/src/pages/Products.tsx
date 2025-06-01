@@ -47,7 +47,9 @@ const Products: React.FC = () => {
   const [importLoading, setImportLoading] = useState(false);
   const [importData, setImportData] = useState<any[]>([]);
   const [importPreview, setImportPreview] = useState(false);
-  
+  // New states for tracking which products are new vs updates
+  const [productUpdateMap, setProductUpdateMap] = useState<Record<string, { id: number, existing: boolean }>>({});
+
   // State for pagination
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -603,14 +605,15 @@ const Products: React.FC = () => {
     }
   };
 
-  // Function to parse Excel file
-  const parseExcelFile = () => {
+  // Function to parse Excel file - improved error handling for existing products check
+  const parseExcelFile = async () => {
     if (!importFile) return;
 
     setImportLoading(true);
+    setError(null); // Reset any previous errors
     
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
       try {
         const data = e.target?.result;
         const workbook = XLSX.read(data, { type: 'array' });
@@ -640,12 +643,90 @@ const Products: React.FC = () => {
           return;
         }
 
-        setImportData(jsonData);
-        setImportPreview(true);
-        setImportLoading(false);
+        // Extract all product names from the import data
+        const importProductNames = jsonData.map((product: any) => product.name);
+        
+        // Handle case when there are no products to import
+        if (importProductNames.length === 0) {
+          setError('No valid products found in the import file');
+          setImportLoading(false);
+          return;
+        }
+        
+        try {
+          // Plan B: If the server endpoint is having issues, we can fall back to checking against the current product list
+          let existingProducts: any[] = [];
+          
+          try {
+            console.log('Trying to check existing products via API for:', importProductNames.slice(0, 5), '...');
+            const response = await productsApi.checkExistingProducts(importProductNames);
+            existingProducts = response.data || [];
+            console.log('API returned existing products:', existingProducts.length);
+          } catch (apiError) {
+            console.error('API error when checking existing products:', apiError);
+            
+            // Fallback: Compare with current loaded products
+            console.log('Falling back to checking against currently loaded products');
+            
+            // Refresh product list to ensure we have the latest data
+            const refreshResponse = await productsApi.getAll({limit: 1000}); // Get more products to check against
+            const allProducts = refreshResponse.data?.products || [];
+            
+            // Create a map of product names to IDs
+            const productNameMap = new Map();
+            allProducts.forEach((product: any) => {
+              productNameMap.set(product.name.toLowerCase(), {
+                id: product.id,
+                name: product.name
+              });
+            });
+            
+            // Find matching products
+            existingProducts = importProductNames
+              .map(name => {
+                const match = productNameMap.get(name.toLowerCase());
+                return match ? { id: match.id, name } : null;
+              })
+              .filter(Boolean);
+            
+            console.log('Found existing products from current data:', existingProducts.length);
+          }
+          
+          // Create a mapping for quick lookup - using lowercase for case-insensitive comparison
+          const updateMap: Record<string, { id: number, existing: boolean }> = {};
+          existingProducts.forEach((product: any) => {
+            if (product && product.name) {
+              updateMap[product.name.toLowerCase()] = {
+                id: product.id,
+                existing: true
+              };
+            }
+          });
+          
+          setProductUpdateMap(updateMap);
+          
+          // Enrich import data with update flags
+          const enrichedData = jsonData.map((product: any) => {
+            const normalizedName = product.name.toLowerCase();
+            const isUpdate = updateMap[normalizedName] !== undefined;
+            
+            return {
+              ...product,
+              _action: isUpdate ? 'UPDATE' : 'CREATE',
+              _id: isUpdate ? updateMap[normalizedName].id : null
+            };
+          });
+
+          setImportData(enrichedData);
+          setImportPreview(true);
+        } catch (error) {
+          console.error('Error in product import process:', error);
+          setError('Failed to process import data. Please try again or contact support.');
+        } 
       } catch (error) {
         console.error('Error parsing Excel file:', error);
         setError('Failed to parse Excel file. Please make sure it\'s a valid Excel file.');
+      } finally {
         setImportLoading(false);
       }
     };
@@ -653,15 +734,15 @@ const Products: React.FC = () => {
     reader.readAsArrayBuffer(importFile);
   };
 
-  // Function to submit imported data
+  // Function to submit imported data - improved to better handle updates
   const submitImportData = async () => {
     if (importData.length === 0) return;
     
     setImportLoading(true);
     
     try {
-      // Create an array to track successful and failed imports
       let successCount = 0;
+      let updateCount = 0;
       let failedCount = 0;
       
       // Process each product
@@ -669,23 +750,33 @@ const Products: React.FC = () => {
         try {
           const formDataToSend = new FormData();
           
-          // Add all fields from product object to formData
+          // Add all relevant fields to formData
           Object.keys(product).forEach(key => {
-            if (product[key] !== undefined && product[key] !== null && product[key] !== '') {
+            // Skip internal fields that start with _
+            if (!key.startsWith('_') && product[key] !== undefined && product[key] !== null && product[key] !== '') {
               formDataToSend.append(key, product[key].toString());
             }
           });
           
-          await productsApi.create(formDataToSend);
-          successCount++;
+          if (product._action === 'UPDATE' && product._id) {
+            console.log(`Updating existing product: ${product.name} (ID: ${product._id})`);
+            await productsApi.update(product._id, formDataToSend);
+            updateCount++;
+          } else {
+            console.log(`Creating new product: ${product.name}`);
+            await productsApi.create(formDataToSend);
+            successCount++;
+          }
         } catch (err) {
-          console.error('Error importing product:', product, err);
+          console.error(`Error processing product ${product.name}:`, err);
           failedCount++;
         }
       }
       
       // Show result message
-      setSuccessMessage(`Import completed: ${successCount} products added successfully, ${failedCount} failed`);
+      setSuccessMessage(`Import completed: ${successCount} products added, ${updateCount} updated, ${failedCount} failed`);
+      
+      // Close modal and refresh data
       setImportModalOpen(false);
       fetchProducts();
     } catch (err) {
@@ -696,15 +787,17 @@ const Products: React.FC = () => {
       setImportFile(null);
       setImportData([]);
       setImportPreview(false);
+      setProductUpdateMap({});
     }
   };
-  
+
   // Reset import modal state
   const handleCloseImportModal = () => {
     setImportModalOpen(false);
     setImportFile(null);
     setImportData([]);
     setImportPreview(false);
+    setProductUpdateMap({});
   };
 
   return (
@@ -1218,10 +1311,25 @@ const Products: React.FC = () => {
                   onClick={() => {
                     setImportPreview(false);
                     setImportData([]);
+                    setProductUpdateMap({});
                   }}
                 >
                   Back to Upload
                 </Button>
+              </div>
+              
+              {/* Show summary of what will happen */}
+              <div className="mb-3 p-3 bg-light rounded">
+                <div className="mb-2">Import summary:</div>
+                <Badge bg="success" className="me-2">
+                  {importData.filter(p => p._action !== 'UPDATE').length} new products
+                </Badge>
+                <Badge bg="warning" text="dark" className="me-2">
+                  {importData.filter(p => p._action === 'UPDATE').length} products to update
+                </Badge>
+                <div className="mt-2 text-muted small">
+                  Products with the same names as existing ones will be updated with the imported values.
+                </div>
               </div>
               
               <div className="table-responsive" style={{ maxHeight: '400px', overflowY: 'auto' }}>
@@ -1230,36 +1338,30 @@ const Products: React.FC = () => {
                     <tr>
                       <th>#</th>
                       <th>Name</th>
-                      <th>Description</th>
-                     
                       <th>Price</th>
-                      <th>Cost Price</th>
                       <th>Stock</th>
-                      <th>Reorder Level</th>
+                      <th>Action</th>
                     </tr>
                   </thead>
                   <tbody>
                     {importData.map((product, index) => (
-                      <tr key={index}>
+                      <tr key={index} className={product._action === 'UPDATE' ? 'table-warning' : ''}>
                         <td>{index + 1}</td>
                         <td>{product.name}</td>
-                        <td>{product.description || '-'}</td>
                         <td>Rs. {product.price}</td>
-                        <td>{product.costPrice ? `Rs. ${product.costPrice}` : '-'}</td>
                         <td>{product.stockQuantity}</td>
-                        <td>{product.reorderLevel || '-'}</td>
+                        <td>
+                          {product._action === 'UPDATE' ? (
+                            <Badge bg="warning" text="dark">Update</Badge>
+                          ) : (
+                            <Badge bg="success">New</Badge>
+                          )}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
                 </Table>
               </div>
-              
-              {importData.length > 100 && (
-                <p className="text-warning mt-2">
-                  Warning: You are importing a large number of products ({importData.length}). 
-                  This might take some time.
-                </p>
-              )}
             </>
           )}
         </Modal.Body>

@@ -151,7 +151,23 @@ export const productsApi = {
   delete: (id: string | number) => api.delete(`/products/${id}`),
   updateStock: (id: string | number, quantity: number) => api.patch(`/products/${id}/stock`, { quantity }),
   getLatest: (limit = 10) => api.get('/products/latest', { params: { limit } }),
-  refresh: () => api.get('/products/refresh')
+  refresh: () => api.get('/products/refresh'),
+  
+  // Fix the checkExistingProducts method with better error handling
+  checkExistingProducts: (productNames: string[]) => {
+    console.log('Checking existing products with names:', productNames);
+    return api.post('/products/check-existing', { productNames })
+      .catch(error => {
+        console.error('Error in checkExistingProducts:', error);
+        if (error.response) {
+          throw new Error(`Server error (${error.response.status}): ${error.response.data?.message || 'Unknown error checking products'}`);
+        } else if (error.request) {
+          throw new Error('No response received from server when checking existing products');
+        } else {
+          throw new Error(`Error checking products: ${error.message}`);
+        }
+      });
+  },
 };
 
 // Categories API

@@ -26,7 +26,12 @@ const Login: React.FC = () => {
   // Redirect if already logged in
   useEffect(() => {
     if (user) {
-      navigate('/dashboard');
+      // Check role and navigate accordingly
+      if (user.role === 'developer') {
+        navigate('/developer/dashboard');
+      } else {
+        navigate('/dashboard');
+      }
     }
   }, [user, navigate]);
   
@@ -51,8 +56,8 @@ const Login: React.FC = () => {
       
       await login(username, password);
       
-      // Navigate to dashboard on successful login
-      navigate('/dashboard');
+      // Remove this section as it may try to access user before state is updated
+      // The useEffect hook will handle navigation once user state is updated
       
     } catch (err) {
       // Error is handled in auth context and passed via the error state

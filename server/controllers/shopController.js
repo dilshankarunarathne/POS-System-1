@@ -94,7 +94,7 @@ exports.updateShop = async (req, res) => {
       return res.status(403).json({ message: 'Access denied' });
     }
 
-    const { name } = req.body;
+    const { name, address, phone, email } = req.body;
     const shopId = req.params.id;
 
     // Check if shop exists
@@ -115,9 +115,13 @@ exports.updateShop = async (req, res) => {
       }
     }
 
-    // Update shop
+    // Update shop with all provided fields
     shop.name = name || shop.name;
+    shop.address = address !== undefined ? address : shop.address;
+    shop.phone = phone !== undefined ? phone : shop.phone;
+    shop.email = email !== undefined ? email : shop.email;
     shop.updatedAt = Date.now();
+    
     await shop.save();
 
     res.json(shop);

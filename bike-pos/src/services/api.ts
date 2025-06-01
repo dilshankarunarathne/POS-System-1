@@ -301,6 +301,11 @@ export const printApi = {
     })
 };
 
+// Stats API
+export const statsApi = {
+  getDeveloperStats: () => api.get('/stats/developer'),
+};
+
 // Helper function to check server connectivity
 export const checkServerConnectivity = () => {
   return api.get('/health-check')

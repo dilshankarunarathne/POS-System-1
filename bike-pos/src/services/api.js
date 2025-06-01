@@ -61,6 +61,19 @@ export const reportsApi = {
   }
 };
 
+// Add stats API endpoints
+export const statsApi = {
+  // Get developer dashboard stats
+  getDeveloperStats: () => {
+    return api.get('/stats/developer');
+  },
+  
+  // Get shop-specific stats
+  getShopStats: (shopId) => {
+    return api.get('/stats/shop', { params: { shopId } });
+  }
+};
+
 // API endpoints for products
 export const productsApi = {
   // Get all products with optional filtering

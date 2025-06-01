@@ -1,15 +1,27 @@
 const express = require('express');
+const router = express.Router();
 const userController = require('../controllers/userController');
 const { authenticate, authorize } = require('../middleware/auth');
 
-const router = express.Router();
+// Base access restrictions - require authentication for all routes
+router.use(authenticate);
 
-// User routes - accessible by developer, admin, and manager as appropriate
-router.get('/', authenticate, authorize('developer', 'admin', 'manager'), userController.getAllUsers);
-router.get('/:id', authenticate, authorize('developer', 'admin', 'manager'), userController.getUserById);
-router.post('/', authenticate, authorize('developer', 'admin'), userController.createUser);
-router.put('/:id', authenticate, authorize('developer', 'admin'), userController.updateUser);
-router.patch('/:id/status', authenticate, authorize('developer', 'admin'), userController.toggleUserStatus);
-router.delete('/:id', authenticate, authorize('developer', 'admin'), userController.deleteUser);
+// Get all users - accessible by admins, managers, and developers
+router.get('/', authorize('admin', 'manager', 'developer'), userController.getAllUsers);
+
+// Get user by ID
+router.get('/:id', authorize('admin', 'manager', 'developer'), userController.getUserById);
+
+// Create user
+router.post('/', authorize('admin', 'developer'), userController.createUser);
+
+// Update user
+router.put('/:id', authorize('admin', 'developer'), userController.updateUser);
+
+// Toggle user status (active/inactive)
+router.patch('/:id/toggle-status', authorize('admin', 'developer'), userController.toggleUserStatus);
+
+// Delete user
+router.delete('/:id', authorize('admin', 'developer'), userController.deleteUser);
 
 module.exports = router;

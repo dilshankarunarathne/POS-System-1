@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
-    Alert,
-    Button,
-    Card,
-    Col,
-    Container,
-    Form,
-    Modal,
-    Row,
-    Table
+  Alert,
+  Button,
+  Card,
+  Col,
+  Container,
+  Form,
+  Modal,
+  Row,
+  Table
 } from 'react-bootstrap';
 import { PencilSquare, Plus, Trash } from 'react-bootstrap-icons';
 import { useAuth } from '../contexts/AuthContext';
@@ -31,6 +31,7 @@ interface User {
   email: string;
   role: string;
   shop?: Shop;
+  shopId?: Shop | string; // Add this to handle both direct shopId or populated shopId object
   active: boolean;
 }
 
@@ -162,7 +163,9 @@ const DeveloperUsers: React.FC = () => {
       email: user.email,
       password: '', // Don't set password when editing
       role: user.role,
-      shopId: user.shop?._id || ''
+      shopId: user.shop?._id || 
+            (user.shopId && typeof user.shopId !== 'string' ? user.shopId._id : 
+             (typeof user.shopId === 'string' ? user.shopId : ''))
     });
     setShowUserModal(true);
   };
@@ -310,7 +313,11 @@ const DeveloperUsers: React.FC = () => {
                   <td>
                     <span className="text-capitalize">{user.role}</span>
                   </td>
-                  <td>{user.shop?.name || '-'}</td>
+                  <td>
+                    {/* Handle both possible shop reference formats */}
+                    {user.shop?.name || 
+                    (user.shopId && typeof user.shopId !== 'string' ? user.shopId.name : '-')}
+                  </td>
                   <td>
                     <span className={`badge bg-${user.active ? 'success' : 'danger'}`}>
                       {user.active ? 'Active' : 'Inactive'}
@@ -498,4 +505,4 @@ const DeveloperUsers: React.FC = () => {
   );
 };
 
-export default DeveloperUsers; 
+export default DeveloperUsers;

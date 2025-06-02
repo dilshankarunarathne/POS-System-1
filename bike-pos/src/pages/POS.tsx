@@ -1241,68 +1241,74 @@ const POS: React.FC = () => {
       <Row className="h-100 g-0 flex-grow-1 overflow-hidden">
         
         {/* QR Scanner Section - Always visible but responsive */}
-        <Col xs={12} lg={2} className="h-100 border-bottom border-lg-end border-lg-bottom-0 bg-light overflow-auto">
-          <div className="d-flex flex-column p-2" style={{ height: '250px' }}>
-            <h5 className="mb-2 d-flex align-items-center">
-              <i className="bi bi-qr-code-scan me-2"></i>
-              QR Scanner
-              <Button 
-                variant="outline-secondary"
-                size="sm"
-                className="ms-2 rounded-circle p-1"
-                onClick={() => setQrScannerActive(prev => !prev)}
-                title={qrScannerActive ? "Pause camera" : "Start camera"}
-              >
-                <i className={`bi ${qrScannerActive ? "bi-pause-fill" : "bi-play-fill"}`}></i>
-              </Button>
-            </h5>
-            <div className="flex-grow-1 position-relative qr-scanner-container rounded shadow-sm overflow-hidden">
-              {qrScannerActive ? (
-                <QRScanner
-                  onScanSuccess={handleQRScanSuccess}
-                  onScanError={(error) => {
-                    console.warn('QR Scanner error:', error);
-                    setScanningMessage(`Scanner error: ${error}`);
-                  }}
-                  autoStart={true}
-                />
-              ) : (
-                <div className="d-flex justify-content-center align-items-center h-100 bg-dark text-white">
-                  <div className="text-center">
-                    <i className="bi bi-camera-video-off fs-1 mb-2 d-block"></i>
-                    <p className="mb-2">Camera paused</p>
-                    <Button 
-                      variant="outline-light" 
-                      size="sm"
-                      onClick={() => setQrScannerActive(true)}
-                    >
-                      Resume Camera
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-            {scanningMessage && (
-              <div className="alert alert-info mt-2 mb-0 shadow-sm py-2">
-                <small>{scanningMessage}</small>
-                <button 
-                  type="button" 
-                  className="btn-close float-end"
-                  style={{ padding: '0.25rem' }}
-                  onClick={() => setScanningMessage(null)}
-                ></button>
-              </div>
-            )}
+        <Col xs={12} lg={2} className="border-bottom border-lg-end border-lg-bottom-0 bg-light overflow-auto">
+  <div className="d-flex flex-column p-2" style={{ height: '200px' }}> {/* Reduced height for mobile */}
+    <h5 className="mb-2 d-flex align-items-center">
+      <i className="bi bi-qr-code-scan me-2"></i>
+      <span className="d-none d-sm-inline">QR Scanner</span> {/* Hide text on very small screens */}
+      <span className="d-sm-none">QR</span> {/* Show abbreviated text on small screens */}
+      <Button 
+        variant="outline-secondary"
+        size="sm"
+        className="ms-2 rounded-circle p-1"
+        onClick={() => setQrScannerActive(prev => !prev)}
+        title={qrScannerActive ? "Pause camera" : "Start camera"}
+      >
+        <i className={`bi ${qrScannerActive ? "bi-pause-fill" : "bi-play-fill"}`}></i>
+      </Button>
+    </h5>
+    <div className="flex-grow-1 position-relative qr-scanner-container rounded shadow-sm overflow-hidden">
+      {qrScannerActive ? (
+        <QRScanner
+          onScanSuccess={handleQRScanSuccess}
+          onScanError={(error) => {
+            console.warn('QR Scanner error:', error);
+            setScanningMessage(`Scanner error: ${error}`);
+          }}
+          autoStart={true}
+        />
+      ) : (
+        <div className="d-flex justify-content-center align-items-center h-100 bg-dark text-white">
+          <div className="text-center">
+            <i className="bi bi-camera-video-off fs-4 mb-1 d-block d-lg-none"></i> {/* Smaller icon on mobile */}
+            <i className="bi bi-camera-video-off fs-1 mb-2 d-none d-lg-block"></i> {/* Original size on desktop */}
+            <p className="mb-2 small d-lg-block">
+              <span className="d-none d-sm-inline">Camera paused</span>
+              <span className="d-sm-none">Paused</span>
+            </p>
+            <Button 
+              variant="outline-light" 
+              size="sm"
+              onClick={() => setQrScannerActive(true)}
+            >
+              <span className="d-none d-sm-inline">Resume Camera</span>
+              <span className="d-sm-none">Resume</span>
+            </Button>
           </div>
-        </Col>
+        </div>
+      )}
+    </div>
+    {scanningMessage && (
+      <div className="alert alert-info mt-2 mb-0 shadow-sm py-1"> {/* Reduced padding on mobile */}
+        <small className="d-block text-truncate">{scanningMessage}</small> {/* Truncate long messages */}
+        <button 
+          type="button" 
+          className="btn-close float-end"
+          style={{ padding: '0.25rem' }}
+          onClick={() => setScanningMessage(null)}
+        ></button>
+      </div>
+    )}
+  </div>
+</Col>
 
         {/* Main Content Section */}
         <Col xs={12} lg={10} className="h-100 d-flex flex-column bg-body-tertiary overflow-hidden">
           {/* Remove mobile QR button since QR scanner is always visible */}
           
           {/* Main content area with equal height columns */}
-          <div className="p-3 flex-grow-1 d-flex overflow-hidden">
-            <Row className="w-100 g-4 h-100">
+          <div className=" flex-grow-1 d-flex overflow-hidden">
+            <Row className="w-100 g-1 h-100">
               {/* Product Search and Grid Section */}
               <Col lg={8} className="h-100 d-flex flex-column overflow-hidden">
                 <div className="d-flex flex-column h-100 overflow-hidden"> {/* Wrapper div for flex column */}
@@ -1805,6 +1811,47 @@ const POS: React.FC = () => {
           word-break: break-word;
           max-height: none;
         }
+
+    
+    /* Adjust container height for mobile */
+    .py-4.px-3.px-md-4 {
+      height: auto !important;
+      min-height: calc(100vh - 56px);
+    }
+    
+    /* Stack layout properly on mobile */
+    .overflow-hidden.flex-grow-1 {
+      overflow: visible !important;
+    }
+  }
+  
+
+    
+    /* Reduce padding on mobile */
+    .p-3 {
+      padding: 1rem !important;
+    }
+    
+    /* Adjust card margins */
+    .mb-3 {
+      margin-bottom: 1rem !important;
+    }
+  }
+
+  .flex-1 {
+    flex: 1;
+    min-width: 100px;
+  }
+  
+  @media (max-width: 576px) {
+    .flex-1 {
+      flex-basis: 100%;
+      margin-bottom: 0.5rem;
+    }
+    .flex-wrap {
+      flex-direction: column;
+    }
+  }
       `}</style>
     </Container>
   );

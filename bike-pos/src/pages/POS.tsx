@@ -642,7 +642,7 @@ const POS: React.FC = () => {
       const currentShop = user?.shopId ? { name: user.shopId.name } : null;
       const shopName = currentShop?.name || "Bike Shop";
       const shopPhone = user?.shopId?.phone || "";
-
+      const shopAddress = user?.shopId?.address || ""; // Extract shop address
 
       // Create a hidden iframe for printing
       const printIframe = document.createElement('iframe');
@@ -746,6 +746,7 @@ const POS: React.FC = () => {
             <div class="receipt">
               <div class="text-center">
                 <h2 style="margin: 0px 0 4px 0; font-size: 18px;">${shopName}</h2>
+                ${shopAddress ? `<p style="margin: 0px 0 4px 0; font-size: 12px;">${shopAddress}</p>` : ''}
                 <h3 style="margin: 0px 0 4px 0; font-size: 16px;">RECEIPT</h3>
                 <p style="margin: 3px 0; font-size: 11px;">${receiptToPrint.date}</p>
                 <p style="margin: 3px 0; font-size: 11px;">Invoice: ${receiptToPrint.invoiceNumber}</p>
@@ -948,67 +949,129 @@ const POS: React.FC = () => {
             <p className="text-muted">No products found. Try a different search.</p>
           </div>
         ) : (
-          <div className="table-responsive h-100">
-            <table className="table table-hover mb-0">
-              <thead className="table-light sticky-top">
-                <tr>
-                  <th scope="col">Name</th>
-                  <th scope="col">Price</th>
-                  <th scope="col" className="text-center">Stock</th>
-                  <th scope="col" className="text-end">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {productsToRender.map(product => (
-                  <tr key={product.id} className={product.stockQuantity <= 0 ? 'table-secondary' : ''}>
-                    <td>
-                      <div className="d-flex flex-column">
-                        <span className="fw-medium text-truncate" 
-                          style={{ maxWidth: '200px' }} 
-                          title={product.name}>
-                          {product.name}
-                        </span>
-                        {product.description && (
-                          <small className="text-muted text-truncate" 
-                            style={{ maxWidth: '250px' }}
-                            title={product.description}>
-                            {product.description}
-                          </small>
-                        )}
-                      </div>
-                    </td>
-                    <td className="fw-bold">Rs. {product.price.toFixed(2)}</td>
-                    <td className="text-center">
-                      <Badge bg={product.stockQuantity > 10 ? "success" : 
-                                product.stockQuantity > 0 ? "warning" : "danger"}
-                             className="rounded-pill px-2">
-                        {product.stockQuantity}
-                      </Badge>
-                    </td>
-                    <td className="text-end">
-                      <Button
-                        variant={product.stockQuantity <= 0 ? "outline-secondary" : "primary"}
-                        size="sm"
-                        disabled={product.stockQuantity <= 0}
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          e.nativeEvent.stopImmediatePropagation();
-                          if (product.stockQuantity > 0) {
-                            addToCart(product);
-                          } else {
-                            setError('Product is out of stock.');
-                          }
-                        }}
-                        className="rounded-pill d-flex align-items-center ms-auto"
-                      >
-                        <>{BsPlus({ size: 16, className: "me-1" })}</>Add
-                      </Button>
-                    </td>
+          <div className="h-100 d-flex flex-column">
+            <div className="table-responsive-header">
+              <table className="table mb-0">
+                <thead className="table-light sticky-top">
+                  <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Price</th>
+                    <th scope="col" className="text-center">Stock</th>
+                    <th scope="col" className="text-end">Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+              </table>
+            </div>
+            <div className="table-responsive flex-grow-1 overflow-auto">
+              <table className="table table-hover mb-0">
+                <tbody>
+                  {productsToRender.map(product => (
+                    <tr key={product.id} className={product.stockQuantity <= 0 ? 'table-secondary' : ''}>
+                      <td className="product-name-cell">
+                        <div className="product-name-container">
+                          <span className="fw-medium product-name" title={product.name}>
+                            {product.name}
+                          </span>
+                          {product.description && (
+                            <small className="text-muted product-description" title={product.description}>
+                              {product.description}
+                            </small>
+                          )}
+                        </div>
+                      </td>
+                      <td className="fw-bold price-cell">Rs. {product.price.toFixed(2)}</td>
+                      <td className="text-center stock-cell">
+                        <Badge bg={product.stockQuantity > 10 ? "success" : 
+                                  product.stockQuantity > 0 ? "warning" : "danger"}
+                               className="rounded-pill px-2">
+                          {product.stockQuantity}
+                        </Badge>
+                      </td>
+                      <td className="text-end action-cell">
+                        <Button
+                          variant={product.stockQuantity <= 0 ? "outline-secondary" : "primary"}
+                          size="sm"
+                          disabled={product.stockQuantity <= 0}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.nativeEvent.stopImmediatePropagation();
+                            if (product.stockQuantity > 0) {
+                              addToCart(product);
+                            } else {
+                              setError('Product is out of stock.');
+                            }
+                          }}
+                          className="rounded-pill d-flex align-items-center ms-auto"
+                        >
+                          <>{BsPlus({ size: 16, className: "me-1" })}</>Add
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            {/* Add CSS to ensure consistent column widths between header and body tables */}
+            <style>{`
+              .table-responsive-header {
+                overflow: hidden;
+              }
+              .table-responsive-header table,
+              .table-responsive table {
+                table-layout: fixed;
+                width: 100%;
+              }
+              .table-responsive-header th:nth-child(1),
+              .product-name-cell {
+                width: 45%;
+              }
+              .table-responsive-header th:nth-child(2),
+              .price-cell {
+                width: 20%;
+              }
+              .table-responsive-header th:nth-child(3),
+              .stock-cell {
+                width: 15%;
+                text-align: center;
+              }
+              .table-responsive-header th:nth-child(4),
+              .action-cell {
+                width: 20%;
+                text-align: right;
+              }
+              
+              /* New styles for scrollable content within cells */
+              .product-name-container {
+                display: flex;
+                flex-direction: column;
+                overflow: hidden;
+              }
+              
+              .product-name {
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                overflow: hidden;
+                display: block;
+              }
+              
+              .product-description {
+                text-overflow: ellipsis;
+                white-space: nowrap;
+                overflow: hidden;
+                display: block;
+                margin-top: 2px;
+              }
+              
+              /* Add hover effect to show full content */
+              tr:hover .product-name,
+              tr:hover .product-description {
+                white-space: normal;
+                overflow: visible;
+                word-break: break-word;
+                max-height: none;
+              }
+            `}</style>
           </div>
         )}
       </div>
@@ -1171,15 +1234,15 @@ const POS: React.FC = () => {
   };
 
   return (
-    <Container fluid className="py-4 px-3 px-md-4">
+    <Container fluid className="py-4 px-3 px-md-4 d-flex flex-column" style={{ height: "calc(100vh - 56px)" }}>
        <Col>
                   <h4 className="fw-bold mb-0">Point of sale</h4>
                 </Col>
-      <Row className="h-100 g-0">
+      <Row className="h-100 g-0 flex-grow-1 overflow-hidden">
         
         {/* QR Scanner Section - Always visible but responsive */}
-        <Col xs={12} lg={2} className="h-auto h-lg-100 border-bottom border-lg-end border-lg-bottom-0 bg-light">
-          <div className="d-flex flex-column p-2" style={{ height: '200px', maxHeight: '200px' }}>
+        <Col xs={12} lg={2} className="h-100 border-bottom border-lg-end border-lg-bottom-0 bg-light overflow-auto">
+          <div className="d-flex flex-column p-2" style={{ height: '250px' }}>
             <h5 className="mb-2 d-flex align-items-center">
               <i className="bi bi-qr-code-scan me-2"></i>
               QR Scanner
@@ -1234,15 +1297,15 @@ const POS: React.FC = () => {
         </Col>
 
         {/* Main Content Section */}
-        <Col xs={12} lg={10} className="h-100 d-flex flex-column bg-body-tertiary">
+        <Col xs={12} lg={10} className="h-100 d-flex flex-column bg-body-tertiary overflow-hidden">
           {/* Remove mobile QR button since QR scanner is always visible */}
           
           {/* Main content area with equal height columns */}
           <div className="p-3 flex-grow-1 d-flex overflow-hidden">
             <Row className="w-100 g-4 h-100">
               {/* Product Search and Grid Section */}
-              <Col lg={8} className="h-100">
-                <div className="d-flex flex-column h-100"> {/* Wrapper div for flex column */}
+              <Col lg={8} className="h-100 d-flex flex-column overflow-hidden">
+                <div className="d-flex flex-column h-100 overflow-hidden"> {/* Wrapper div for flex column */}
                   <Card className="shadow-sm mb-3 border-0"> {/* Reduced margin bottom */}
                     <Card.Body className="pb-2">
                       <Row className="mb-3">
@@ -1350,8 +1413,73 @@ const POS: React.FC = () => {
                   
                   {/* Products Grid with proper flex-grow */}
                   <Card className="shadow-sm flex-grow-1 d-flex flex-column border-0 overflow-hidden">
-                    <div className="flex-grow-1 overflow-auto">
-                      {!isManualMode ? renderProductGrid() : (
+                    <div className="flex-grow-1 overflow-hidden">
+                      {!isManualMode ? (
+                        <div className="h-100 d-flex flex-column overflow-hidden">
+                          <div className="table-responsive-header">
+                            <table className="table mb-0">
+                              <thead className="table-light sticky-top">
+                                <tr>
+                                  <th scope="col">Name</th>
+                                  <th scope="col">Price</th>
+                                  <th scope="col" className="text-center">Stock</th>
+                                  <th scope="col" className="text-end">Action</th>
+                                </tr>
+                              </thead>
+                            </table>
+                          </div>
+                          <div className="table-responsive flex-grow-1 overflow-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
+                            <table className="table table-hover mb-0">
+                              <tbody>
+                                {(filteredProducts || []).map(product => (
+                                  <tr key={product.id} className={product.stockQuantity <= 0 ? 'table-secondary' : ''}>
+                                    <td className="product-name-cell">
+                                      <div className="product-name-container">
+                                        <span className="fw-medium product-name" title={product.name}>
+                                          {product.name}
+                                        </span>
+                                        {product.description && (
+                                          <small className="text-muted product-description" title={product.description}>
+                                            {product.description}
+                                          </small>
+                                        )}
+                                      </div>
+                                    </td>
+                                    <td className="fw-bold price-cell">Rs. {product.price.toFixed(2)}</td>
+                                    <td className="text-center stock-cell">
+                                      <Badge bg={product.stockQuantity > 10 ? "success" : 
+                                                product.stockQuantity > 0 ? "warning" : "danger"}
+                                            className="rounded-pill px-2">
+                                        {product.stockQuantity}
+                                      </Badge>
+                                    </td>
+                                    <td className="text-end action-cell">
+                                      <Button
+                                        variant={product.stockQuantity <= 0 ? "outline-secondary" : "primary"}
+                                        size="sm"
+                                        disabled={product.stockQuantity <= 0}
+                                        onClick={(e) => {
+                                          e.preventDefault();
+                                          e.stopPropagation();
+                                          e.nativeEvent.stopImmediatePropagation();
+                                          if (product.stockQuantity > 0) {
+                                            addToCart(product);
+                                          } else {
+                                            setError('Product is out of stock.');
+                                          }
+                                        }}
+                                        className="rounded-pill d-flex align-items-center ms-auto"
+                                      >
+                                        <>{BsPlus({ size: 16, className: "me-1" })}</>Add
+                                      </Button>
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      ) : (
                         <div className="text-center my-5 py-4 rounded bg-light">
                           <div className="mb-3">
                             <i className="bi bi-pencil-square fs-1 text-primary"></i>
@@ -1369,8 +1497,8 @@ const POS: React.FC = () => {
               </Col>
 
               {/* Cart Section */}
-              <Col lg={4} className="h-100">
-                <Card className="shadow-sm h-100 d-flex flex-column border-0">
+              <Col lg={4} className="h-100 d-flex flex-column overflow-hidden">
+                <Card className="shadow-sm h-100 d-flex flex-column border-0 overflow-hidden">
                   <Card.Header className="bg-primary text-white py-3">
                     <h5 className="mb-0 d-flex align-items-center">
                       <i className="bi bi-cart me-2"></i>
@@ -1381,8 +1509,8 @@ const POS: React.FC = () => {
                     </h5>
                   </Card.Header>
                   
-                  {/* Cart items with flex-grow-1 instead of hardcoded height */}
-                  <div className="overflow-auto" style={{ maxHeight: '50vh' }}>
+                  {/* Cart items with fixed height and scrolling */}
+                  <div className="overflow-auto flex-grow-1" style={{ maxHeight: "calc(100vh - 350px)" }}>
                     {renderCartItems()} 
                   </div>
                   
@@ -1611,6 +1739,73 @@ const POS: React.FC = () => {
           </Button>
         </Modal.Footer>
       </Modal>
+      
+      {/* Add styles for fixed heights and scrolling */}
+      <style>{`
+        .table-responsive-header {
+          overflow: hidden;
+        }
+        .table-responsive-header table,
+        .table-responsive table {
+          table-layout: fixed;
+          width: 100%;
+        }
+        .table-responsive-header th:nth-child(1),
+        .product-name-cell {
+          width: 45%;
+        }
+        .table-responsive-header th:nth-child(2),
+        .price-cell {
+          width: 20%;
+        }
+        .table-responsive-header th:nth-child(3),
+        .stock-cell {
+          width: 15%;
+          text-align: center;
+        }
+        .table-responsive-header th:nth-child(4),
+        .action-cell {
+          width: 20%;
+          text-align: right;
+        }
+        
+        /* Fixed height and overflow styles */
+        .table-responsive {
+          height: 100%;
+          overflow-y: auto;
+        }
+        
+        /* Product name and description styles */
+        .product-name-container {
+          display: flex;
+          flex-direction: column;
+          overflow: hidden;
+        }
+        
+        .product-name {
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          overflow: hidden;
+          display: block;
+        }
+        
+        .product-description {
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          overflow: hidden;
+          display: block;
+          margin-top: 2px;
+        }
+        
+        /* Add hover effect to show full content */
+        tr:hover .product-name,
+        tr:hover .product-description {
+          white-space: normal;
+          overflow: visible;
+          word-break: break-word;
+          max-height: none;
+        }
+      `}</style>
     </Container>
   );
 };

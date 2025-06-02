@@ -792,7 +792,7 @@ const POS: React.FC = () => {
                 ${receiptToPrint.discount > 0 ? `
                   <div class="summary-row">
                     <span>Discount:</span>
-                    <span>Rs. ${receiptToPrint.discount.toFixed(2)}</span>
+                    <span>-Rs. ${receiptToPrint.discount.toFixed(2)}</span>
                   </div>
                 ` : ''}
                 ${receiptToPrint.tax > 0 ? `

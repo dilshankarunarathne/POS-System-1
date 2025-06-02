@@ -299,6 +299,7 @@ const Sales: React.FC = () => {
       const currentShop = user?.shopId ? { name: user.shopId.name } : null;
       const shopName = currentShop?.name || "Bike Shop";
       const shopPhone = user?.shopId?.phone || "";
+      const shopAddress = user?.shopId?.address || "";
       
       // Format items for receipt with improved handling of manual items
       const receiptItems = sale.SaleItems?.map(item => {
@@ -307,15 +308,23 @@ const Sales: React.FC = () => {
           ? (item.name || 'Manual Item') 
           : (item.product?.name || item.Product?.name || 'Unknown Product');
         const unitPrice = item.price || item.unitPrice || 0;
+        const itemDiscount = item.discount || 0;
         const subtotal = item.subtotal || (unitPrice * item.quantity);
         
         return {
           name: productName,
           quantity: item.quantity,
           price: unitPrice,
-          total: subtotal - (item.discount || 0)
+          discount: itemDiscount,
+          total: subtotal - itemDiscount
         };
       }) || [];
+      
+      // Calculate total item discounts (separate from sale.discount)
+      const totalItemDiscounts = receiptItems.reduce((sum, item) => sum + item.discount, 0);
+      
+      // Calculate total discount (item discounts + sale discount)
+      const totalDiscount = totalItemDiscounts + sale.discount;
       
       // Generate receipt HTML content
       const receiptHtml = `
@@ -357,8 +366,6 @@ const Sales: React.FC = () => {
                 text-align: left;
                 font-size: 11px;
               }
-
-
               .item-row td {
                 font-size: 12px;
                 padding: 2px 0;
@@ -370,6 +377,10 @@ const Sales: React.FC = () => {
                 white-space: normal; /* Allow text to wrap */
                 max-width: 35mm; /* Set maximum width */
                 padding-right: 4px; /* Add some spacing from price */
+              }
+              .discount-text {
+                font-size: 10px;
+                color: #555;
               }
               .summary-row {
                 display: flex;
@@ -404,6 +415,7 @@ const Sales: React.FC = () => {
             <div class="receipt">
               <div class="text-center">
                 <h2 style="margin: 0px 0 4px 0; font-size: 18px;">${shopName}</h2>
+                ${shopAddress ? `<p style="margin: 0px 0 4px 0; font-size: 12px;">${shopAddress}</p>` : ''}
                 <h3 style="margin: 0px 0 4px 0; font-size: 16px;">RECEIPT</h3>
                 <p style="margin: 3px 0; font-size: 11px;">${new Date(sale.date).toLocaleString()}</p>
                 <p style="margin: 3px 0; font-size: 11px;">Invoice: ${sale.invoiceNumber}</p>
@@ -413,7 +425,7 @@ const Sales: React.FC = () => {
               
               <div>
                 <p style="margin: 2px 0; font-size: 11px;">Customer: ${sale.customerName || 'Walk-in Customer'}</p>
-                <p style="margin: 2px 0; font-size: 11px;">Cashier: ${sale.cashier?.username || sale.user?.username || sale.user?.name || 'Unknown'}</p>
+                <p style="margin: 2px 0; font-size: 11px;">Cashier: ${sale.user?.name || 'Unknown'}</p>
               </div>
               
               <hr />
@@ -430,7 +442,9 @@ const Sales: React.FC = () => {
                 <tbody>
                   ${receiptItems.map(item => `
                     <tr class="item-row">
-                      <td class="item-name">${item.name}</td>
+                      <td class="item-name">
+                        ${item.name}
+                      </td>
                       <td style="text-align: center;">${item.quantity}</td>
                       <td style="text-align: right;">${item.price.toFixed(2)}</td>
                       <td style="text-align: right;">${item.total.toFixed(2)}</td>
@@ -446,12 +460,13 @@ const Sales: React.FC = () => {
                   <span>Subtotal:</span>
                   <span>Rs. ${sale.subtotal.toFixed(2)}</span>
                 </div>
-                ${sale.discount > 0 ? `
+                ${totalDiscount > 0 ? `
                   <div class="summary-row">
                     <span>Discount:</span>
-                    <span>Rs. ${sale.discount.toFixed(2)}</span>
+                    <span>-Rs. ${totalDiscount.toFixed(2)}</span>
                   </div>
                 ` : ''}
+               
                 ${sale.tax > 0 ? `
                   <div class="summary-row">
                     <span>Tax:</span>

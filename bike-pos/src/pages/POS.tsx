@@ -853,7 +853,13 @@ const POS: React.FC = () => {
 
         setSuccessMessage('Sale completed successfully!');
 
-        directPrintReceipt(receiptDataForPrint);
+        // Print receipt and refresh page after completion
+        await directPrintReceipt(receiptDataForPrint);
+        
+        // Refresh the page after a short delay to allow printing to complete
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
       }
     } catch (err: any) {
       console.error('Error processing sale:', err);

@@ -24,14 +24,11 @@ import {
   Table
 } from 'react-bootstrap';
 import {
-  Award,
   BoxSeam,
-  Calendar,
   Cart,
-  CurrencyDollar,
-  GraphUp
+  CurrencyDollar
 } from 'react-bootstrap-icons';
-import { Bar, Line } from 'react-chartjs-2';
+import { Line } from 'react-chartjs-2';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { productsApi, reportsApi } from '../services/api';
@@ -69,6 +66,11 @@ const Dashboard: React.FC = () => {
   const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
   const [topProducts, setTopProducts] = useState<any[]>([]);
   const [dailySales, setDailySales] = useState<any[]>([]);
+  const [todaySales, setTodaySales] = useState<any>({
+    revenue: 0,
+    transactions: 0,
+    items: 0
+  });
   
   useEffect(() => {
     const fetchDashboardData = async () => {
@@ -86,6 +88,10 @@ const Dashboard: React.FC = () => {
         const endDate = new Date();
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - 6); // Last 7 days
+        
+        // Get today's date
+        const today = new Date();
+        const todayStr = today.toISOString().split('T')[0];
         
         // Format dates for API
         const startDateStr = startDate.toISOString().split('T')[0];
@@ -110,6 +116,29 @@ const Dashboard: React.FC = () => {
         } else {
           console.warn('Daily sales data is not an array:', dailyResponse.data);
           setDailySales([]);
+        }
+        
+        // Fetch today's sales data
+        const todayResponse = await reportsApi.getDailySales({
+          startDate: todayStr,
+          endDate: todayStr,
+          shopId: currentShop._id
+        });
+        
+        // Process today's sales data
+        if (Array.isArray(todayResponse.data) && todayResponse.data.length > 0) {
+          const todayData = todayResponse.data[0];
+          setTodaySales({
+            revenue: todayData.revenue || 0,
+            transactions: todayData.transactions || 0,
+            items: todayData.items || 0
+          });
+        } else {
+          setTodaySales({
+            revenue: 0,
+            transactions: 0,
+            items: 0
+          });
         }
         
         // Process sales data
@@ -328,82 +357,54 @@ const Dashboard: React.FC = () => {
         <>
           {/* Quick Stats */}
           <Row className="g-4 mb-4">
-            {/* Total Sales Revenue */}
-            <Col lg={3} md={6} sm={6} xs={12}>
+            {/* Today's Sales Revenue */}
+            <Col lg={4} md={6} sm={6} xs={12}>
               <Card className="h-100 shadow-sm border-0 stat-card">
                 <Card.Body className="p-3">
                   <div className="d-flex justify-content-between">
                     <div>
-                      <Card.Title as="h6" className="text-muted mb-1">Total Revenue</Card.Title>
-                      <h3 className="mb-0 fw-bold">Rs. {salesData.totals?.total?.toLocaleString() || '0.00'}</h3>
-                      <Badge bg="success" className="mt-2">Last 7 days</Badge>
+                      <Card.Title as="h6" className="text-muted mb-1">Today's Revenue</Card.Title>
+                      <h3 className="mb-0 fw-bold">Rs. {todaySales.revenue.toLocaleString()}</h3>
+                      <Badge bg="primary" className="mt-2">Today</Badge>
                     </div>
                     <div className="rounded-circle d-flex align-items-center justify-content-center stat-icon-bg primary-icon">
                       <CurrencyDollar size={22} />
                     </div>
                   </div>
-                  {dailySales.length > 1 && 
-                    <div className="mt-3">
-                      <small className={
-                        dailySales[dailySales.length-1]?.revenue > dailySales[dailySales.length-2]?.revenue 
-                          ? "text-success" : "text-danger"
-                      }>
-                        <GraphUp className="me-1" /> 
-                        {dailySales[dailySales.length-2]?.revenue > 0 
-                          ? (((dailySales[dailySales.length-1]?.revenue / dailySales[dailySales.length-2]?.revenue) - 1) * 100).toFixed(1)
-                          : '0'}% vs previous day
-                      </small>
-                    </div>
-                  }
+                  <div className="mt-3">
+                    <small className="text-muted">
+                      {todaySales.items} items sold
+                    </small>
+                  </div>
                 </Card.Body>
               </Card>
             </Col>
-            
-            {/* Total Transactions */}
-            <Col lg={3} md={6} sm={6} xs={12}>
+
+            {/* Today's Transactions */}
+            <Col lg={4} md={6} sm={6} xs={12}>
               <Card className="h-100 shadow-sm border-0 stat-card">
                 <Card.Body className="p-3">
                   <div className="d-flex justify-content-between">
                     <div>
-                      <Card.Title as="h6" className="text-muted mb-1">Transactions</Card.Title>
-                      <h3 className="mb-0 fw-bold">{salesData.totals?.totalSales?.toLocaleString() || 0}</h3>
-                      <Badge bg="info" className="mt-2">Last 7 days</Badge>
+                      <Card.Title as="h6" className="text-muted mb-1">Today's Transactions</Card.Title>
+                      <h3 className="mb-0 fw-bold">{todaySales.transactions}</h3>
+                      <Badge bg="info" className="mt-2">Today</Badge>
                     </div>
-                    <div className="rounded-circle d-flex align-items-center justify-content-center stat-icon-bg success-icon">
-                      <Calendar size={22} />
+                    <div className="rounded-circle d-flex align-items-center justify-content-center stat-icon-bg info-icon">
+                      <Cart size={22} />
                     </div>
                   </div>
                   <div className="mt-3">
                     <small className="text-muted">
-                      Average: {Math.round(salesData.totals?.totalSales / 7) || 0} per day
+                      Avg: Rs. {todaySales.transactions > 0 ? (todaySales.revenue / todaySales.transactions).toLocaleString() : '0'} per sale
                     </small>
                   </div>
                 </Card.Body>
               </Card>
             </Col>
             
-            {/* Average Sale Value */}
-            <Col lg={3} md={6} sm={6} xs={12}>
-              <Card className="h-100 shadow-sm border-0 stat-card">
-                <Card.Body className="p-3">
-                  <div className="d-flex justify-content-between">
-                    <div>
-                      <Card.Title as="h6" className="text-muted mb-1">Avg Sale Value</Card.Title>
-                      <h3 className="mb-0 fw-bold">
-                        Rs. {salesData.totals?.averageSale?.toLocaleString() || '0.00'}
-                      </h3>
-                      <Badge bg="warning" className="mt-2">Last 7 days</Badge>
-                    </div>
-                    <div className="rounded-circle d-flex align-items-center justify-content-center stat-icon-bg warning-icon">
-                      <Award size={22} />
-                    </div>
-                  </div>
-                </Card.Body>
-              </Card>
-            </Col>
-            
             {/* Low Stock Items */}
-            <Col lg={3} md={6} sm={6} xs={12}>
+            <Col lg={4} md={6} sm={6} xs={12}>
               <Card className="h-100 shadow-sm border-0 stat-card">
                 <Card.Body className="p-3">
                   <div className="d-flex justify-content-between">
@@ -595,6 +596,11 @@ const Dashboard: React.FC = () => {
         .danger-icon {
           background-color: rgba(220, 53, 69, 0.1);
           color: #dc3545;
+        }
+        
+        .info-icon {
+          background-color: rgba(13, 202, 240, 0.1);
+          color: #0dcaf0;
         }
       `}</style>
     </Container>

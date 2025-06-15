@@ -346,24 +346,35 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
         id="qr-reader" 
         style={{ 
           width: '100%', 
-          maxWidth: '500px',
-          minHeight: '300px', // Enforce minimum height
+          maxWidth: '100%',
+          minHeight: '300px', 
           position: 'relative',
+          height: 'calc(100vh - 250px)', // Responsive height based on viewport
+          maxHeight: '500px', // Maximum height constraint
         }}
+        className="mb-3"
       ></div>
       
-      <p className="text-center mt-2">
-        Position the QR code within the frame to scan
-      </p>
-      
       {errorMessage && (
-        <Alert variant="danger" className="mt-2 w-100" style={{ maxWidth: '500px' }}>
+        <Alert 
+          variant="danger" 
+          className="mt-2 w-100" 
+          style={{ 
+            maxWidth: '100%', 
+            fontSize: 'clamp(0.875rem, 2vw, 1rem)' // Responsive font size
+          }}
+        >
           {errorMessage}
         </Alert>
       )}
       
       {scanning && (
-        <p className="text-muted text-center mt-1 small">
+        <p className="text-muted text-center mt-2 small w-100" 
+           style={{ 
+             maxWidth: '100%', 
+             fontSize: 'clamp(0.75rem, 1.5vw, 0.875rem)',
+             padding: '0 10px'
+           }}>
           Camera active. If scanning fails, try adjusting lighting or camera angle.
         </p>
       )}

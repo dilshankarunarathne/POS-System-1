@@ -861,33 +861,6 @@ const Products: React.FC = () => {
               </InputGroup>
             </Col>
             
-            <Col xs={12} sm={6} md={3}>
-              <Form.Select
-                value={categoryFilter}
-                onChange={(e) => handleFilterSelectChange(e, 'category')}
-              >
-                <option value="">All Categories</option>
-                {categories.map((category) => (
-                  <option key={category.id} value={category.id?.toString() || ''}>
-                    {category.name}
-                  </option>
-                ))}
-              </Form.Select>
-            </Col>
-            
-            <Col xs={12} sm={6} md={3}>
-              <Form.Select
-                value={supplierFilter}
-                onChange={(e) => handleFilterSelectChange(e, 'supplier')}
-              >
-                <option value="">All Suppliers</option>
-                {suppliers.map((supplier) => (
-                  <option key={supplier.id} value={supplier.id?.toString() || ''}>
-                    {supplier.name}
-                  </option>
-                ))}
-              </Form.Select>
-            </Col>
             
             <Col xs={12} sm={6} md={2}>
               <Button
@@ -905,9 +878,9 @@ const Products: React.FC = () => {
       {/* Products Table */}
       <Card>
         <Card.Body className="p-0">
-          <div className="table-responsive">
-            <Table hover>
-              <thead>
+          <div className="table-responsive" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
+            <Table hover className="mb-0">
+              <thead className="sticky-top bg-white" style={{ zIndex: 10 }}>
                 <tr>
                   <th style={{ width: '80px' }}></th>
                   <th>Name</th>

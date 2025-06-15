@@ -853,13 +853,7 @@ const POS: React.FC = () => {
 
         setSuccessMessage('Sale completed successfully!');
 
-        // Print receipt and refresh page after completion
-        await directPrintReceipt(receiptDataForPrint);
-        
-        // Refresh the page after a short delay to allow printing to complete
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
+        directPrintReceipt(receiptDataForPrint);
       }
     } catch (err: any) {
       console.error('Error processing sale:', err);
@@ -931,7 +925,7 @@ const POS: React.FC = () => {
   };
 
   return (
-    <Container fluid className="py-4 px-3 px-md-4 d-flex flex-column" style={{ height: "calc(100vh - 56px)" }}>
+    <Container fluid className="py-4 px-3 px-md-4 d-flex flex-column" style={{ minHeight: "calc(100vh - 56px)" }}>
       <Row className="mb-3">
         <Col>
           <div className="d-flex justify-content-between align-items-center">
@@ -954,7 +948,9 @@ const POS: React.FC = () => {
                   style={{ fontSize: '0.8rem', padding: '0.5rem 0.75rem' }}
                 >
                   <i className={`bi ${qrScannerActive ? "bi-qr-code-scan" : "bi-qr-code"}`}></i>
-                  QR Scanner {qrScannerActive ? "ON" : "OFF"}
+                  <span className="d-none d-sm-inline">QR Scanner</span>
+                  <span className="d-sm-none">QR</span>
+                  <span className="d-none d-md-inline">{qrScannerActive ? "ON" : "OFF"}</span>
                 </Badge>
               </OverlayTrigger>
 
@@ -968,33 +964,19 @@ const POS: React.FC = () => {
                   onClick={() => setQrScannerActive(prev => !prev)}
                   className="rounded-pill"
                 >
-                  <i className={`bi ${qrScannerActive ? "bi-stop-fill" : "bi-play-fill"} me-1`}></i>
-                  {qrScannerActive ? "Stop" : "Start"}
+                  <i className={`bi ${qrScannerActive ? "bi-stop-fill" : "bi-play-fill"}`}></i>
+                  <span className="d-none d-sm-inline ms-1">
+                    {qrScannerActive ? "Stop" : "Start"}
+                  </span>
                 </Button>
               </OverlayTrigger>
-
-              <div className="d-none d-lg-block">
-                <OverlayTrigger
-                  placement="bottom"
-                  overlay={<Tooltip>Keyboard Shortcuts (F1)</Tooltip>}
-                >
-                  <Button
-                    variant="outline-info"
-                    size="sm"
-                    onClick={() => setShowHelpModal(true)}
-                    className="rounded-pill"
-                  >
-                    <i className="bi bi-question-circle"></i>
-                  </Button>
-                </OverlayTrigger>
-              </div>
             </div>
           </div>
         </Col>
       </Row>
 
-      <Row className="h-100 g-0 flex-grow-1 overflow-hidden">
-        <Col xs={12} className="h-100 d-flex flex-column bg-body-tertiary overflow-hidden">
+      <Row className="flex-grow-1 g-0">
+        <Col xs={12} className="d-flex flex-column bg-body-tertiary">
           <div style={{ display: 'none' }}>
             {qrScannerActive && (
               <QRScanner
@@ -1022,10 +1004,10 @@ const POS: React.FC = () => {
             </div>
           )}
           
-          <div className="flex-grow-1 d-flex overflow-hidden">
-            <Row className="w-100 g-1 h-100">
-              <Col lg={8} className="h-100 d-flex flex-column overflow-hidden">
-                <div className="d-flex flex-column h-100 overflow-hidden">
+          <div className="d-flex flex-lg-row flex-column">
+            <Row className="w-100 g-1">
+              <Col xs={12} lg={8} className="products-section">
+                <div className="d-flex flex-column">
                   <Card className="shadow-sm mb-3 border-0">
                     <Card.Body className="pb-2">
                       <Row className="mb-3">
@@ -1153,10 +1135,10 @@ const POS: React.FC = () => {
                     </Card.Body>
                   </Card>
                   
-                  <Card className="shadow-sm flex-grow-1 d-flex flex-column border-0 overflow-hidden">
-                    <div className="flex-grow-1 overflow-hidden">
+                  <Card className="shadow-sm border-0 products-card">
+                    <div className="products-container">
                       {!isManualMode ? (
-                        <div className="h-100 d-flex flex-column overflow-hidden">
+                        <div className="products-table-container">
                           <div className="table-responsive-header">
                             <table className="table mb-0">
                               <thead className="table-light sticky-top">
@@ -1168,7 +1150,7 @@ const POS: React.FC = () => {
                               </thead>
                             </table>
                           </div>
-                          <div className="table-responsive flex-grow-1 overflow-auto" style={{ maxHeight: "calc(100vh - 280px)" }}>
+                          <div className="table-responsive products-table">
                             <table className="table table-hover mb-0">
                               <tbody>
                                 {(filteredProducts || []).map(product => (
@@ -1227,8 +1209,8 @@ const POS: React.FC = () => {
                 </div>
               </Col>
 
-              <Col lg={4} className="h-100 d-flex flex-column overflow-hidden">
-                <Card className="shadow-sm h-100 d-flex flex-column border-0 overflow-hidden">
+              <Col xs={12} lg={4} className="cart-section">
+                <Card className="shadow-sm border-0 cart-card">
                   <Card.Header className="bg-primary text-white py-3">
                     <h5 className="mb-0 d-flex align-items-center">
                       <i className="bi bi-cart me-2"></i>
@@ -1239,7 +1221,7 @@ const POS: React.FC = () => {
                     </h5>
                   </Card.Header>
                   
-                  <div className="overflow-auto flex-grow-1" style={{ maxHeight: "calc(100vh - 350px)" }}>
+                  <div className="cart-items-container">
                     <ListGroup variant="flush" className="cart-items">
                       {cartItems.length === 0 ? (
                         <ListGroup.Item className="text-center py-5">
@@ -1767,6 +1749,78 @@ const POS: React.FC = () => {
           }
           .flex-wrap {
             flex-direction: column;
+          }
+        }
+        
+        @media (max-width: 991.98px) {
+          .products-section {
+            margin-bottom: 1rem;
+          }
+          
+          .products-card {
+            min-height: 400px;
+          }
+          
+          .products-container {
+            min-height: 350px;
+          }
+          
+          .products-table-container {
+            height: 350px;
+            display: flex;
+            flex-direction: column;
+          }
+          
+          .products-table {
+            flex: 1;
+            overflow-y: auto;
+          }
+          
+          .cart-card {
+            min-height: 500px;
+            display: flex;
+            flex-direction: column;
+          }
+          
+          .cart-items-container {
+            flex: 1;
+            overflow-y: auto;
+            max-height: 400px;
+          }
+        }
+        
+        @media (min-width: 992px) {
+          .products-section,
+          .cart-section {
+            height: calc(100vh - 200px);
+          }
+          
+          .products-card,
+          .cart-card {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+          }
+          
+          .products-container {
+            flex: 1;
+            overflow: hidden;
+          }
+          
+          .products-table-container {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+          }
+          
+          .products-table {
+            flex: 1;
+            overflow-y: auto;
+          }
+          
+          .cart-items-container {
+            flex: 1;
+            overflow-y: auto;
           }
         }
       `}</style>

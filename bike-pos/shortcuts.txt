@@ -1,0 +1,16 @@
+Global Keyboard Shortcuts:
+
+Ctrl+F or F3 - Focus search input
+F9 or Ctrl+Enter - Checkout
+Ctrl+Delete - Clear cart
+F2 - Toggle manual mode
+F4 - Toggle QR scanner
+F1 - Show help modal
+Auto-focus search when typing alphanumeric characters
+Smart Focus Management: Shortcuts are disabled when typing in input fields or when modals are open
+
+Visual Indicators: Tooltips on buttons showing their shortcuts and keyboard shortcut hints in the header
+
+Help System: F1 opens a comprehensive help modal showing all available shortcuts
+
+Input Focus Tracking: Prevents conflicts between shortcuts and normal typing

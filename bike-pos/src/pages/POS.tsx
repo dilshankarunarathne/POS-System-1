@@ -10,10 +10,11 @@ import {
   InputGroup,
   ListGroup,
   Modal,
+  OverlayTrigger,
   Row,
-  Spinner
+  Spinner,
+  Tooltip
 } from 'react-bootstrap';
-// Fix icon imports
 import {
   BsDash,
   BsPlus,
@@ -23,9 +24,8 @@ import {
 } from 'react-icons/bs';
 import QRScanner from '../components/QRScanner';
 import { useAuth } from '../contexts/AuthContext';
-import { productsApi, salesApi } from '../services/api'; // Add salesApi import
+import { productsApi, salesApi } from '../services/api';
 
-// Define Product type
 interface Product {
   id: number;
   name: string;
@@ -40,30 +40,27 @@ interface Product {
   };
 }
 
-// Update CartItem type to handle manual items
 interface CartItem {
-  product?: Product; // Make product optional for manual items
-  manualItem?: boolean; // Flag for manual items
-  name?: string; // For manual items
-  barcode?: string; // Optional barcode for manual items
-  price?: number; // Price for manual items
+  product?: Product;
+  manualItem?: boolean;
+  name?: string;
+  barcode?: string;
+  price?: number;
   quantity: number;
   subtotal: number;
   discount: number;
 }
 
-// Payment method type
 type PaymentMethod = 'cash' | 'credit_card' | 'debit_card' | 'mobile_payment' | 'other';
 
-// Update Sale interface to completely separate manual and product items
 interface Sale {
   items: Array<{
     productId?: number;
     quantity: number;
     price: number;
     discount?: number;
-    isManual?: boolean; // Updated flag name for consistency with backend
-    name?: string; // Name for manual items
+    isManual?: boolean;
+    name?: string;
   }>;
   subtotal: number;
   discount: number;
@@ -75,7 +72,6 @@ interface Sale {
   user?: number;
 }
 
-// Define Receipt data structure
 interface ReceiptData {
   id: string | number;
   invoiceNumber: string;
@@ -107,97 +103,160 @@ const POS: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [manualDiscount, setManualDiscount] = useState<number>(0);
-  
-  // Checkout dialog state
+
   const [checkoutDialogOpen, setCheckoutDialogOpen] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
   const [processingSale, setProcessingSale] = useState(false);
-  
-  // Receipt dialog state
+
   const [receiptDialogOpen, setReceiptDialogOpen] = useState(false);
   const [receiptUrl, setReceiptUrl] = useState('');
   const [receiptData, setReceiptData] = useState<ReceiptData | null>(null);
   const [printingReceipt, setPrintingReceipt] = useState(false);
-  
-  // Receipt preview reference for direct printing
+
   const receiptPreviewRef = useRef<HTMLDivElement>(null);
-  
-  // QR scanner state
+
   const [scanningMessage, setScanningMessage] = useState<string | null>(null);
   const [scanningProduct, setScanningProduct] = useState<Product | null>(null);
-  const [qrScannerActive, setQrScannerActive] = useState(true); // Add state to track scanner activity
-  
-  // Focus references
-  const barcodeInputRef = useRef<HTMLInputElement>(null);
-  
-  // Add a reference for the complete sale button
-  const completeSaleButtonRef = useRef<HTMLButtonElement>(null);
-  
-  // Add a state to track temporary empty input values
-  const [tempQuantities, setTempQuantities] = useState<{[key: number]: string}>({});
+  const [qrScannerActive, setQrScannerActive] = useState(true);
 
-  // Add state for manual entry mode and form
+  const barcodeInputRef = useRef<HTMLInputElement>(null);
+
+  const completeSaleButtonRef = useRef<HTMLButtonElement>(null);
+
+  const [tempQuantities, setTempQuantities] = useState<{ [key: number]: string }>({});
+
   const [isManualMode, setIsManualMode] = useState(false);
   const [manualItemName, setManualItemName] = useState('');
   const [manualItemPrice, setManualItemPrice] = useState('');
   const [manualItemQuantity, setManualItemQuantity] = useState('1');
-  
-  // Load products on mount
+
+  const [showHelpModal, setShowHelpModal] = useState(false);
+  const [isTypingInInput, setIsTypingInInput] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         setLoadingProducts(true);
         const response = await productsApi.getAll();
-        // Ensure we always have an array, even if response.data.products is undefined
         const productsData = response.data?.products || [];
         setProducts(productsData);
         setFilteredProducts(productsData);
       } catch (err) {
         console.error('Error fetching products:', err);
         setError('Failed to load products. Please try again.');
-        // Set empty arrays to prevent undefined errors
         setProducts([]);
         setFilteredProducts([]);
       } finally {
         setLoadingProducts(false);
       }
     };
-    
+
     fetchProducts();
   }, []);
-  
-  // Filter products when search query changes
+
   useEffect(() => {
     if (!searchQuery.trim()) {
       setFilteredProducts(products);
       return;
     }
-    
-    const filtered = products.filter(product => 
+
+    const filtered = products.filter(product =>
       product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       product.barcode.includes(searchQuery)
     );
-    
+
     setFilteredProducts(filtered);
   }, [searchQuery, products]);
-  
-  // Focus barcode input when component mounts
+
   useEffect(() => {
     if (barcodeInputRef.current) {
       barcodeInputRef.current.focus();
     }
   }, []);
-  
-  // Update the QR scanner useEffect to better handle camera activation/deactivation
+
   useEffect(() => {
-    // Only activate camera when the component is visible and not in a modal
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (isTypingInInput || checkoutDialogOpen || showHelpModal || processingSale) {
+        return;
+      }
+
+      const target = event.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') {
+        return;
+      }
+
+      switch (event.key) {
+        case 'F3':
+          event.preventDefault();
+          focusSearchInput();
+          break;
+
+        case 'f':
+          if (event.ctrlKey) {
+            event.preventDefault();
+            focusSearchInput();
+          }
+          break;
+
+        case 'F9':
+          event.preventDefault();
+          if (cartItems.length > 0) {
+            handleCheckout();
+          }
+          break;
+
+        case 'Enter':
+          if (event.ctrlKey && cartItems.length > 0) {
+            event.preventDefault();
+            handleCheckout();
+          }
+          break;
+
+        case 'Delete':
+          if (event.ctrlKey && cartItems.length > 0) {
+            event.preventDefault();
+            clearCart();
+          }
+          break;
+
+        case 'F2':
+          event.preventDefault();
+          setIsManualMode(prev => !prev);
+          break;
+
+        case 'F4':
+          event.preventDefault();
+          setQrScannerActive(prev => !prev);
+          break;
+
+        case 'F1':
+          event.preventDefault();
+          setShowHelpModal(true);
+          break;
+
+        default:
+          if (!isManualMode && /^[a-zA-Z0-9]$/.test(event.key)) {
+            focusSearchInput();
+          }
+          break;
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isTypingInInput, checkoutDialogOpen, showHelpModal, processingSale, cartItems.length, isManualMode]);
+
+  useEffect(() => {
     const activateCamera = () => {
       if (qrScannerActive) {
         const qrScannerElement = document.querySelector('.qr-scanner-container video');
         if (qrScannerElement) {
-          // If there's a start button in the QR scanner, simulate a click on it
           const startButton = document.querySelector('.qr-scanner-container button') as HTMLButtonElement;
           if (startButton) {
             try {
@@ -209,14 +268,12 @@ const POS: React.FC = () => {
         }
       }
     };
-    
-    // Initial activation with delay to ensure DOM is ready
+
     const timeoutId = setTimeout(activateCamera, 500);
-    
+
     return () => {
       clearTimeout(timeoutId);
-      
-      // Cleanup: ensure video tracks are stopped when component unmounts or scanner becomes inactive
+
       if (!qrScannerActive) {
         const videoElements = document.querySelectorAll('.qr-scanner-container video');
         videoElements.forEach((videoElement: any) => {
@@ -230,64 +287,87 @@ const POS: React.FC = () => {
         });
       }
     };
-  }, [qrScannerActive]); // Depend on qrScannerActive state
-  
-  // Add a visibility change listener to handle tab/window visibility changes
+  }, [qrScannerActive]);
+
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
-        // Page is not visible, deactivate camera to avoid resource waste and errors
         setQrScannerActive(false);
       } else {
-        // Page is visible again, reactivate camera
         setQrScannerActive(true);
       }
     };
-    
+
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    
+
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, []);
-  
-  // Calculate cart totals
+
+  useEffect(() => {
+    if (checkoutDialogOpen && !processingSale) {
+      setTimeout(() => {
+        if (completeSaleButtonRef.current) {
+          completeSaleButtonRef.current.focus();
+        }
+      }, 100);
+
+      const handleEnterKey = (event: KeyboardEvent) => {
+        if (event.key === 'Enter' && !processingSale) {
+          event.preventDefault();
+          processSale();
+        }
+      };
+
+      window.addEventListener('keydown', handleEnterKey);
+
+      return () => {
+        window.removeEventListener('keydown', handleEnterKey);
+      };
+    }
+  }, [checkoutDialogOpen, processingSale]);
+
+  const focusSearchInput = () => {
+    if (!isManualMode && searchInputRef.current) {
+      searchInputRef.current.focus();
+      searchInputRef.current.select();
+    }
+  };
+
+  const handleInputFocus = () => setIsTypingInInput(true);
+  const handleInputBlur = () => setIsTypingInInput(false);
+
   const cartSubtotal = cartItems.reduce((sum, item) => sum + item.subtotal, 0);
   const cartDiscount = cartItems.reduce((sum, item) => sum + item.discount, 0);
-  const cartTax = 0; // We can implement tax calculation if needed
+  const cartTax = 0;
   const cartTotal = cartSubtotal - cartDiscount - manualDiscount + cartTax;
-  
-  // Handle barcode scan/input
+
   const handleBarcodeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!barcodeInput.trim()) return;
-    
+
     try {
       setLoading(true);
       setError(null);
-      
+
       const response = await productsApi.getByBarcode(barcodeInput);
       const product = response.data;
-      
-      // Check if product exists
+
       if (!product) {
         setError('Product not found. Please try again.');
         return;
       }
-      
-      // Check if product is in stock
+
       if (product.stockQuantity <= 0) {
         setError('Product is out of stock.');
         return;
       }
-      
-      // Add product to cart
+
       addToCart(product);
-      
-      // Clear barcode input
       setBarcodeInput('');
-      
+
     } catch (err) {
       console.error('Error fetching product by barcode:', err);
       setError('Product not found or an error occurred.');
@@ -298,26 +378,23 @@ const POS: React.FC = () => {
       }
     }
   };
-  
-  // Handle successful QR scan
+
   const handleQRScanSuccess = async (qrData: any) => {
     try {
       setLoading(true);
       setScanningMessage(null);
       setScanningProduct(null);
-      
+
       console.log("QR scan received:", qrData);
-      
-      // Verify we have usable data in the QR code
+
       if (!qrData) {
         setScanningMessage('Invalid QR data: Empty or null data received');
         return;
       }
-      
+
       let product;
       let identifierType = '';
-      
-      // First try using barcode if available
+
       if (qrData.barcode) {
         identifierType = 'barcode';
         console.log("Trying to fetch by barcode:", qrData.barcode);
@@ -329,11 +406,9 @@ const POS: React.FC = () => {
           }
         } catch (error) {
           console.warn("Barcode lookup failed:", error);
-          // Continue to try other methods
         }
       }
-      
-      // If no product found by barcode, try by ID
+
       if (!product && qrData.id) {
         identifierType = 'id';
         console.log("Trying to fetch by ID:", qrData.id);
@@ -347,45 +422,35 @@ const POS: React.FC = () => {
           console.warn("ID lookup failed:", error);
         }
       }
-      
-      // If both methods failed, search by name as last resort
+
       if (!product && qrData.name) {
         identifierType = 'name';
         console.log("Trying to search by name:", qrData.name);
-        // This would require implementing a search by name API
         try {
-          // Use getAll with query params instead of a direct search method
           const response = await productsApi.getAll({ search: qrData.name });
           if (response.data && response.data.products && response.data.products.length > 0) {
-            product = response.data.products[0]; // Take the first match
+            product = response.data.products[0];
             console.log("Product found by name search:", product);
           }
         } catch (error) {
           console.warn("Name search failed:", error);
         }
       }
-      
-      // Check if product exists
+
       if (!product) {
         setScanningMessage(`Product not found. Could not find product with ${identifierType || 'provided data'}.`);
         return;
       }
-      
-      // Check if product is in stock
+
       if (product.stockQuantity <= 0) {
         setScanningMessage('Product is out of stock.');
         return;
       }
-      
-      // Set the scanned product for display
+
       setScanningProduct(product);
-      
-      // Directly add the product to cart instead of showing quantity modal
       addToCart(product);
-      
-      // Show success message
       setScanningMessage(`Added ${product.name} to cart!`);
-      
+
     } catch (err) {
       console.error('Error processing QR code:', err);
       setScanningMessage('Error processing QR code. Please try again or enter the barcode manually.');
@@ -394,46 +459,30 @@ const POS: React.FC = () => {
     }
   };
 
-  // Add product to cart
   const addToCart = (product: Product) => {
-    console.log('addToCart called for:', product.name);
-    
-    // Use a function that receives the latest state to ensure we're working with the most current data
     setCartItems(prevItems => {
-      console.log('Previous cart items:', prevItems.length);
-      
-      // Check if product is already in cart
       const existingItemIndex = prevItems.findIndex(
         item => item.product && item.product.id === product.id
       );
-      
+
       if (existingItemIndex >= 0) {
-        // Get the most up-to-date item from the current state
         const currentItem = prevItems[existingItemIndex];
-        console.log('Product exists, current quantity:', currentItem.quantity);
-        
-        // Update quantity if already in cart
-        const updatedItems = [...prevItems];
-        
-        // Check if we have enough stock
+
         if (currentItem.product && currentItem.quantity >= currentItem.product.stockQuantity) {
           setError('Cannot add more of this product. Stock limit reached.');
           return prevItems;
         }
-        
-        // Only increment by 1
+
         const newQuantity = currentItem.quantity + 1;
+        const updatedItems = [...prevItems];
         updatedItems[existingItemIndex] = {
           ...currentItem,
           quantity: newQuantity,
           subtotal: newQuantity * (currentItem.product?.price || currentItem.price || 0)
         };
-        
-        console.log('New quantity:', newQuantity);
+
         return updatedItems;
       } else {
-        console.log('Adding new product to cart');
-        // Add new item to cart
         return [
           ...prevItems,
           {
@@ -446,51 +495,43 @@ const POS: React.FC = () => {
       }
     });
   };
-  
-  // Update cart item quantity
+
   const updateCartItemQuantity = (index: number, newQuantity: number) => {
     setCartItems(prevItems => {
       const updatedItems = [...prevItems];
       const item = updatedItems[index];
-      
-      // Check limits
+
       if (newQuantity <= 0) {
-        // Remove item if quantity becomes 0
         updatedItems.splice(index, 1);
         return updatedItems;
       }
-      
+
       if (item.product && newQuantity > item.product.stockQuantity) {
         setError('Cannot add more of this product. Stock limit reached.');
         return prevItems;
       }
-      
-      // Update quantity and subtotal
+
       item.quantity = newQuantity;
-      // Calculate subtotal based on whether it's a product or manual item
       item.subtotal = newQuantity * (item.product?.price || item.price || 0);
-      
+
       return updatedItems;
     });
   };
-  
-  // Handle item discount change
+
   const handleItemDiscountChange = (index: number, discount: number) => {
     setCartItems(prevItems => {
       const updatedItems = [...prevItems];
       const item = updatedItems[index];
-      
-      // Ensure discount doesn't exceed item subtotal
+
       const maxDiscount = item.subtotal;
-      const validDiscount = isNaN(discount) || discount < 0 ? 0 : 
-                           discount > maxDiscount ? maxDiscount : discount;
-      
+      const validDiscount = isNaN(discount) || discount < 0 ? 0 :
+        discount > maxDiscount ? maxDiscount : discount;
+
       item.discount = validDiscount;
       return updatedItems;
     });
   };
 
-  // Remove item from cart
   const removeCartItem = (index: number) => {
     setCartItems(prevItems => {
       const updatedItems = [...prevItems];
@@ -498,153 +539,29 @@ const POS: React.FC = () => {
       return updatedItems;
     });
   };
-  
-  // Clear cart
+
   const clearCart = () => {
     setCartItems([]);
   };
-  
-  // Handle checkout process
+
   const handleCheckout = async () => {
     if (cartItems.length === 0) {
       setError('Cart is empty. Please add items before checkout.');
       return;
     }
-    
-    // Open checkout dialog
+
     setCheckoutDialogOpen(true);
   };
-  
-  // Add useEffect to handle keyboard events for the checkout dialog
-  useEffect(() => {
-    if (checkoutDialogOpen && !processingSale) {
-      // Focus the complete sale button when the dialog opens
-      setTimeout(() => {
-        if (completeSaleButtonRef.current) {
-          completeSaleButtonRef.current.focus();
-        }
-      }, 100);
-      
-      // Add event listener for Enter key
-      const handleEnterKey = (event: KeyboardEvent) => {
-        if (event.key === 'Enter' && !processingSale) {
-          event.preventDefault();
-          processSale();
-        }
-      };
-      
-      // Add the event listener
-      window.addEventListener('keydown', handleEnterKey);
-      
-      // Clean up
-      return () => {
-        window.removeEventListener('keydown', handleEnterKey);
-      };
-    }
-  }, [checkoutDialogOpen, processingSale]);
-  
-  // Process the sale after checkout confirmation
-  const processSale = async () => {
-    try {
-      setProcessingSale(true);
-      setError(null);
-      
-      // Prepare sale items by correctly separating manual and product items
-      const saleItems = cartItems.map(item => {
-        if (item.product) {
-          // Regular product item
-          return {
-            productId: item.product.id,
-            quantity: item.quantity,
-            price: item.product.price,
-            discount: item.discount || 0
-          };
-        } else {
-          // Manual item - ensure we include isManual flag and name
-          return {
-            isManual: true,
-            name: item.name || 'Manual Item',
-            quantity: item.quantity,
-            price: item.price || 0,
-            discount: item.discount || 0
-          };
-        }
-      });
-      
-      // Prepare sale data with proper structure matching backend model
-      const sale: Sale = {
-        items: saleItems,
-        subtotal: cartSubtotal,
-        discount: manualDiscount,
-        tax: cartTax,
-        total: cartTotal,
-        paymentMethod,
-        customerName: customerName.trim() || undefined,
-        customerPhone: customerPhone.trim() || undefined,
-        user: user?.id
-      };
-      
-      console.log("Sending sale data:", JSON.stringify(sale)); // Add logging to debug
-      
-      // Use the salesApi endpoint
-      const response = await salesApi.create(sale);
-      
-      // Handle successful sale
-      if (response.data) {
-        // Set receipt data for direct printing with better handling of manual items
-        const receiptDataForPrint = {
-          id: response.data._id || response.data.id,
-          invoiceNumber: response.data.invoiceNumber || `INV-${Date.now()}`,
-          date: new Date().toLocaleString(),
-          customer: customerName || 'Walk-in Customer',
-          cashier: user?.name || user?.username || 'Staff',
-          items: cartItems.map(item => ({
-            name: item.product ? item.product.name : (item.name || 'Manual Item'),
-            quantity: item.quantity,
-            price: item.product ? item.product.price : (item.price || 0),
-            total: (item.quantity * (item.product ? item.product.price : (item.price || 0))) - item.discount
-          })),
-          subtotal: cartSubtotal,
-          discount: cartDiscount + manualDiscount,
-          tax: cartTax,
-          total: cartTotal,
-          paymentMethod: paymentMethod
-        };
-        
-        // Close checkout dialog and reset state
-        setCheckoutDialogOpen(false);
-        setCartItems([]);
-        setManualDiscount(0);
-        setCustomerName('');
-        setCustomerPhone('');
-        setPaymentMethod('cash');
-        
-        setSuccessMessage('Sale completed successfully!');
-        
-        // Directly print receipt without showing the receipt dialog
-        directPrintReceipt(receiptDataForPrint);
-      }
-    } catch (err: any) {
-      console.error('Error processing sale:', err);
-      console.error('Response data:', err?.response?.data); // Add more detailed error logging
-      setError(`Failed to process sale: ${err?.response?.data?.message || err?.message || 'Unknown error'}`);
-    } finally {
-      setProcessingSale(false);
-    }
-  };
 
-  // Direct print receipt function (bypasses the receipt preview dialog)
   const directPrintReceipt = async (receiptToPrint: ReceiptData) => {
     try {
       setPrintingReceipt(true);
 
-      // Get the current shop from Auth context
       const currentShop = user?.shopId ? { name: user.shopId.name } : null;
       const shopName = currentShop?.name || "Bike Shop";
       const shopPhone = user?.shopId?.phone || "";
-      const shopAddress = user?.shopId?.address || ""; // Extract shop address
+      const shopAddress = user?.shopId?.address || "";
 
-      // Create a hidden iframe for printing
       const printIframe = document.createElement('iframe');
       printIframe.style.position = 'fixed';
       printIframe.style.right = '0';
@@ -653,29 +570,27 @@ const POS: React.FC = () => {
       printIframe.style.height = '0';
       printIframe.style.border = 'none';
       document.body.appendChild(printIframe);
-      
-      // Ensure all items have valid properties before generating receipt HTML
+
       const safeItems = receiptToPrint.items.map(item => ({
         name: item.name || 'Unnamed Item',
         quantity: item.quantity || 1,
         price: typeof item.price === 'number' ? item.price : 0,
         total: typeof item.total === 'number' ? item.total : 0
       }));
-      
-      // Generate receipt HTML content optimized for XP-365B 80mm thermal printer
+
       const receiptHtml = `
         <html>
           <head>
             <title>XP-365B Receipt</title>
             <style>
               @page { 
-                size: 80mm auto;  /* XP-365B standard thermal paper width */
-                margin: 0mm;      /* Remove browser margins */
+                size: 80mm auto;
+                margin: 0mm;
               }
               body { 
                 font-family: 'Arial', sans-serif; 
                 font-size: 12px; 
-                width: 72mm;      /* Slightly less than paper width to ensure proper printing */
+                width: 72mm;
                 margin: 4mm;
                 padding: 0;
                 -webkit-print-color-adjust: exact;
@@ -705,14 +620,14 @@ const POS: React.FC = () => {
               .item-row td {
                 font-size: 12px;
                 padding: 2px 0;
-                vertical-align: top; /* Align to top for multi-line text */
+                vertical-align: top;
               }
               .item-name {
-                word-wrap: break-word; /* Allow long words to break */
-                word-break: break-word; /* Break words that are too long */
-                white-space: normal; /* Allow text to wrap */
-                max-width: 35mm; /* Set maximum width */
-                padding-right: 4px; /* Add some spacing from price */
+                word-wrap: break-word;
+                word-break: break-word;
+                white-space: normal;
+                max-width: 35mm;
+                padding-right: 4px;
               }
               .summary-row {
                 display: flex;
@@ -729,15 +644,12 @@ const POS: React.FC = () => {
                 font-size: 10px;
                 margin-top: 10px;
               }
-              /* Add extra space at the bottom for printer cutting */
               .paper-cut-space {
                 height: 20mm;
               }
             </style>
             <script>
-              // Auto-close print dialog after printing
               window.addEventListener('afterprint', function() {
-                // Signal back to parent that printing is complete
                 window.parent.postMessage('printComplete', '*');
               });
             </script>
@@ -817,30 +729,24 @@ const POS: React.FC = () => {
                 <p style="margin: 2px 0;">Thank you for your purchase!</p>
                 <p style="margin: 2px 0;">Please visit again</p>
                 ${shopPhone ? `<p style="margin: 4px 0; font-size: 11px;">Contact us: ${shopPhone}</p>` : ''}
-
               </div>
               
-              <!-- Add space for the paper cutter -->
               <div class="paper-cut-space"></div>
             </div>
           </body>
         </html>
       `;
-      
-      // Get iframe's document and write content
+
       const iframeDoc = printIframe.contentDocument || printIframe.contentWindow?.document;
       if (iframeDoc) {
         iframeDoc.open();
         iframeDoc.write(receiptHtml);
         iframeDoc.close();
 
-        // Add listener for when printing completes
         window.addEventListener('message', function onPrintComplete(event) {
           if (event.data === 'printComplete') {
-            // Remove the event listener
             window.removeEventListener('message', onPrintComplete);
             
-            // Cleanup iframe after printing
             setTimeout(() => {
               document.body.removeChild(printIframe);
               setPrintingReceipt(false);
@@ -848,20 +754,14 @@ const POS: React.FC = () => {
           }
         });
 
-        // Trigger print once content is loaded
         const onIframeLoad = () => {
           try {
-            // Remove event listener
             printIframe.removeEventListener('load', onIframeLoad);
-            
-            // Focus the iframe window and print
             printIframe.contentWindow?.focus();
             
-            // Add a small delay to ensure styles are properly loaded
             setTimeout(() => {
               printIframe.contentWindow?.print();
               
-              // Fallback cleanup in case the afterprint event doesn't fire
               setTimeout(() => {
                 if (document.body.contains(printIframe)) {
                   document.body.removeChild(printIframe);
@@ -876,7 +776,6 @@ const POS: React.FC = () => {
           }
         };
 
-        // Add load event listener
         printIframe.addEventListener('load', onIframeLoad);
       } else {
         throw new Error('Could not access iframe document');
@@ -886,34 +785,104 @@ const POS: React.FC = () => {
       setPrintingReceipt(false);
     }
   };
-  
-  // We can keep the handlePrintReceipt function for any manual receipt printing needs,
-  // but we won't be using receiptDialogOpen in the main flow anymore
-  
-  // Remove or comment out the handleReceiptKeyPress function as we're not showing the dialog
 
-  // Add a function to handle manual item submission
+  const processSale = async () => {
+    try {
+      setProcessingSale(true);
+      setError(null);
+
+      const saleItems = cartItems.map(item => {
+        if (item.product) {
+          return {
+            productId: item.product.id,
+            quantity: item.quantity,
+            price: item.product.price,
+            discount: item.discount || 0
+          };
+        } else {
+          return {
+            isManual: true,
+            name: item.name || 'Manual Item',
+            quantity: item.quantity,
+            price: item.price || 0,
+            discount: item.discount || 0
+          };
+        }
+      });
+
+      const sale: Sale = {
+        items: saleItems,
+        subtotal: cartSubtotal,
+        discount: manualDiscount,
+        tax: cartTax,
+        total: cartTotal,
+        paymentMethod,
+        customerName: customerName.trim() || undefined,
+        customerPhone: customerPhone.trim() || undefined,
+        user: user?.id
+      };
+
+      const response = await salesApi.create(sale);
+
+      if (response.data) {
+        const receiptDataForPrint = {
+          id: response.data._id || response.data.id,
+          invoiceNumber: response.data.invoiceNumber || `INV-${Date.now()}`,
+          date: new Date().toLocaleString(),
+          customer: customerName || 'Walk-in Customer',
+          cashier: user?.name || user?.username || 'Staff',
+          items: cartItems.map(item => ({
+            name: item.product ? item.product.name : (item.name || 'Manual Item'),
+            quantity: item.quantity,
+            price: item.product ? item.product.price : (item.price || 0),
+            total: (item.quantity * (item.product ? item.product.price : (item.price || 0))) - item.discount
+          })),
+          subtotal: cartSubtotal,
+          discount: cartDiscount + manualDiscount,
+          tax: cartTax,
+          total: cartTotal,
+          paymentMethod: paymentMethod
+        };
+
+        setCheckoutDialogOpen(false);
+        setCartItems([]);
+        setManualDiscount(0);
+        setCustomerName('');
+        setCustomerPhone('');
+        setPaymentMethod('cash');
+
+        setSuccessMessage('Sale completed successfully!');
+
+        directPrintReceipt(receiptDataForPrint);
+      }
+    } catch (err: any) {
+      console.error('Error processing sale:', err);
+      setError(`Failed to process sale: ${err?.response?.data?.message || err?.message || 'Unknown error'}`);
+    } finally {
+      setProcessingSale(false);
+    }
+  };
+
   const handleManualItemSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!manualItemName.trim()) {
       setError('Item name is required');
       return;
     }
-    
+
     const price = parseFloat(manualItemPrice);
     if (isNaN(price) || price <= 0) {
       setError('Please enter a valid price');
       return;
     }
-    
+
     const quantity = parseInt(manualItemQuantity, 10);
     if (isNaN(quantity) || quantity <= 0) {
       setError('Please enter a valid quantity');
       return;
     }
-    
-    // Create manual item and add to cart
+
     const newItem: CartItem = {
       manualItem: true,
       name: manualItemName.trim(),
@@ -922,292 +891,15 @@ const POS: React.FC = () => {
       subtotal: price * quantity,
       discount: 0
     };
-    
+
     setCartItems(prev => [...prev, newItem]);
-    
-    // Reset form
+
     setManualItemName('');
     setManualItemPrice('');
     setManualItemQuantity('1');
     setSuccessMessage('Manual item added to cart');
   };
 
-  // Render product grid - updated to use table view with proper height
-  const renderProductGrid = () => {
-    const productsToRender = filteredProducts || [];
-    
-    return (
-      <div className="w-100 h-100"> {/* Added h-100 for full height */}
-        {loadingProducts ? (
-          <div className="d-flex justify-content-center align-items-center h-100">
-            <Spinner animation="border" role="status">
-              <span className="visually-hidden">Loading...</span>
-            </Spinner>
-          </div>
-        ) : productsToRender.length === 0 ? (
-          <div className="text-center d-flex justify-content-center align-items-center h-100">
-            <p className="text-muted">No products found. Try a different search.</p>
-          </div>
-        ) : (
-          <div className="h-100 d-flex flex-column">
-            <div className="table-responsive-header">
-              <table className="table mb-0">
-                <thead className="table-light sticky-top">
-                  <tr>
-                    <th scope="col">Name</th>
-                    <th scope="col">Price</th>
-                    <th scope="col" className="text-center">Stock</th>
-                    <th scope="col" className="text-end">Action</th>
-                  </tr>
-                </thead>
-              </table>
-            </div>
-            <div className="table-responsive flex-grow-1 overflow-auto">
-              <table className="table table-hover mb-0">
-                <tbody>
-                  {productsToRender.map(product => (
-                    <tr key={product.id} className={product.stockQuantity <= 0 ? 'table-secondary' : ''}>
-                      <td className="product-name-cell">
-                        <div className="product-name-container">
-                          <span className="fw-medium product-name" title={product.name}>
-                            {product.name}
-                          </span>
-                          {product.description && (
-                            <small className="text-muted product-description" title={product.description}>
-                              {product.description}
-                            </small>
-                          )}
-                        </div>
-                      </td>
-                      <td className="fw-bold price-cell">Rs. {product.price.toFixed(2)}</td>
-                      <td className="text-center stock-cell">
-                        <Badge bg={product.stockQuantity > 10 ? "success" : 
-                                  product.stockQuantity > 0 ? "warning" : "danger"}
-                               className="rounded-pill px-2">
-                          {product.stockQuantity}
-                        </Badge>
-                      </td>
-                      <td className="text-end action-cell">
-                        <Button
-                          variant={product.stockQuantity <= 0 ? "outline-secondary" : "primary"}
-                          size="sm"
-                          disabled={product.stockQuantity <= 0}
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            e.nativeEvent.stopImmediatePropagation();
-                            if (product.stockQuantity > 0) {
-                              addToCart(product);
-                            } else {
-                              setError('Product is out of stock.');
-                            }
-                          }}
-                          className="rounded-pill d-flex align-items-center ms-auto"
-                        >
-                          <>{BsPlus({ size: 16, className: "me-1" })}</>Add
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {/* Add CSS to ensure consistent column widths between header and body tables */}
-            <style>{`
-              .table-responsive-header {
-                overflow: hidden;
-              }
-              .table-responsive-header table,
-              .table-responsive table {
-                table-layout: fixed;
-                width: 100%;
-              }
-              .table-responsive-header th:nth-child(1),
-              .product-name-cell {
-                width: 45%;
-              }
-              .table-responsive-header th:nth-child(2),
-              .price-cell {
-                width: 20%;
-              }
-              .table-responsive-header th:nth-child(3),
-              .stock-cell {
-                width: 15%;
-                text-align: center;
-              }
-              .table-responsive-header th:nth-child(4),
-              .action-cell {
-                width: 20%;
-                text-align: right;
-              }
-              
-              /* New styles for scrollable content within cells */
-              .product-name-container {
-                display: flex;
-                flex-direction: column;
-                overflow: hidden;
-              }
-              
-              .product-name {
-                text-overflow: ellipsis;
-                white-space: nowrap;
-                overflow: hidden;
-                display: block;
-              }
-              
-              .product-description {
-                text-overflow: ellipsis;
-                white-space: nowrap;
-                overflow: hidden;
-                display: block;
-                margin-top: 2px;
-              }
-              
-              /* Add hover effect to show full content */
-              tr:hover .product-name,
-              tr:hover .product-description {
-                white-space: normal;
-                overflow: visible;
-                word-break: break-word;
-                max-height: none;
-              }
-            `}</style>
-          </div>
-        )}
-      </div>
-    );
-  };
-
-  // Render cart items
-  const renderCartItems = () => {
-    return (
-      <ListGroup variant="flush" className="cart-items">
-        {cartItems.length === 0 ? (
-          <ListGroup.Item className="text-center py-5">
-            <div className="empty-cart-placeholder">
-              <div className="text-muted mb-3">
-                <i className="bi bi-cart fs-1"></i>
-              </div>
-              <p className="mb-1 fw-medium">Your cart is empty</p>
-              <small className="text-muted">Scan or search for products to add</small>
-            </div>
-          </ListGroup.Item>
-        ) : (
-          cartItems.map((item, index) => (
-            <ListGroup.Item key={item.product?.id || `manual-${index}`} className="py-3 cart-item">
-              <div className="d-flex align-items-start mb-2">
-                <div className="flex-grow-1">
-                  <h6 className="mb-0 d-flex align-items-center">
-                    {item.manualItem && (
-                      <span className="badge bg-info text-dark rounded-pill me-2" style={{fontSize: '0.7rem'}}>
-                        Manual
-                      </span>
-                    )}
-                    {item.product ? item.product.name : item.name}
-                  </h6>
-                  <div className="d-flex justify-content-between mt-1">
-                    <small className="text-muted">
-                      Rs. {item.product ? item.product.price.toFixed(2) : item.price?.toFixed(2)}
-                    </small>
-                    <span className="fw-bold text-primary">
-                      Rs. {(item.subtotal - item.discount).toFixed(2)}
-                    </span>
-                  </div>
-                </div>
-              </div>
-              
-              <div className="d-flex justify-content-between align-items-center">
-                <div className="d-flex align-items-center quantity-control">
-                  <Button
-                    variant="light"
-                    size="sm"
-                    className="rounded-circle p-1 d-flex align-items-center justify-content-center"
-                    style={{ width: '28px', height: '28px' }}
-                    onClick={() => updateCartItemQuantity(index, item.quantity - 1)}
-                  >
-                    <>{BsDash({ size: 16 })}</>
-                  </Button>
-                  <Form.Control
-                    type="text"
-                    min="1"
-                    max={item.product?.stockQuantity || 9999}
-                    className="mx-2 text-center"
-                    value={tempQuantities[index] !== undefined ? tempQuantities[index] : item.quantity.toString()}
-                    onChange={(e) => {
-                      const newTempQuantities = { ...tempQuantities };
-                      newTempQuantities[index] = e.target.value;
-                      setTempQuantities(newTempQuantities);
-                      
-                      if (e.target.value !== '') {
-                        const newValue = parseInt(e.target.value, 10);
-                        if (!isNaN(newValue)) {
-                          updateCartItemQuantity(index, newValue);
-                        }
-                      }
-                    }}
-                    onBlur={(e) => {
-                      if (e.target.value === '' || isNaN(parseInt(e.target.value, 10))) {
-                        updateCartItemQuantity(index, 1);
-                      }
-                      
-                      const newTempQuantities = { ...tempQuantities };
-                      delete newTempQuantities[index];
-                      setTempQuantities(newTempQuantities);
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        if (e.currentTarget.value === '' || isNaN(parseInt(e.currentTarget.value, 10))) {
-                          updateCartItemQuantity(index, 1);
-                        }
-                        e.currentTarget.blur();
-                        
-                        const newTempQuantities = { ...tempQuantities };
-                        delete newTempQuantities[index];
-                        setTempQuantities(newTempQuantities);
-                      }
-                    }}
-                    style={{ width: '50px', textAlign: 'center', padding: '2px', height: '28px' }}
-                  />
-                  <Button
-                    variant="light"
-                    size="sm"
-                    className="rounded-circle p-1 d-flex align-items-center justify-content-center"
-                    style={{ width: '28px', height: '28px' }}
-                    onClick={() => updateCartItemQuantity(index, item.quantity + 1)}
-                  >
-                    <>{BsPlus({ size: 16 })}</>
-                  </Button>
-                </div>
-                
-                <div className="d-flex align-items-center gap-2">
-                  <InputGroup size="sm" className="cart-discount-input">
-                    <InputGroup.Text className="py-0 px-2 bg-light" style={{fontSize: '0.75rem'}}>Discount</InputGroup.Text>
-                    <Form.Control
-                      type="number"
-                      value={item.discount}
-                      onChange={(e) => handleItemDiscountChange(index, parseFloat(e.target.value))}
-                      style={{ width: '70px', height: '28px', fontSize: '0.85rem' }}
-                    />
-                  </InputGroup>
-                  <Button
-                    variant="outline-danger"
-                    size="sm"
-                    className="rounded-circle p-1 d-flex align-items-center justify-content-center"
-                    style={{ width: '28px', height: '28px' }}
-                    onClick={() => removeCartItem(index)}
-                  >
-                    <>{BsTrash({ size: 14 })}</>
-                  </Button>
-                </div>
-              </div>
-            </ListGroup.Item>
-          ))
-        )}
-      </ListGroup>
-    );
-  };
-  
-  // Error Alert component
   const ErrorAlert = () => {
     return error ? (
       <div className="alert alert-danger alert-dismissible fade show mt-2 shadow-sm" role="alert">
@@ -1220,7 +912,6 @@ const POS: React.FC = () => {
     ) : null;
   };
 
-  // Success Alert component
   const SuccessAlert = () => {
     return successMessage ? (
       <div className="alert alert-success alert-dismissible fade show mt-2 shadow-sm" role="alert">
@@ -1235,107 +926,132 @@ const POS: React.FC = () => {
 
   return (
     <Container fluid className="py-4 px-3 px-md-4 d-flex flex-column" style={{ height: "calc(100vh - 56px)" }}>
-       <Col>
-                  <h4 className="fw-bold mb-0">Point of sale</h4>
-                </Col>
-      <Row className="h-100 g-0 flex-grow-1 overflow-hidden">
-        
-        {/* QR Scanner Section - Always visible but responsive */}
-        <Col xs={12} lg={2} className="border-bottom border-lg-end border-lg-bottom-0 bg-light overflow-auto">
-  <div className="d-flex flex-column p-2" style={{ height: '200px' }}> {/* Reduced height for mobile */}
-    <h5 className="mb-2 d-flex align-items-center">
-      <i className="bi bi-qr-code-scan me-2"></i>
-      <span className="d-none d-sm-inline">QR Scanner</span> {/* Hide text on very small screens */}
-      <span className="d-sm-none">QR</span> {/* Show abbreviated text on small screens */}
-      <Button 
-        variant="outline-secondary"
-        size="sm"
-        className="ms-2 rounded-circle p-1"
-        onClick={() => setQrScannerActive(prev => !prev)}
-        title={qrScannerActive ? "Pause camera" : "Start camera"}
-      >
-        <i className={`bi ${qrScannerActive ? "bi-pause-fill" : "bi-play-fill"}`}></i>
-      </Button>
-    </h5>
-    <div className="flex-grow-1 position-relative qr-scanner-container rounded shadow-sm overflow-hidden">
-      {qrScannerActive ? (
-        <QRScanner
-          onScanSuccess={handleQRScanSuccess}
-          onScanError={(error) => {
-            console.warn('QR Scanner error:', error);
-            setScanningMessage(`Scanner error: ${error}`);
-          }}
-          autoStart={true}
-        />
-      ) : (
-        <div className="d-flex justify-content-center align-items-center h-100 bg-dark text-white">
-          <div className="text-center">
-            <i className="bi bi-camera-video-off fs-4 mb-1 d-block d-lg-none"></i> {/* Smaller icon on mobile */}
-            <i className="bi bi-camera-video-off fs-1 mb-2 d-none d-lg-block"></i> {/* Original size on desktop */}
-            <p className="mb-2 small d-lg-block">
-              <span className="d-none d-sm-inline">Camera paused</span>
-              <span className="d-sm-none">Paused</span>
-            </p>
-            <Button 
-              variant="outline-light" 
-              size="sm"
-              onClick={() => setQrScannerActive(true)}
-            >
-              <span className="d-none d-sm-inline">Resume Camera</span>
-              <span className="d-sm-none">Resume</span>
-            </Button>
-          </div>
-        </div>
-      )}
-    </div>
-    {scanningMessage && (
-      <div className="alert alert-info mt-2 mb-0 shadow-sm py-1"> {/* Reduced padding on mobile */}
-        <small className="d-block text-truncate">{scanningMessage}</small> {/* Truncate long messages */}
-        <button 
-          type="button" 
-          className="btn-close float-end"
-          style={{ padding: '0.25rem' }}
-          onClick={() => setScanningMessage(null)}
-        ></button>
-      </div>
-    )}
-  </div>
-</Col>
+      <Row className="mb-3">
+        <Col>
+          <div className="d-flex justify-content-between align-items-center">
+            <div className="d-flex align-items-center gap-3">
+              <h4 className="fw-bold mb-0">Point of sale</h4>
+              <div className="d-none d-lg-block">
+                <small className="text-muted">
+                  <kbd>F1</kbd> Help • <kbd>Ctrl+F</kbd> Search • <kbd>F9</kbd> Checkout • <kbd>F2</kbd> Manual Mode • <kbd>Ctrl+Delete</kbd> Clear Cart  • <kbd>F4</kbd> QR Scanner
+                </small>
+              </div>
+            </div>
+            <div className="d-flex align-items-center gap-2">
+              <OverlayTrigger
+                placement="bottom"
+                overlay={<Tooltip>Press F4 to toggle scanner</Tooltip>}
+              >
+                <Badge
+                  bg={qrScannerActive ? "success" : "secondary"}
+                  className="d-flex align-items-center gap-1"
+                  style={{ fontSize: '0.8rem', padding: '0.5rem 0.75rem' }}
+                >
+                  <i className={`bi ${qrScannerActive ? "bi-qr-code-scan" : "bi-qr-code"}`}></i>
+                  QR Scanner {qrScannerActive ? "ON" : "OFF"}
+                </Badge>
+              </OverlayTrigger>
 
-        {/* Main Content Section */}
-        <Col xs={12} lg={10} className="h-100 d-flex flex-column bg-body-tertiary overflow-hidden">
-          {/* Remove mobile QR button since QR scanner is always visible */}
+              <OverlayTrigger
+                placement="bottom"
+                overlay={<Tooltip>Toggle QR Scanner (F4)</Tooltip>}
+              >
+                <Button
+                  variant={qrScannerActive ? "outline-danger" : "outline-success"}
+                  size="sm"
+                  onClick={() => setQrScannerActive(prev => !prev)}
+                  className="rounded-pill"
+                >
+                  <i className={`bi ${qrScannerActive ? "bi-stop-fill" : "bi-play-fill"} me-1`}></i>
+                  {qrScannerActive ? "Stop" : "Start"}
+                </Button>
+              </OverlayTrigger>
+
+              <div className="d-none d-lg-block">
+                <OverlayTrigger
+                  placement="bottom"
+                  overlay={<Tooltip>Keyboard Shortcuts (F1)</Tooltip>}
+                >
+                  <Button
+                    variant="outline-info"
+                    size="sm"
+                    onClick={() => setShowHelpModal(true)}
+                    className="rounded-pill"
+                  >
+                    <i className="bi bi-question-circle"></i>
+                  </Button>
+                </OverlayTrigger>
+              </div>
+            </div>
+          </div>
+        </Col>
+      </Row>
+
+      <Row className="h-100 g-0 flex-grow-1 overflow-hidden">
+        <Col xs={12} className="h-100 d-flex flex-column bg-body-tertiary overflow-hidden">
+          <div style={{ display: 'none' }}>
+            {qrScannerActive && (
+              <QRScanner
+                onScanSuccess={handleQRScanSuccess}
+                onScanError={(error) => {
+                  console.warn('QR Scanner error:', error);
+                  setScanningMessage(`Scanner error: ${error}`);
+                }}
+                autoStart={true}
+              />
+            )}
+          </div>
           
-          {/* Main content area with equal height columns */}
-          <div className=" flex-grow-1 d-flex overflow-hidden">
+          {scanningMessage && (
+            <div className="alert alert-info alert-dismissible fade show shadow-sm" role="alert">
+              <div className="d-flex align-items-center">
+                <i className="bi bi-qr-code-scan me-2"></i>
+                <div>{scanningMessage}</div>
+              </div>
+              <button 
+                type="button" 
+                className="btn-close"
+                onClick={() => setScanningMessage(null)}
+              ></button>
+            </div>
+          )}
+          
+          <div className="flex-grow-1 d-flex overflow-hidden">
             <Row className="w-100 g-1 h-100">
-              {/* Product Search and Grid Section */}
               <Col lg={8} className="h-100 d-flex flex-column overflow-hidden">
-                <div className="d-flex flex-column h-100 overflow-hidden"> {/* Wrapper div for flex column */}
-                  <Card className="shadow-sm mb-3 border-0"> {/* Reduced margin bottom */}
+                <div className="d-flex flex-column h-100 overflow-hidden">
+                  <Card className="shadow-sm mb-3 border-0">
                     <Card.Body className="pb-2">
                       <Row className="mb-3">
-                        {/* Toggle between product search and manual entry */}
                         <Col md={6} className="mb-3 mb-md-0">
                           <div className="btn-group w-100">
-                            <Button 
-                              variant={isManualMode ? "outline-primary" : "primary"}
-                              onClick={() => setIsManualMode(false)}
-                              className="flex-grow-1 rounded-start"
+                            <OverlayTrigger
+                              placement="top"
+                              overlay={<Tooltip>Switch to Products (F2)</Tooltip>}
                             >
-                              <i className="bi bi-grid me-1"></i> Products
-                            </Button>
-                            <Button 
-                              variant={isManualMode ? "primary" : "outline-primary"}
-                              onClick={() => setIsManualMode(true)}
-                              className="flex-grow-1 rounded-end"
+                              <Button 
+                                variant={isManualMode ? "outline-primary" : "primary"}
+                                onClick={() => setIsManualMode(false)}
+                                className="flex-grow-1 rounded-start"
+                              >
+                                <i className="bi bi-grid me-1"></i> Products
+                              </Button>
+                            </OverlayTrigger>
+                            <OverlayTrigger
+                              placement="top"
+                              overlay={<Tooltip>Switch to Manual Entry (F2)</Tooltip>}
                             >
-                              <i className="bi bi-pencil-square me-1"></i> Manual Entry
-                            </Button>
+                              <Button 
+                                variant={isManualMode ? "primary" : "outline-primary"}
+                                onClick={() => setIsManualMode(true)}
+                                className="flex-grow-1 rounded-end"
+                              >
+                                <i className="bi bi-pencil-square me-1"></i> Manual Entry
+                              </Button>
+                            </OverlayTrigger>
                           </div>
                         </Col>
                         
-                        {/* Product Search or Manual Entry Form */}
                         <Col md={6}>
                           {isManualMode ? (
                             <Form onSubmit={handleManualItemSubmit} className="manual-entry-form">
@@ -1348,6 +1064,8 @@ const POS: React.FC = () => {
                                   placeholder="Item name"
                                   value={manualItemName}
                                   onChange={(e) => setManualItemName(e.target.value)}
+                                  onFocus={handleInputFocus}
+                                  onBlur={handleInputBlur}
                                   required
                                   className="border-start-0"
                                 />
@@ -1363,6 +1081,8 @@ const POS: React.FC = () => {
                                       placeholder="Price"
                                       value={manualItemPrice}
                                       onChange={(e) => setManualItemPrice(e.target.value)}
+                                      onFocus={handleInputFocus}
+                                      onBlur={handleInputBlur}
                                       required
                                       className="border-start-0"
                                       style={{ height: '42px' }}
@@ -1380,6 +1100,8 @@ const POS: React.FC = () => {
                                       placeholder="Qty"
                                       value={manualItemQuantity}
                                       onChange={(e) => setManualItemQuantity(e.target.value)}
+                                      onFocus={handleInputFocus}
+                                      onBlur={handleInputBlur}
                                       required
                                       className="border-start-0"
                                     />
@@ -1391,23 +1113,31 @@ const POS: React.FC = () => {
                               </Button>
                             </Form>
                           ) : (
-                            <InputGroup className="search-bar shadow-sm rounded">
-                              <InputGroup.Text className="bg-white border-end-0">
-                                <>{BsSearch({ size: 16 })}</>
-                              </InputGroup.Text>
-                              <Form.Control
-                                type="text"
-                                placeholder="Search Products"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                className="border-start-0"
-                              />
-                              {searchQuery && (
-                                <Button variant="outline-secondary" onClick={() => setSearchQuery('')} className="border-start-0">
-                                  <>{BsX({ size: 16 })}</>
-                                </Button>
-                              )}
-                            </InputGroup>
+                            <OverlayTrigger
+                              placement="top"
+                              overlay={<Tooltip>Search Products (Ctrl+F or F3)</Tooltip>}
+                            >
+                              <InputGroup className="search-bar shadow-sm rounded">
+                                <InputGroup.Text className="bg-white border-end-0">
+                                  <>{BsSearch({ size: 16 })}</>
+                                </InputGroup.Text>
+                                <Form.Control
+                                  ref={searchInputRef}
+                                  type="text"
+                                  placeholder="Search Products (Ctrl+F)"
+                                  value={searchQuery}
+                                  onChange={(e) => setSearchQuery(e.target.value)}
+                                  onFocus={handleInputFocus}
+                                  onBlur={handleInputBlur}
+                                  className="border-start-0"
+                                />
+                                {searchQuery && (
+                                  <Button variant="outline-secondary" onClick={() => setSearchQuery('')} className="border-start-0">
+                                    <>{BsX({ size: 16 })}</>
+                                  </Button>
+                                )}
+                              </InputGroup>
+                            </OverlayTrigger>
                           )}
                         </Col>
                       </Row>
@@ -1417,7 +1147,6 @@ const POS: React.FC = () => {
                     </Card.Body>
                   </Card>
                   
-                  {/* Products Grid with proper flex-grow */}
                   <Card className="shadow-sm flex-grow-1 d-flex flex-column border-0 overflow-hidden">
                     <div className="flex-grow-1 overflow-hidden">
                       {!isManualMode ? (
@@ -1429,7 +1158,6 @@ const POS: React.FC = () => {
                                   <th scope="col">Name</th>
                                   <th scope="col">Price</th>
                                   <th scope="col" className="text-center">Stock</th>
-                                  <th scope="col" className="text-end">Action</th>
                                 </tr>
                               </thead>
                             </table>
@@ -1438,7 +1166,18 @@ const POS: React.FC = () => {
                             <table className="table table-hover mb-0">
                               <tbody>
                                 {(filteredProducts || []).map(product => (
-                                  <tr key={product.id} className={product.stockQuantity <= 0 ? 'table-secondary' : ''}>
+                                  <tr 
+                                    key={product.id} 
+                                    className={`clickable-row ${product.stockQuantity <= 0 ? 'table-secondary' : ''}`}
+                                    onClick={() => {
+                                      if (product.stockQuantity > 0) {
+                                        addToCart(product);
+                                      } else {
+                                        setError('Product is out of stock.');
+                                      }
+                                    }}
+                                    style={{ cursor: product.stockQuantity > 0 ? 'pointer' : 'not-allowed' }}
+                                  >
                                     <td className="product-name-cell">
                                       <div className="product-name-container">
                                         <span className="fw-medium product-name" title={product.name}>
@@ -1458,26 +1197,6 @@ const POS: React.FC = () => {
                                             className="rounded-pill px-2">
                                         {product.stockQuantity}
                                       </Badge>
-                                    </td>
-                                    <td className="text-end action-cell">
-                                      <Button
-                                        variant={product.stockQuantity <= 0 ? "outline-secondary" : "primary"}
-                                        size="sm"
-                                        disabled={product.stockQuantity <= 0}
-                                        onClick={(e) => {
-                                          e.preventDefault();
-                                          e.stopPropagation();
-                                          e.nativeEvent.stopImmediatePropagation();
-                                          if (product.stockQuantity > 0) {
-                                            addToCart(product);
-                                          } else {
-                                            setError('Product is out of stock.');
-                                          }
-                                        }}
-                                        className="rounded-pill d-flex align-items-center ms-auto"
-                                      >
-                                        <>{BsPlus({ size: 16, className: "me-1" })}</>Add
-                                      </Button>
                                     </td>
                                   </tr>
                                 ))}
@@ -1502,7 +1221,6 @@ const POS: React.FC = () => {
                 </div>
               </Col>
 
-              {/* Cart Section */}
               <Col lg={4} className="h-100 d-flex flex-column overflow-hidden">
                 <Card className="shadow-sm h-100 d-flex flex-column border-0 overflow-hidden">
                   <Card.Header className="bg-primary text-white py-3">
@@ -1515,13 +1233,137 @@ const POS: React.FC = () => {
                     </h5>
                   </Card.Header>
                   
-                  {/* Cart items with fixed height and scrolling */}
                   <div className="overflow-auto flex-grow-1" style={{ maxHeight: "calc(100vh - 350px)" }}>
-                    {renderCartItems()} 
+                    <ListGroup variant="flush" className="cart-items">
+                      {cartItems.length === 0 ? (
+                        <ListGroup.Item className="text-center py-5">
+                          <div className="empty-cart-placeholder">
+                            <div className="text-muted mb-3">
+                              <i className="bi bi-cart fs-1"></i>
+                            </div>
+                            <p className="mb-1 fw-medium">Your cart is empty</p>
+                            <small className="text-muted">Scan or search for products to add</small>
+                          </div>
+                        </ListGroup.Item>
+                      ) : (
+                        cartItems.map((item, index) => (
+                          <ListGroup.Item key={item.product?.id || `manual-${index}`} className="py-3 cart-item">
+                            <div className="d-flex align-items-start mb-2">
+                              <div className="flex-grow-1">
+                                <h6 className="mb-0 d-flex align-items-center">
+                                  {item.manualItem && (
+                                    <span className="badge bg-info text-dark rounded-pill me-2" style={{fontSize: '0.7rem'}}>
+                                      Manual
+                                    </span>
+                                  )}
+                                  {item.product ? item.product.name : item.name}
+                                </h6>
+                                <div className="d-flex justify-content-between mt-1">
+                                  <small className="text-muted">
+                                    Rs. {item.product ? item.product.price.toFixed(2) : item.price?.toFixed(2)}
+                                  </small>
+                                  <span className="fw-bold text-primary">
+                                    Rs. {(item.subtotal - item.discount).toFixed(2)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <div className="d-flex justify-content-between align-items-center">
+                              <div className="d-flex align-items-center quantity-control">
+                                <Button
+                                  variant="light"
+                                  size="sm"
+                                  className="rounded-circle p-1 d-flex align-items-center justify-content-center"
+                                  style={{ width: '28px', height: '28px' }}
+                                  onClick={() => updateCartItemQuantity(index, item.quantity - 1)}
+                                >
+                                  <>{BsDash({ size: 16 })}</>
+                                </Button>
+                                <Form.Control
+                                  type="text"
+                                  min="1"
+                                  max={item.product?.stockQuantity || 9999}
+                                  className="mx-2 text-center"
+                                  value={tempQuantities[index] !== undefined ? tempQuantities[index] : item.quantity.toString()}
+                                  onChange={(e) => {
+                                    const newTempQuantities = { ...tempQuantities };
+                                    newTempQuantities[index] = e.target.value;
+                                    setTempQuantities(newTempQuantities);
+                                    
+                                    if (e.target.value !== '') {
+                                      const newValue = parseInt(e.target.value, 10);
+                                      if (!isNaN(newValue)) {
+                                        updateCartItemQuantity(index, newValue);
+                                      }
+                                    }
+                                  }}
+                                  onFocus={handleInputFocus}
+                                  onBlur={(e) => {
+                                    handleInputBlur();
+                                    if (e.target.value === '' || isNaN(parseInt(e.target.value, 10))) {
+                                      updateCartItemQuantity(index, 1);
+                                    }
+                                    
+                                    const newTempQuantities = { ...tempQuantities };
+                                    delete newTempQuantities[index];
+                                    setTempQuantities(newTempQuantities);
+                                  }}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      if (e.currentTarget.value === '' || isNaN(parseInt(e.currentTarget.value, 10))) {
+                                        updateCartItemQuantity(index, 1);
+                                      }
+                                      e.currentTarget.blur();
+                                      
+                                      const newTempQuantities = { ...tempQuantities };
+                                      delete newTempQuantities[index];
+                                      setTempQuantities(newTempQuantities);
+                                    }
+                                  }}
+                                  style={{ width: '50px', textAlign: 'center', padding: '2px', height: '28px' }}
+                                />
+                                <Button
+                                  variant="light"
+                                  size="sm"
+                                  className="rounded-circle p-1 d-flex align-items-center justify-content-center"
+                                  style={{ width: '28px', height: '28px' }}
+                                  onClick={() => updateCartItemQuantity(index, item.quantity + 1)}
+                                >
+                                  <>{BsPlus({ size: 16 })}</>
+                                </Button>
+                              </div>
+                              
+                              <div className="d-flex align-items-center gap-2">
+                                <InputGroup size="sm" className="cart-discount-input">
+                                  <InputGroup.Text className="py-0 px-2 bg-light" style={{fontSize: '0.75rem'}}>Discount</InputGroup.Text>
+                                  <Form.Control
+                                    type="number"
+                                    value={item.discount}
+                                    onChange={(e) => handleItemDiscountChange(index, parseFloat(e.target.value))}
+                                    onFocus={handleInputFocus}
+                                    onBlur={handleInputBlur}
+                                    style={{ width: '70px', height: '28px', fontSize: '0.85rem' }}
+                                  />
+                                </InputGroup>
+                                <Button
+                                  variant="outline-danger"
+                                  size="sm"
+                                  className="rounded-circle p-1 d-flex align-items-center justify-content-center"
+                                  style={{ width: '28px', height: '28px' }}
+                                  onClick={() => removeCartItem(index)}
+                                >
+                                  <>{BsTrash({ size: 14 })}</>
+                                </Button>
+                              </div>
+                            </div>
+                          </ListGroup.Item>
+                        ))
+                      )}
+                    </ListGroup>
                   </div>
                   
                   <Card.Footer className="bg-white py-3">
-                    {/* Cart Summary */}
                     <div className="mb-3">
                       <div className="d-flex justify-content-between mb-2">
                         <span className="text-muted">Subtotal:</span>
@@ -1545,11 +1387,11 @@ const POS: React.FC = () => {
                                 setManualDiscount(value);
                               }
                             }}
+                            onFocus={handleInputFocus}
+                            onBlur={handleInputBlur}
                           />
                         </InputGroup>
                       </div>
-                      
-                      
                       
                       <div className="d-flex justify-content-between mb-2 text-primary">
                         <span>Total Discount:</span>
@@ -1569,47 +1411,37 @@ const POS: React.FC = () => {
                       </div>
                     </div>
                     
-                    {/* Cart Actions - Modified for better mobile responsiveness with 3 columns */}
                     <div className="d-flex flex-wrap justify-content-between gap-2">
-                      <Button
-                        variant="outline-danger"
-                        className="flex-1 rounded-pill"
-                        onClick={clearCart}
-                        disabled={cartItems.length === 0}
+                      <OverlayTrigger
+                        placement="top"
+                        overlay={<Tooltip>Clear Cart (Ctrl+Delete)</Tooltip>}
                       >
-                        <i className="bi bi-trash me-1"></i>
-                        <span className="d-inline">Clear</span>
-                      </Button>
+                        <Button
+                          variant="outline-danger"
+                          className="flex-1 rounded-pill"
+                          onClick={clearCart}
+                          disabled={cartItems.length === 0}
+                        >
+                          <i className="bi bi-trash me-1"></i>
+                          <span className="d-inline">Clear</span>
+                        </Button>
+                      </OverlayTrigger>
                       
-                     
-                      <Button
-                        variant="success"
-                        className="flex-1 rounded-pill"
-                        onClick={handleCheckout}
-                        disabled={cartItems.length === 0}
+                      <OverlayTrigger
+                        placement="top"
+                        overlay={<Tooltip>Checkout (F9 or Ctrl+Enter)</Tooltip>}
                       >
-                        <i className="bi bi-credit-card me-1"></i>
-                        <span className="d-inline">Checkout</span>
-                      </Button>
+                        <Button
+                          variant="success"
+                          className="flex-1 rounded-pill"
+                          onClick={handleCheckout}
+                          disabled={cartItems.length === 0}
+                        >
+                          <i className="bi bi-credit-card me-1"></i>
+                          <span className="d-inline">Checkout</span>
+                        </Button>
+                      </OverlayTrigger>
                     </div>
-
-                    {/* Add responsive styles to ensure equal-width buttons */}
-                    <style>{`
-                      .flex-1 {
-                        flex: 1;
-                        min-width: 100px;
-                      }
-                      
-                      @media (max-width: 576px) {
-                        .flex-1 {
-                          flex-basis: 100%;
-                          margin-bottom: 0.5rem;
-                        }
-                        .flex-wrap {
-                          flex-direction: column;
-                        }
-                      }
-                    `}</style>
                   </Card.Footer>
                 </Card>
               </Col>
@@ -1618,23 +1450,6 @@ const POS: React.FC = () => {
         </Col>
       </Row>
 
-      {/* Replace or modify the Receipt Preview Modal to be hidden by default 
-         We'll keep it in the code but just not display it in the normal flow */}
-      <Modal 
-        show={false} // Always hidden by setting to false
-        onHide={() => {}} 
-        size="lg"
-        centered
-      >
-        <Modal.Header closeButton>
-          <Modal.Title>Receipt Preview</Modal.Title>
-        </Modal.Header>
-        <Modal.Body>
-          {/* Receipt preview content removed as we're bypassing this step */}
-        </Modal.Body>
-      </Modal>
-      
-      {/* Checkout Modal */}
       <Modal
         show={checkoutDialogOpen}
         onHide={() => setCheckoutDialogOpen(false)}
@@ -1646,7 +1461,6 @@ const POS: React.FC = () => {
           <Modal.Title>Complete Sale</Modal.Title>
         </Modal.Header>
         <Modal.Body>
-          {/* Customer Information */}
           <Form.Group className="mb-3">
             <Form.Label>Customer Name (Optional)</Form.Label>
             <Form.Control
@@ -1654,6 +1468,8 @@ const POS: React.FC = () => {
               placeholder="Enter customer name"
               value={customerName}
               onChange={(e) => setCustomerName(e.target.value)}
+              onFocus={handleInputFocus}
+              onBlur={handleInputBlur}
               disabled={processingSale}
             />
           </Form.Group>
@@ -1665,16 +1481,19 @@ const POS: React.FC = () => {
               placeholder="Enter customer phone"
               value={customerPhone}
               onChange={(e) => setCustomerPhone(e.target.value)}
+              onFocus={handleInputFocus}
+              onBlur={handleInputBlur}
               disabled={processingSale}
             />
           </Form.Group>
           
-          {/* Payment Method */}
           <Form.Group className="mb-3">
             <Form.Label>Payment Method</Form.Label>
             <Form.Select
               value={paymentMethod}
               onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod)}
+              onFocus={handleInputFocus}
+              onBlur={handleInputBlur}
               disabled={processingSale}
             >
               <option value="cash">Cash</option>
@@ -1685,7 +1504,6 @@ const POS: React.FC = () => {
             </Form.Select>
           </Form.Group>
           
-          {/* Order Summary */}
           <div className="mt-4">
             <h6 className="mb-3">Order Summary</h6>
             <div className="d-flex justify-content-between mb-2">
@@ -1716,7 +1534,6 @@ const POS: React.FC = () => {
             </div>
           </div>
           
-          {/* Error display */}
           {error && (
             <div className="alert alert-danger mt-3">
               {error}
@@ -1745,9 +1562,124 @@ const POS: React.FC = () => {
           </Button>
         </Modal.Footer>
       </Modal>
-      
-      {/* Add styles for fixed heights and scrolling */}
+
+      <Modal
+        show={showHelpModal}
+        onHide={() => setShowHelpModal(false)}
+        size="lg"
+        centered
+      >
+        <Modal.Header closeButton>
+          <Modal.Title>
+            <i className="bi bi-keyboard me-2"></i>
+            Keyboard Shortcuts
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div className="row">
+            <div className="col-md-6">
+              <h6 className="text-primary mb-3">
+                <i className="bi bi-search me-2"></i>
+                Search & Navigation
+              </h6>
+              <div className="mb-3">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <span>Focus Search</span>
+                  <div>
+                    <kbd className="me-1">Ctrl</kbd>+<kbd>F</kbd> or <kbd>F3</kbd>
+                  </div>
+                </div>
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <span>Auto Search</span>
+                  <span><small className="text-muted">Type any letter/number</small></span>
+                </div>
+                <div className="d-flex justify-content-between align-items-center">
+                  <span>Toggle Manual Mode</span>
+                  <kbd>F2</kbd>
+                </div>
+              </div>
+
+              <h6 className="text-success mb-3">
+                <i className="bi bi-cart me-2"></i>
+                Cart Actions
+              </h6>
+              <div className="mb-3">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <span>Checkout</span>
+                  <div>
+                    <kbd>F9</kbd> or <kbd className="me-1">Ctrl</kbd>+<kbd>Enter</kbd>
+                  </div>
+                </div>
+                <div className="d-flex justify-content-between align-items-center">
+                  <span>Clear Cart</span>
+                  <div>
+                    <kbd className="me-1">Ctrl</kbd>+<kbd>Delete</kbd>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="col-md-6">
+              <h6 className="text-info mb-3">
+                <i className="bi bi-qr-code-scan me-2"></i>
+                Scanner & Tools
+              </h6>
+              <div className="mb-3">
+                <div className="d-flex justify-content-between align-items-center mb-2">
+                  <span>Toggle QR Scanner</span>
+                  <kbd>F4</kbd>
+                </div>
+                <div className="d-flex justify-content-between align-items-center">
+                  <span>Show Help</span>
+                  <kbd>F1</kbd>
+                </div>
+              </div>
+
+              <h6 className="text-warning mb-3">
+                <i className="bi bi-info-circle me-2"></i>
+                Tips
+              </h6>
+              <div className="small text-muted">
+                <ul className="list-unstyled">
+                  <li className="mb-1">• Shortcuts are disabled when typing in fields</li>
+                  <li className="mb-1">• Shortcuts are disabled during checkout</li>
+                  <li className="mb-1">• Auto-search only works in Products mode</li>
+                  <li>• Press Esc to cancel most actions</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={() => setShowHelpModal(false)}>
+            Close
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
       <style>{`
+        kbd {
+          background-color: #e9ecef;
+          border: 1px solid #adb5bd;
+          border-radius: 3px;
+          box-shadow: 0 1px 0 rgba(0,0,0,0.2), 0 0 0 2px #fff inset;
+          color: #495057;
+          display: inline-block;
+          font-size: 0.75rem;
+          font-weight: 700;
+          line-height: 1;
+          padding: 2px 4px;
+          white-space: nowrap;
+        }
+        
+        .kbd-combo {
+          white-space: nowrap;
+        }
+        
+        .tooltip {
+          z-index: 1070;
+        }
+        
         .table-responsive-header {
           overflow: hidden;
         }
@@ -1758,30 +1690,23 @@ const POS: React.FC = () => {
         }
         .table-responsive-header th:nth-child(1),
         .product-name-cell {
-          width: 45%;
+          width: 55%;
         }
         .table-responsive-header th:nth-child(2),
         .price-cell {
-          width: 20%;
+          width: 25%;
         }
         .table-responsive-header th:nth-child(3),
         .stock-cell {
-          width: 15%;
+          width: 20%;
           text-align: center;
         }
-        .table-responsive-header th:nth-child(4),
-        .action-cell {
-          width: 20%;
-          text-align: right;
-        }
         
-        /* Fixed height and overflow styles */
         .table-responsive {
           height: 100%;
           overflow-y: auto;
         }
         
-        /* Product name and description styles */
         .product-name-container {
           display: flex;
           flex-direction: column;
@@ -1803,7 +1728,6 @@ const POS: React.FC = () => {
           margin-top: 2px;
         }
         
-        /* Add hover effect to show full content */
         tr:hover .product-name,
         tr:hover .product-description {
           white-space: normal;
@@ -1812,46 +1736,33 @@ const POS: React.FC = () => {
           max-height: none;
         }
 
-    
-    /* Adjust container height for mobile */
-    .py-4.px-3.px-md-4 {
-      height: auto !important;
-      min-height: calc(100vh - 56px);
-    }
-    
-    /* Stack layout properly on mobile */
-    .overflow-hidden.flex-grow-1 {
-      overflow: visible !important;
-    }
-  }
-  
+        .clickable-row {
+          transition: background-color 0.2s ease;
+        }
+        
+        .clickable-row:hover {
+          background-color: var(--bs-primary-bg-subtle) !important;
+        }
+        
+        .clickable-row:active {
+          background-color: var(--bs-primary) !important;
+          color: white !important;
+        }
 
-    
-    /* Reduce padding on mobile */
-    .p-3 {
-      padding: 1rem !important;
-    }
-    
-    /* Adjust card margins */
-    .mb-3 {
-      margin-bottom: 1rem !important;
-    }
-  }
-
-  .flex-1 {
-    flex: 1;
-    min-width: 100px;
-  }
-  
-  @media (max-width: 576px) {
-    .flex-1 {
-      flex-basis: 100%;
-      margin-bottom: 0.5rem;
-    }
-    .flex-wrap {
-      flex-direction: column;
-    }
-  }
+        .flex-1 {
+          flex: 1;
+          min-width: 100px;
+        }
+        
+        @media (max-width: 576px) {
+          .flex-1 {
+            flex-basis: 100%;
+            margin-bottom: 0.5rem;
+          }
+          .flex-wrap {
+            flex-direction: column;
+          }
+        }
       `}</style>
     </Container>
   );

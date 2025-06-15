@@ -48,7 +48,7 @@ const Products: React.FC = () => {
   const [importData, setImportData] = useState<any[]>([]);
   const [importPreview, setImportPreview] = useState(false);
   // New states for tracking which products are new vs updates
-  const [productUpdateMap, setProductUpdateMap] = useState<Record<string, { id: number, existing: boolean }>>({});
+  const [productUpdateMap, setProductUpdateMap] = useState<Record<string, { id: number, existing: boolean, currentStock: number }>>({});
 
   // State for pagination
   const [page, setPage] = useState(0);
@@ -562,7 +562,7 @@ const Products: React.FC = () => {
         barcode: '', // Leave empty for auto-generation
         price: 1000,
         costPrice: 800,
-        stockQuantity: 10,
+        stockQuantity: 10, // For new products: initial stock. For existing products: quantity to ADD
         reorderLevel: 5,
         categoryName: 'Category Name', // Can use either name or ID
         supplierName: 'Supplier Name', // Can use either name or ID
@@ -580,12 +580,14 @@ const Products: React.FC = () => {
       { wch: 15 }, // barcode
       { wch: 10 }, // price
       { wch: 10 }, // costPrice
-      { wch: 10 }, // stockQuantity
+      { wch: 15 }, // stockQuantity - made wider for the note
       { wch: 10 }, // reorderLevel
       { wch: 15 }, // categoryName
       { wch: 15 }, // supplierName
     ];
     ws['!cols'] = wscols;
+
+
 
     // Add the worksheet to the workbook
     XLSX.utils.book_append_sheet(wb, ws, 'Products Template');
@@ -605,12 +607,12 @@ const Products: React.FC = () => {
     }
   };
 
-  // Function to parse Excel file - improved error handling for existing products check
+  // Function to parse Excel file - improved to handle stock quantity addition
   const parseExcelFile = async () => {
     if (!importFile) return;
 
     setImportLoading(true);
-    setError(null); // Reset any previous errors
+    setError(null);
     
     const reader = new FileReader();
     reader.onload = async (e) => {
@@ -618,21 +620,17 @@ const Products: React.FC = () => {
         const data = e.target?.result;
         const workbook = XLSX.read(data, { type: 'array' });
         
-        // Get first worksheet
         const worksheetName = workbook.SheetNames[0];
         const worksheet = workbook.Sheets[worksheetName];
         
-        // Convert to JSON
         const jsonData = XLSX.utils.sheet_to_json(worksheet);
         
-        // Validate data structure
         if (jsonData.length === 0) {
           setError('The Excel file is empty or has no valid data');
           setImportLoading(false);
           return;
         }
         
-        // Check required fields
         const requiredFields = ['name', 'price', 'stockQuantity'];
         const firstRow = jsonData[0] as any;
         
@@ -643,10 +641,8 @@ const Products: React.FC = () => {
           return;
         }
 
-        // Extract all product names from the import data
         const importProductNames = jsonData.map((product: any) => product.name);
         
-        // Handle case when there are no products to import
         if (importProductNames.length === 0) {
           setError('No valid products found in the import file');
           setImportLoading(false);
@@ -654,66 +650,82 @@ const Products: React.FC = () => {
         }
         
         try {
-          // Plan B: If the server endpoint is having issues, we can fall back to checking against the current product list
           let existingProducts: any[] = [];
           
           try {
-            console.log('Trying to check existing products via API for:', importProductNames.slice(0, 5), '...');
+            console.log('Checking existing products via API for:', importProductNames.slice(0, 5), '...');
             const response = await productsApi.checkExistingProducts(importProductNames);
             existingProducts = response.data || [];
             console.log('API returned existing products:', existingProducts.length);
           } catch (apiError) {
             console.error('API error when checking existing products:', apiError);
             
-            // Fallback: Compare with current loaded products
-            console.log('Falling back to checking against currently loaded products');
-            
-            // Refresh product list to ensure we have the latest data
-            const refreshResponse = await productsApi.getAll({limit: 1000}); // Get more products to check against
+            const refreshResponse = await productsApi.getAll({limit: 1000});
             const allProducts = refreshResponse.data?.products || [];
             
-            // Create a map of product names to IDs
             const productNameMap = new Map();
             allProducts.forEach((product: any) => {
               productNameMap.set(product.name.toLowerCase(), {
                 id: product.id,
-                name: product.name
+                name: product.name,
+                stockQuantity: product.stockQuantity || 0
               });
             });
             
-            // Find matching products
             existingProducts = importProductNames
               .map(name => {
                 const match = productNameMap.get(name.toLowerCase());
-                return match ? { id: match.id, name } : null;
+                return match ? { 
+                  id: match.id, 
+                  name, 
+                  stockQuantity: match.stockQuantity 
+                } : null;
               })
               .filter(Boolean);
             
             console.log('Found existing products from current data:', existingProducts.length);
           }
           
-          // Create a mapping for quick lookup - using lowercase for case-insensitive comparison
-          const updateMap: Record<string, { id: number, existing: boolean }> = {};
+          // Create a mapping for quick lookup with current stock quantities
+          const updateMap: Record<string, { id: number, existing: boolean, currentStock: number }> = {};
           existingProducts.forEach((product: any) => {
             if (product && product.name) {
               updateMap[product.name.toLowerCase()] = {
                 id: product.id,
-                existing: true
+                existing: true,
+                currentStock: product.stockQuantity || 0
               };
             }
           });
           
           setProductUpdateMap(updateMap);
           
-          // Enrich import data with update flags
+          // Enrich import data with update flags and calculate new stock quantities
           const enrichedData = jsonData.map((product: any) => {
             const normalizedName = product.name.toLowerCase();
-            const isUpdate = updateMap[normalizedName] !== undefined;
+            const existingProduct = updateMap[normalizedName];
+            const isUpdate = existingProduct !== undefined;
+            
+            // For existing products, calculate the new total stock quantity
+            let finalStockQuantity = parseInt(product.stockQuantity) || 0;
+            let stockChange = 0;
+            
+            if (isUpdate) {
+              const currentStock = existingProduct.currentStock;
+              const importQuantity = parseInt(product.stockQuantity) || 0;
+              finalStockQuantity = currentStock + importQuantity;
+              stockChange = importQuantity;
+            }
             
             return {
               ...product,
               _action: isUpdate ? 'UPDATE' : 'CREATE',
-              _id: isUpdate ? updateMap[normalizedName].id : null
+              _id: isUpdate ? existingProduct.id : null,
+              _currentStock: isUpdate ? existingProduct.currentStock : 0,
+              _importQuantity: parseInt(product.stockQuantity) || 0,
+              _finalStock: finalStockQuantity,
+              _stockChange: stockChange,
+              stockQuantity: finalStockQuantity // This will be the final quantity sent to server
             };
           });
 
@@ -1275,12 +1287,16 @@ const Products: React.FC = () => {
                 <li><strong>barcode</strong> - Product barcode (leave empty for auto-generation)</li>
                 <li><strong>price</strong> - Selling price (required)</li>
                 <li><strong>costPrice</strong> - Cost price</li>
-                <li><strong>stockQuantity</strong> - Initial stock quantity (required)</li>
+                <li><strong>stockQuantity</strong> - For new products: initial stock. For existing products: quantity to ADD (required)</li>
                 <li><strong>reorderLevel</strong> - Stock reorder level</li>
                 <li><strong>categoryName</strong> - Category name</li>
                 <li><strong>supplierName</strong> - Supplier name</li>
               </ul>
               
+              <div className="alert alert-info">
+                <strong>Note:</strong> For existing products (products with the same name), the stock quantity will be <strong>added</strong> to the current stock, not replaced.
+              </div>
+
               <div className="d-flex justify-content-between mb-3">
                 <Button 
                   variant="outline-primary" 
@@ -1328,7 +1344,7 @@ const Products: React.FC = () => {
                   {importData.filter(p => p._action === 'UPDATE').length} products to update
                 </Badge>
                 <div className="mt-2 text-muted small">
-                  Products with the same names as existing ones will be updated with the imported values.
+                  For existing products, the imported stock quantity will be <strong>added</strong> to the current stock.
                 </div>
               </div>
               
@@ -1339,7 +1355,7 @@ const Products: React.FC = () => {
                       <th>#</th>
                       <th>Name</th>
                       <th>Price</th>
-                      <th>Stock</th>
+                      <th>Stock Info</th>
                       <th>Action</th>
                     </tr>
                   </thead>
@@ -1349,7 +1365,17 @@ const Products: React.FC = () => {
                         <td>{index + 1}</td>
                         <td>{product.name}</td>
                         <td>Rs. {product.price}</td>
-                        <td>{product.stockQuantity}</td>
+                        <td>
+                          {product._action === 'UPDATE' ? (
+                            <div>
+                              <small className="text-muted">Current: {product._currentStock}</small><br/>
+                              <small className="text-success">+{product._importQuantity}</small><br/>
+                              <strong>Total: {product._finalStock}</strong>
+                            </div>
+                          ) : (
+                            <span>{product.stockQuantity}</span>
+                          )}
+                        </td>
                         <td>
                           {product._action === 'UPDATE' ? (
                             <Badge bg="warning" text="dark">Update</Badge>

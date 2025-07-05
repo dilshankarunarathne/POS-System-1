@@ -142,31 +142,28 @@ const DeveloperUsers: React.FC = () => {
         )
       );
 
-      // If shop is being deactivated, deactivate all its users
-      if (!newStatus) {
-        // Update users belonging to this shop
-        const usersToUpdate = users.filter(user => 
-          user.shop?._id === shopId || 
-          (user.shopId && typeof user.shopId !== 'string' ? user.shopId._id === shopId : user.shopId === shopId)
+      // Update users belonging to this shop
+      const usersToUpdate = users.filter(user => 
+        user.shop?._id === shopId || 
+        (user.shopId && typeof user.shopId !== 'string' ? user.shopId._id === shopId : user.shopId === shopId)
+      );
+
+      if (usersToUpdate.length > 0) {
+        // Update users in the backend
+        await Promise.all(
+          usersToUpdate.map(user => 
+            api.patch(`/users/${user._id}/toggle-status`, { active: newStatus })
+          )
         );
 
-        if (usersToUpdate.length > 0) {
-          // Update users in the backend
-          await Promise.all(
-            usersToUpdate.map(user => 
-              api.patch(`/users/${user._id}/toggle-status`, { active: false })
-            )
-          );
-
-          // Update users state optimistically
-          setUsers(prevUsers => 
-            prevUsers.map(user => {
-              const belongsToShop = user.shop?._id === shopId || 
-                (user.shopId && typeof user.shopId !== 'string' ? user.shopId._id === shopId : user.shopId === shopId);
-              return belongsToShop ? { ...user, active: false } : user;
-            })
-          );
-        }
+        // Update users state optimistically
+        setUsers(prevUsers => 
+          prevUsers.map(user => {
+            const belongsToShop = user.shop?._id === shopId || 
+              (user.shopId && typeof user.shopId !== 'string' ? user.shopId._id === shopId : user.shopId === shopId);
+            return belongsToShop ? { ...user, active: newStatus } : user;
+          })
+        );
       }
     } catch (err: any) {
       setError(err.response?.data?.message || 'Error updating shop status');

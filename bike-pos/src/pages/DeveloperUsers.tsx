@@ -130,6 +130,49 @@ const DeveloperUsers: React.FC = () => {
     }
   };
 
+  const handleToggleShopStatus = async (shopId: string, currentStatus: boolean) => {
+    try {
+      const newStatus = !currentStatus;
+      await api.patch(`/shops/${shopId}/toggle-status`, { active: newStatus });
+      
+      // Update the shop status optimistically
+      setShops(prevShops => 
+        prevShops.map(shop => 
+          shop._id === shopId ? { ...shop, active: newStatus } : shop
+        )
+      );
+
+      // If shop is being deactivated, deactivate all its users
+      if (!newStatus) {
+        // Update users belonging to this shop
+        const usersToUpdate = users.filter(user => 
+          user.shop?._id === shopId || 
+          (user.shopId && typeof user.shopId !== 'string' ? user.shopId._id === shopId : user.shopId === shopId)
+        );
+
+        if (usersToUpdate.length > 0) {
+          // Update users in the backend
+          await Promise.all(
+            usersToUpdate.map(user => 
+              api.patch(`/users/${user._id}/toggle-status`, { active: false })
+            )
+          );
+
+          // Update users state optimistically
+          setUsers(prevUsers => 
+            prevUsers.map(user => {
+              const belongsToShop = user.shop?._id === shopId || 
+                (user.shopId && typeof user.shopId !== 'string' ? user.shopId._id === shopId : user.shopId === shopId);
+              return belongsToShop ? { ...user, active: false } : user;
+            })
+          );
+        }
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.message || 'Error updating shop status');
+    }
+  };
+
   // User handlers
   const handleUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -252,6 +295,14 @@ const DeveloperUsers: React.FC = () => {
                       onClick={() => handleEditShop(shop)}
                     >
                       <PencilSquare size={18} />
+                    </Button>
+                    <Button
+                      variant={shop.active ? 'outline-warning' : 'outline-success'}
+                      size="sm"
+                      className="me-2"
+                      onClick={() => handleToggleShopStatus(shop._id, shop.active)}
+                    >
+                      {shop.active ? 'Deactivate' : 'Activate'}
                     </Button>
                     <Button
                       variant="link"

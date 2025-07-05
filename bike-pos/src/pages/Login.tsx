@@ -9,7 +9,7 @@ import {
   Row,
   Spinner
 } from 'react-bootstrap';
-import { Bicycle } from 'react-bootstrap-icons';
+import { CashStack } from 'react-bootstrap-icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/Login.css'; // We'll create this CSS file for additional styling
@@ -71,27 +71,27 @@ const Login: React.FC = () => {
       <div className="login-background"></div>
       <Container className="d-flex align-items-center justify-content-center min-vh-100">
         <Row className="justify-content-center w-100">
-          <Col xs={12} md={10} lg={8} xl={6}>
+          <Col xs={12} md={12} lg={10} xl={8}>
             <Card className="login-card border-0">
               <Card.Body className="p-0">
                 <Row className="g-0">
-                  <Col md={5} className="login-brand-section d-none d-md-flex">
+                  <Col md={6} className="login-brand-section d-none d-md-flex">
                     <div className="p-4 p-lg-5 h-100 d-flex flex-column justify-content-between">
                       <div className="logo-area text-white">
-                        <Bicycle size={40} className="mb-3" />
-                        <h2 className="brand-name">Bike POS</h2>
-                        <p className="brand-tagline">Manage your bike shop with ease</p>
+                        <CashStack size={40} className="mb-3" />
+                        <h2 className="brand-name">POS System</h2>
+                        <p className="brand-tagline">Streamline your business operations</p>
                       </div>
                       <div className="testimonial text-white-50">
-                        <p className="mb-0 fst-italic">"Streamline your operations and boost sales with our comprehensive solution."</p>
+                        <p className="mb-0 fst-italic">"Efficiently manage sales, inventory, and customer data with our comprehensive POS solution."</p>
                       </div>
                     </div>
                   </Col>
-                  <Col md={7}>
+                  <Col md={6}>
                     <div className="login-form-section p-4 p-lg-5">
                       <div className="text-center mb-4 d-md-none">
-                        <Bicycle size={36} className="text-primary mb-2" />
-                        <h2 className="fw-bold">Bike POS</h2>
+                        <CashStack size={36} className="text-primary mb-2" />
+                        <h2 className="fw-bold">POS System</h2>
                       </div>
                       
                       <h3 className="fw-bold mb-4">Welcome Back!</h3>
@@ -138,24 +138,6 @@ const Login: React.FC = () => {
                           {loading ? <Spinner animation="border" size="sm" /> : 'Sign In'}
                         </Button>
                       </Form>
-                      
-                      <div className="mt-4 demo-accounts">
-                        <p className="text-muted small fw-medium">Demo Accounts:</p>
-                        <div className="demo-grid">
-                          <div className="demo-account">
-                            <span className="demo-role">Admin</span>
-                            <span className="demo-credentials">admin / password</span>
-                          </div>
-                          <div className="demo-account">
-                            <span className="demo-role">Manager</span>
-                            <span className="demo-credentials">manager / password</span>
-                          </div>
-                          <div className="demo-account">
-                            <span className="demo-role">Cashier</span>
-                            <span className="demo-credentials">cashier / password</span>
-                          </div>
-                        </div>
-                      </div>
                     </div>
                   </Col>
                 </Row>

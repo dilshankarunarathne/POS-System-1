@@ -15,16 +15,20 @@
 }
 
 .login-card {
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 15px 40px rgba(0, 0, 0, 0.25);
   transition: all 0.3s ease;
   animation: fadeIn 0.8s ease;
+  max-width: 1200px;
+  width: 100%;
+  min-height: 600px;
 }
 
 .login-brand-section {
   background: linear-gradient(135deg, #3a7bd5 0%, #1a3c6e 100%);
-  border-radius: 12px 0 0 12px;
+  border-radius: 16px 0 0 16px;
+  min-height: 600px;
 }
 
 .logo-area {
@@ -44,12 +48,18 @@
 
 .login-form-section {
   background: #ffffff;
+  min-height: 600px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
 }
 
 .login-input {
-  padding: 0.7rem 1rem;
-  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  border-radius: 10px;
   transition: all 0.3s;
+  font-size: 1rem;
+  height: 50px;
 }
 
 .login-input:focus {
@@ -58,11 +68,13 @@
 }
 
 .login-button {
-  border-radius: 8px;
+  border-radius: 10px;
   font-weight: 600;
   transition: all 0.3s;
   background: linear-gradient(to right, #4b6cb7, #182848);
   border: none;
+  height: 50px;
+  font-size: 1.1rem;
 }
 
 .login-button:hover:not(:disabled) {
@@ -123,8 +135,75 @@
   20%, 40%, 60%, 80% { transform: translateX(5px); }
 }
 
+/* Responsive breakpoints */
+@media (max-width: 1399.98px) {
+  .login-card {
+    max-width: 1100px;
+  }
+}
+
+@media (max-width: 1199.98px) {
+  .login-card {
+    max-width: 1000px;
+    min-height: 550px;
+  }
+  
+  .login-brand-section,
+  .login-form-section {
+    min-height: 550px;
+  }
+}
+
+@media (max-width: 991.98px) {
+  .login-card {
+    max-width: 900px;
+    min-height: 500px;
+  }
+  
+  .login-brand-section,
+  .login-form-section {
+    min-height: 500px;
+  }
+}
+
 @media (max-width: 767.98px) {
   .login-card {
     margin: 1rem;
+    max-width: 100%;
+    min-height: auto;
+  }
+  
+  .login-form-section {
+    padding: 3rem 2rem !important;
+    min-height: auto;
+  }
+  
+  .login-input {
+    height: 45px;
+    padding: 0.8rem 1rem;
+  }
+  
+  .login-button {
+    height: 45px;
+    font-size: 1rem;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .login-card {
+    margin: 0.5rem;
+    border-radius: 12px;
+  }
+  
+  .login-form-section {
+    padding: 2rem 1.5rem !important;
+  }
+  
+  .login-input {
+    height: 42px;
+  }
+  
+  .login-button {
+    height: 42px;
   }
 }

@@ -1,5 +1,5 @@
 import 'bootstrap/dist/css/bootstrap.min.css';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Badge,
   Button,
@@ -11,6 +11,7 @@ import {
   ListGroup,
   Modal,
   OverlayTrigger,
+  Pagination,
   Row,
   Spinner,
   Tooltip
@@ -22,6 +23,15 @@ import {
   BsTrash,
   BsX
 } from 'react-icons/bs';
+import {
+  Column,
+  HeaderGroup,
+  TableInstance,
+  usePagination,
+  UsePaginationInstanceProps,
+  UsePaginationState,
+  useTable
+} from 'react-table';
 import QRScanner from '../components/QRScanner';
 import { useAuth } from '../contexts/AuthContext';
 import { productsApi, salesApi } from '../services/api';
@@ -135,6 +145,8 @@ const POS: React.FC = () => {
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [isTypingInInput, setIsTypingInInput] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  const [pageSize, setPageSize] = useState(10);
 
   useEffect(() => {
     const fetchProducts = async () => {
@@ -924,6 +936,92 @@ const POS: React.FC = () => {
     ) : null;
   };
 
+  const columns = useMemo<Column<Product>[]>(
+    () => [
+      {
+        Header: 'Product Details',
+        accessor: 'name',
+        Cell: ({ row }: { row: any }) => (
+          <div className="product-cell">
+            <div className="product-main">
+              <div className="product-title" title={row.original.name}>
+                {row.original.name}
+              </div>
+              {row.original.description && (
+                <div className="product-desc" title={row.original.description}>
+                  {row.original.description}
+                </div>
+              )}
+              <div className="product-meta">
+                {row.original.Category && (
+                  <span className="category-tag">
+                    {row.original.Category.name}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        ),
+      },
+      {
+        Header: 'Price',
+        accessor: 'price',
+        Cell: ({ value }: { value: number }) => (
+          <div className="price-cell">
+            <span className="price-amount">Rs. {value}</span>
+          </div>
+        ),
+      },
+      {
+        Header: 'Stock',
+        accessor: 'stockQuantity',
+        Cell: ({ value }: { value: number }) => (
+          <div className="stock-cell">
+            <Badge 
+              bg={value > 10 ? "success" : value > 0 ? "warning" : "danger"}
+              className="stock-badge"
+            >
+              {value}
+            </Badge>
+          </div>
+        ),
+      },
+    ],
+    []
+  );
+
+  const tableInstance = useTable(
+    {
+      columns,
+      data: filteredProducts,
+      initialState: { pageIndex: 0, pageSize } as any,
+    },
+    usePagination
+  ) as TableInstance<Product> & UsePaginationInstanceProps<Product> & {
+    state: UsePaginationState<Product>;
+  };
+
+  const {
+    getTableProps,
+    getTableBodyProps,
+    headerGroups,
+    page,
+    prepareRow,
+    canPreviousPage,
+    canNextPage,
+    pageOptions,
+    pageCount,
+    gotoPage,
+    nextPage,
+    previousPage,
+    setPageSize: setTablePageSize,
+    state: { pageIndex },
+  } = tableInstance;
+
+  useEffect(() => {
+    setTablePageSize(pageSize);
+  }, [pageSize, setTablePageSize]);
+
   return (
     <Container fluid className="py-4 px-3 px-md-4 d-flex flex-column" style={{ minHeight: "calc(100vh - 56px)" }}>
       <Row className="mb-3">
@@ -1037,11 +1135,187 @@ const POS: React.FC = () => {
                                 <i className="bi bi-pencil-square me-1"></i> Manual Entry
                               </Button>
                             </OverlayTrigger>
+                            
                           </div>
                         </Col>
-                        
                         <Col md={6}>
-                          {isManualMode ? (
+                        <OverlayTrigger
+                              placement="top"
+                              overlay={<Tooltip>Search Products (Ctrl+F or F3)</Tooltip>}
+                            >
+                              <InputGroup className="search-bar shadow-sm rounded">
+                                <InputGroup.Text className="bg-white border-end-0">
+                                  <>{BsSearch({ size: 16 })}</>
+                                </InputGroup.Text>
+                                <Form.Control
+                                  ref={searchInputRef}
+                                  type="text"
+                                  placeholder="Search Products (Ctrl+F)"
+                                  value={searchQuery}
+                                  onChange={(e) => setSearchQuery(e.target.value)}
+                                  onFocus={handleInputFocus}
+                                  onBlur={handleInputBlur}
+                                  className="border-start-0"
+                                />
+                                {searchQuery && (
+                                  <Button variant="outline-secondary" onClick={() => setSearchQuery('')} className="border-start-0">
+                                    <>{BsX({ size: 16 })}</>
+                                  </Button>
+                                )}
+                              </InputGroup>
+                            </OverlayTrigger>
+                        </Col>
+                      
+                      </Row>
+                      
+                      
+                      <ErrorAlert />
+                      <SuccessAlert />
+                    </Card.Body>
+                  </Card>
+                  
+                  <Card className="shadow-sm border-0 products-card">
+                    <div className="products-container">
+                      {!isManualMode ? (
+                        <div className="products-table-container">
+                          {/* Table Controls */}
+                          <div className="d-flex justify-content-between align-items-center p-3 border-bottom">
+                            <div className="d-flex align-items-center gap-2">
+                              <span className="text-muted small">Show</span>
+                              <Form.Select
+                                size="sm"
+                                value={pageSize}
+                                onChange={(e) => setPageSize(Number(e.target.value))}
+                                style={{ width: 'auto' }}
+                              >
+                                <option value={5}>5</option>
+                                <option value={10}>10</option>
+                                <option value={25}>25</option>
+                                <option value={50}>50</option>
+                              </Form.Select>
+                              <span className="text-muted small">entries</span>
+                            </div>
+                          </div>
+
+                          <div className="table-responsive products-table">
+                            <table {...getTableProps()} className="table table-hover mb-0 products-data-table">
+                              <thead className="table-light sticky-top">
+                                {headerGroups.map((headerGroup: HeaderGroup<Product>, headerIndex: number) => (
+                                  <tr {...headerGroup.getHeaderGroupProps()} key={headerIndex}>
+                                    {headerGroup.headers.map((column: any, columnIndex: number) => (
+                                      <th {...column.getHeaderProps()} scope="col" key={columnIndex} className={`table-header-${columnIndex}`}>
+                                        {column.render('Header')}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </thead>
+                              <tbody {...getTableBodyProps()}>
+                                {page.map((row: any, rowIndex: number) => {
+                                  prepareRow(row);
+                                  const product = row.original;
+                                  return (
+                                    <tr 
+                                      {...row.getRowProps()}
+                                      key={product.id}
+                                      className={`clickable-row product-row ${product.stockQuantity <= 0 ? 'out-of-stock' : ''}`}
+                                      onClick={() => {
+                                        if (product.stockQuantity > 0) {
+                                          addToCart(product);
+                                        } else {
+                                          setError('Product is out of stock.');
+                                        }
+                                      }}
+                                      style={{ cursor: product.stockQuantity > 0 ? 'pointer' : 'not-allowed' }}
+                                    >
+                                      {row.cells.map((cell: any, cellIndex: number) => (
+                                        <td {...cell.getCellProps()} key={cellIndex} className={`table-cell-${cellIndex}`}>
+                                          {cell.render('Cell')}
+                                        </td>
+                                      ))}
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+
+                          {/* Pagination */}
+                          {pageCount > 1 && (
+                            <div className="d-flex justify-content-between align-items-center p-3 border-top">
+                              <Button
+                                variant="outline-secondary"
+                                size="sm"
+                                onClick={() => previousPage()}
+                                disabled={!canPreviousPage}
+                                className="d-flex align-items-center gap-1"
+                              >
+                                <i className="bi bi-chevron-left" style={{fontSize: '14px'}}></i>
+                                Previous
+                              </Button>
+
+                              <Pagination className="mb-0" size="sm">
+                                {/* First page */}
+                                {pageIndex > 2 && (
+                                  <>
+                                    <Pagination.Item onClick={() => gotoPage(0)}>
+                                      1
+                                    </Pagination.Item>
+                                    {pageIndex > 3 && <Pagination.Ellipsis />}
+                                  </>
+                                )}
+
+                                {/* Previous page */}
+                                {pageIndex > 0 && (
+                                  <Pagination.Item onClick={() => gotoPage(pageIndex - 1)}>
+                                    {pageIndex}
+                                  </Pagination.Item>
+                                )}
+
+                                {/* Current page */}
+                                <Pagination.Item active>
+                                  {pageIndex + 1}
+                                </Pagination.Item>
+
+                                {/* Next page */}
+                                {pageIndex < pageCount - 1 && (
+                                  <Pagination.Item onClick={() => gotoPage(pageIndex + 1)}>
+                                    {pageIndex + 2}
+                                  </Pagination.Item>
+                                )}
+
+                                {/* Last page */}
+                                {pageIndex < pageCount - 3 && (
+                                  <>
+                                    {pageIndex < pageCount - 4 && <Pagination.Ellipsis />}
+                                    <Pagination.Item onClick={() => gotoPage(pageCount - 1)}>
+                                      {pageCount}
+                                    </Pagination.Item>
+                                  </>
+                                )}
+                              </Pagination>
+
+                              <Button
+                                variant="outline-secondary"
+                                size="sm"
+                                onClick={() => nextPage()}
+                                disabled={!canNextPage}
+                                className="d-flex align-items-center gap-1"
+                              >
+                                Next
+                                <i className="bi bi-chevron-right" style={{fontSize: '14px'}}></i>
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="text-center my-5 py-4 rounded bg-light">
+                          <div className="mb-3">
+                            <i className="bi bi-pencil-square fs-1 text-primary"></i>
+                          </div>
+                            
+                        <Col md={6} className="mx-auto ">
+                          
                             <Form onSubmit={handleManualItemSubmit} className="manual-entry-form">
                               <InputGroup className="mb-2">
                                 <InputGroup.Text className="bg-white">
@@ -1096,112 +1370,12 @@ const POS: React.FC = () => {
                                   </InputGroup>
                                 </Col>
                               </Row>
-                              <Button type="submit" variant="success" className="w-100 rounded-pill">
+                              <Button type="submit" variant="success" className="w-50 rounded-pill m-3 text-center">
                                 <>{BsPlus({ size: 16, className: "me-1" })}</>Add to Cart
                               </Button>
                             </Form>
-                          ) : (
-                            <OverlayTrigger
-                              placement="top"
-                              overlay={<Tooltip>Search Products (Ctrl+F or F3)</Tooltip>}
-                            >
-                              <InputGroup className="search-bar shadow-sm rounded">
-                                <InputGroup.Text className="bg-white border-end-0">
-                                  <>{BsSearch({ size: 16 })}</>
-                                </InputGroup.Text>
-                                <Form.Control
-                                  ref={searchInputRef}
-                                  type="text"
-                                  placeholder="Search Products (Ctrl+F)"
-                                  value={searchQuery}
-                                  onChange={(e) => setSearchQuery(e.target.value)}
-                                  onFocus={handleInputFocus}
-                                  onBlur={handleInputBlur}
-                                  className="border-start-0"
-                                />
-                                {searchQuery && (
-                                  <Button variant="outline-secondary" onClick={() => setSearchQuery('')} className="border-start-0">
-                                    <>{BsX({ size: 16 })}</>
-                                  </Button>
-                                )}
-                              </InputGroup>
-                            </OverlayTrigger>
-                          )}
+                         
                         </Col>
-                      </Row>
-                      
-                      <ErrorAlert />
-                      <SuccessAlert />
-                    </Card.Body>
-                  </Card>
-                  
-                  <Card className="shadow-sm border-0 products-card">
-                    <div className="products-container">
-                      {!isManualMode ? (
-                        <div className="products-table-container">
-                          <div className="table-responsive-header">
-                            <table className="table mb-0">
-                              <thead className="table-light sticky-top">
-                                <tr>
-                                  <th scope="col">Name</th>
-                                  <th scope="col">Price</th>
-                                  <th scope="col" className="text-center">Stock</th>
-                                </tr>
-                              </thead>
-                            </table>
-                          </div>
-                          <div className="table-responsive products-table">
-                            <table className="table table-hover mb-0">
-                              <tbody>
-                                {(filteredProducts || []).map(product => (
-                                  <tr 
-                                    key={product.id} 
-                                    className={`clickable-row ${product.stockQuantity <= 0 ? 'table-secondary' : ''}`}
-                                    onClick={() => {
-                                      if (product.stockQuantity > 0) {
-                                        addToCart(product);
-                                      } else {
-                                        setError('Product is out of stock.');
-                                      }
-                                    }}
-                                    style={{ cursor: product.stockQuantity > 0 ? 'pointer' : 'not-allowed' }}
-                                  >
-                                    <td className="product-name-cell">
-                                      <div className="product-name-container">
-                                        <span className="fw-medium product-name" title={product.name}>
-                                          {product.name}
-                                        </span>
-                                        {product.description && (
-                                          <small className="text-muted product-description" title={product.description}>
-                                            {product.description}
-                                          </small>
-                                        )}
-                                      </div>
-                                    </td>
-                                    <td className="fw-bold price-cell">Rs. {product.price.toFixed(2)}</td>
-                                    <td className="text-center stock-cell">
-                                      <Badge bg={product.stockQuantity > 10 ? "success" : 
-                                                product.stockQuantity > 0 ? "warning" : "danger"}
-                                            className="rounded-pill px-2">
-                                        {product.stockQuantity}
-                                      </Badge>
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="text-center my-5 py-4 rounded bg-light">
-                          <div className="mb-3">
-                            <i className="bi bi-pencil-square fs-1 text-primary"></i>
-                          </div>
-                          <h5>Manual Item Entry Mode</h5>
-                          <p className="text-muted mb-0">
-                            Use the form above to add custom items to your cart.<br/>
-                            These items will be included in the bill but won't affect inventory.
-                          </p>
                         </div>
                       )}
                     </div>
@@ -1668,75 +1842,270 @@ const POS: React.FC = () => {
           z-index: 1070;
         }
         
-        .table-responsive-header {
-          overflow: hidden;
+        /* Table Layout Optimization */
+        .products-table {
+          flex: 1;
+          overflow-y: auto;
+          max-height: calc(100vh - 400px);
         }
-        .table-responsive-header table,
-        .table-responsive table {
+        
+        .products-data-table {
           table-layout: fixed;
           width: 100%;
+          border-collapse: separate;
+          border-spacing: 0;
         }
-        .table-responsive-header th:nth-child(1),
-        .product-name-cell {
-          width: 55%;
+        
+        /* Column Headers */
+        .table-header-0 {
+          width: 50%;
+          text-align: left;
+          padding-left: 16px;
         }
-        .table-responsive-header th:nth-child(2),
-        .price-cell {
-          width: 25%;
+        
+        .table-header-1 {
+          width: 30%;
+          text-align: center;
         }
-        .table-responsive-header th:nth-child(3),
-        .stock-cell {
+        
+        .table-header-2 {
           width: 20%;
           text-align: center;
         }
         
-        .table-responsive {
-          height: 100%;
-          overflow-y: auto;
+        /* Table Cells */
+        .table-cell-0 {
+          width: 50%;
+          padding: 16px;
+          vertical-align: top;
         }
         
-        .product-name-container {
+        .table-cell-1 {
+          width: 30%;
+          padding: 16px;
+          text-align: center;
+          vertical-align: middle;
+        }
+        
+        .table-cell-2 {
+          width: 20%;
+          padding: 16px;
+          text-align: center;
+          vertical-align: middle;
+        }
+        
+        /* Product Cell Layout */
+        .product-cell {
+          display: flex;
+          align-items: flex-start;
+          width: 100%;
+        }
+        
+        .product-main {
+          flex: 1;
+          min-width: 0;
+        }
+        
+        .product-title {
+          font-size: 1rem;
+          font-weight: 600;
+          color: #212529;
+          line-height: 1.4;
+          margin-bottom: 4px;
+          display: -webkit-box;
+          -webkit-line-clamp: 2;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          word-wrap: break-word;
+        }
+        
+        .product-desc {
+          font-size: 0.85rem;
+          color: #6c757d;
+          line-height: 1.3;
+          margin-bottom: 6px;
+          display: -webkit-box;
+          -webkit-line-clamp: 1;
+          -webkit-box-orient: vertical;
+          overflow: hidden;
+          word-wrap: break-word;
+        }
+        
+        .product-meta {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+        }
+        
+        .category-tag {
+          font-size: 0.7rem;
+          padding: 2px 8px;
+          background-color: #f8f9fa;
+          color: #495057;
+          border: 1px solid #dee2e6;
+          border-radius: 12px;
+          white-space: nowrap;
+        }
+        
+        /* Price Cell */
+        .price-cell {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          height: 100%;
+        }
+        
+        .price-amount {
+          font-size: 1rem;
+          font-weight: 700;
+          color: #198754;
+          background: linear-gradient(135deg, #d4edda 0%, #c3e6cb 100%);
+          padding: 4px 8px;
+          border-radius: 20px;
+          white-space: nowrap;
+          min-width: 100px;
+          text-align: center;
+        }
+        
+        /* Stock Cell */
+        .stock-cell {
+          display: flex;
+          justify-content: center;
+          align-items: center;
+          height: 100%;
+        }
+        
+        .stock-badge {
+          font-size: 0.85rem;
+          font-weight: 600;
+          padding: 6px 12px;
+          border-radius: 16px;
+          min-width: 50px;
+          text-align: center;
+        }
+        
+        /* Table Headers Styling */
+        .table-light th {
+          background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+          color: #495057;
+          font-weight: 600;
+          font-size: 0.9rem;
+          text-transform: uppercase;
+          letter-spacing: 0.5px;
+          padding: 16px 12px;
+          border-bottom: 2px solid #dee2e6;
+          position: sticky;
+          top: 0;
+          z-index: 10;
+        }
+        
+        /* Row Hover Effects */
+        .product-row {
+          transition: all 0.2s ease;
+          cursor: pointer;
+        }
+        
+        .product-row:hover {
+          background: linear-gradient(135deg, #e3f2fd 0%, #f0f8ff 100%);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 12px rgba(13, 110, 253, 0.15);
+        }
+        
+        .product-row:hover .product-title {
+          color: #0d6efd;
+        }
+        
+        .product-row:hover .price-amount {
+          background: linear-gradient(135deg, #0d6efd 0%, #0b5ed7 100%);
+          color: white;
+          transform: scale(1.05);
+        }
+        
+        .out-of-stock {
+          opacity: 0.6;
+          cursor: not-allowed;
+          background: #f8f9fa;
+        }
+        
+        .out-of-stock:hover {
+          background: #f8f9fa;
+          transform: none;
+          box-shadow: none;
+        }
+        
+        .out-of-stock .product-title,
+        .out-of-stock .product-desc,
+        .out-of-stock .price-amount {
+          color: #6c757d !important;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 1200px) {
+          .table-header-0, .table-cell-0 { width: 45%; }
+          .table-header-1, .table-cell-1 { width: 35%; }
+          .table-header-2, .table-cell-2 { width: 20%; }
+          
+          .product-title { font-size: 0.95rem; }
+          .price-amount { font-size: 1rem; min-width: 90px; }
+        }
+        
+        @media (max-width: 992px) {
+          .table-header-0, .table-cell-0 { width: 50%; }
+          .table-header-1, .table-cell-1 { width: 30%; }
+          .table-header-2, .table-cell-2 { width: 20%; }
+          
+          .products-data-table td,
+          .products-data-table th {
+            padding: 12px 8px;
+          }
+          
+          .product-title { 
+            font-size: 0.9rem;
+            -webkit-line-clamp: 1;
+          }
+          
+          .product-desc { display: none; }
+          .price-amount { 
+            font-size: 0.95rem;
+            padding: 6px 12px;
+            min-width: 80px;
+          }
+        }
+        
+        @media (max-width: 768px) {
+          .table-header-0, .table-cell-0 { width: 60%; }
+          .table-header-1, .table-cell-1 { width: 25%; }
+          .table-header-2, .table-cell-2 { width: 15%; }
+          
+          .products-data-table td,
+          .products-data-table th {
+            padding: 10px 6px;
+          }
+          
+          .product-title { font-size: 0.85rem; }
+          .category-tag { display: none; }
+          .price-amount { 
+            font-size: 0.9rem;
+            padding: 4px 8px;
+            min-width: 70px;
+          }
+          .stock-badge {
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            min-width: 40px;
+          }
+        }
+        
+        .products-table-container {
+          height: 100%;
           display: flex;
           flex-direction: column;
-          overflow: hidden;
         }
         
-        .product-name {
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          overflow: hidden;
-          display: block;
-        }
-        
-        .product-description {
-          text-overflow: ellipsis;
-          white-space: nowrap;
-          overflow: hidden;
-          display: block;
-          margin-top: 2px;
-        }
-        
-        tr:hover .product-name,
-        tr:hover .product-description {
-          white-space: normal;
-          overflow: visible;
-          word-break: break-word;
-          max-height: none;
-        }
-
         .clickable-row {
           transition: background-color 0.2s ease;
         }
         
-        .clickable-row:hover {
-          background-color: var(--bs-primary-bg-subtle) !important;
-        }
-        
-        .clickable-row:active {
-          background-color: var(--bs-primary) !important;
-          color: white !important;
-        }
-
         .flex-1 {
           flex: 1;
           min-width: 100px;
@@ -1769,11 +2138,6 @@ const POS: React.FC = () => {
             height: 350px;
             display: flex;
             flex-direction: column;
-          }
-          
-          .products-table {
-            flex: 1;
-            overflow-y: auto;
           }
           
           .cart-card {
@@ -1811,11 +2175,6 @@ const POS: React.FC = () => {
             height: 100%;
             display: flex;
             flex-direction: column;
-          }
-          
-          .products-table {
-            flex: 1;
-            overflow-y: auto;
           }
           
           .cart-items-container {

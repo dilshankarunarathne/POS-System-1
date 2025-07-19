@@ -175,7 +175,7 @@ const Layout = () => {
               </button>
             )}
             
-            <LinkContainer to="/dashboard">
+            <LinkContainer to={user?.role === 'developer' ? '/developer/dashboard' : '/dashboard'}>
               <Navbar.Brand className="fw-bold fs-4 text-white d-flex align-items-center">
                 
                 <span className="d-none d-sm-inline">

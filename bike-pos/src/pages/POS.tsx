@@ -34,7 +34,7 @@ import {
 } from 'react-table';
 import QRScanner from '../components/QRScanner';
 import { useAuth } from '../contexts/AuthContext';
-import { productsApi, salesApi } from '../services/api';
+import { categoriesApi, productsApi, salesApi } from '../services/api'; // Add categoriesApi
 
 interface Product {
   id: number;
@@ -101,6 +101,13 @@ interface ReceiptData {
   paymentMethod: string;
 }
 
+// Add Category interface
+interface Category {
+  _id: string;
+  name: string;
+  description?: string;
+}
+
 const POS: React.FC = () => {
   const { user } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
@@ -148,11 +155,18 @@ const POS: React.FC = () => {
 
   const [pageSize, setPageSize] = useState(10);
 
+  const [selectedCategory, setSelectedCategory] = useState<string>('');
+
+  // Add categories state
+  const [categories, setCategories] = useState<Category[]>([]);
+
   useEffect(() => {
     const fetchProducts = async () => {
       try {
         setLoadingProducts(true);
-        const response = await productsApi.getAll();
+        const response = await productsApi.getAll({
+          category: selectedCategory || undefined
+        });
         const productsData = response.data?.products || [];
         setProducts(productsData);
         setFilteredProducts(productsData);
@@ -167,6 +181,20 @@ const POS: React.FC = () => {
     };
 
     fetchProducts();
+  }, [selectedCategory]);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      try {
+        const response = await categoriesApi.getAll();
+        setCategories(response.data || []);
+      } catch (err) {
+        console.error('Error fetching categories:', err);
+        setError('Failed to load categories');
+      }
+    };
+
+    fetchCategories();
   }, []);
 
   useEffect(() => {
@@ -200,10 +228,9 @@ const POS: React.FC = () => {
         return;
       }
 
-      // Check if the key event is likely from a barcode scanner
-      const isRapidInput = event.timeStamp - lastKeyTime < 50; // 50ms threshold
+      const isRapidInput = event.timeStamp - lastKeyTime < 50;
       if (isRapidInput) {
-        return; // Skip auto-search for rapid inputs (likely from scanner)
+        return;
       }
 
       switch (event.key) {
@@ -921,6 +948,11 @@ const POS: React.FC = () => {
     setSuccessMessage('Manual item added to cart');
   };
 
+  const handleCategoryChange = (categoryId: string) => {
+    setSelectedCategory(categoryId);
+    setSearchQuery('');
+  };
+
   const ErrorAlert = () => {
     return error ? (
       <div className="alert alert-danger alert-dismissible fade show mt-2 shadow-sm" role="alert">
@@ -1118,6 +1150,20 @@ const POS: React.FC = () => {
                   <Card className="shadow-sm mb-3 border-0">
                     <Card.Body className="pb-2">
                       <Row className="mb-3">
+                        <Col md={3} className="mb-3 mb-md-0">
+                          <Form.Select
+                            value={selectedCategory}
+                            onChange={(e) => handleCategoryChange(e.target.value)}
+                            className="shadow-sm"
+                          >
+                            <option value="">All Categories</option>
+                            {categories.map((category) => (
+                              <option key={category._id} value={category._id}>
+                                {category.name}
+                              </option>
+                            ))}
+                          </Form.Select>
+                        </Col>
                         <Col md={6} className="mb-3 mb-md-0">
                           <div className="btn-group w-100">
                             <OverlayTrigger
@@ -1144,39 +1190,36 @@ const POS: React.FC = () => {
                                 <i className="bi bi-pencil-square me-1"></i> Manual Entry
                               </Button>
                             </OverlayTrigger>
-                            
                           </div>
                         </Col>
-                        <Col md={6}>
-                        <OverlayTrigger
-                              placement="top"
-                              overlay={<Tooltip>Search Products (Ctrl+F or F3)</Tooltip>}
-                            >
-                              <InputGroup className="search-bar shadow-sm rounded">
-                                <InputGroup.Text className="bg-white border-end-0">
-                                  <>{BsSearch({ size: 16 })}</>
-                                </InputGroup.Text>
-                                <Form.Control
-                                  ref={searchInputRef}
-                                  type="text"
-                                  placeholder="Search Products (Ctrl+F)"
-                                  value={searchQuery}
-                                  onChange={(e) => setSearchQuery(e.target.value)}
-                                  onFocus={handleInputFocus}
-                                  onBlur={handleInputBlur}
-                                  className="border-start-0"
-                                />
-                                {searchQuery && (
-                                  <Button variant="outline-secondary" onClick={() => setSearchQuery('')} className="border-start-0">
-                                    <>{BsX({ size: 16 })}</>
-                                  </Button>
-                                )}
-                              </InputGroup>
-                            </OverlayTrigger>
+                        <Col md={3}>
+                          <OverlayTrigger
+                            placement="top"
+                            overlay={<Tooltip>Search Products (Ctrl+F or F3)</Tooltip>}
+                          >
+                            <InputGroup className="search-bar shadow-sm rounded">
+                              <InputGroup.Text className="bg-white border-end-0">
+                                <>{BsSearch({ size: 16 })}</>
+                              </InputGroup.Text>
+                              <Form.Control
+                                ref={searchInputRef}
+                                type="text"
+                                placeholder="Search Products (Ctrl+F)"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                onFocus={handleInputFocus}
+                                onBlur={handleInputBlur}
+                                className="border-start-0"
+                              />
+                              {searchQuery && (
+                                <Button variant="outline-secondary" onClick={() => setSearchQuery('')} className="border-start-0">
+                                  <>{BsX({ size: 16 })}</>
+                                </Button>
+                              )}
+                            </InputGroup>
+                          </OverlayTrigger>
                         </Col>
-                      
                       </Row>
-                      
                       
                       <ErrorAlert />
                       <SuccessAlert />

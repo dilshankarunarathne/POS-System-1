@@ -50,6 +50,14 @@ const Products: React.FC = () => {
   // New states for tracking which products are new vs updates
   const [productUpdateMap, setProductUpdateMap] = useState<Record<string, { id: number, existing: boolean, currentStock: number }>>({});
 
+  // Add new states for category management
+  const [categoryModalOpen, setCategoryModalOpen] = useState(false);
+  const [categoryFormData, setCategoryFormData] = useState({
+    id: '',
+    name: '',
+    description: ''
+  });
+
   // State for pagination
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
@@ -180,6 +188,16 @@ const Products: React.FC = () => {
       setLoading(false);
     }
   };
+
+  const fetchCategories = async () => {
+    try {
+      const response = await categoriesApi.getAll();
+      setCategories(response.data || []);
+    } catch (err) {
+      console.error('Error fetching categories:', err);
+      setError('Failed to load categories');
+    }
+  };
   
   // Handle page change
   const handleChangePage = (pageNumber: number) => {
@@ -202,6 +220,53 @@ const Products: React.FC = () => {
   const handleCloseProductForm = () => {
     setProductFormOpen(false);
     setSelectedProduct(null);
+  };
+
+  // Add these after the existing handleCloseProductForm function
+  const handleOpenCategoryModal = () => {
+    setCategoryModalOpen(true);
+  };
+
+  const handleCloseCategoryModal = () => {
+    setCategoryModalOpen(false);
+    setCategoryFormData({ id: '', name: '', description: '' });
+  };
+
+  const handleEditCategory = (category: any) => {
+    setCategoryFormData({
+      id: category._id,
+      name: category.name,
+      description: category.description || ''
+    });
+  };
+
+  const handleDeleteCategory = async (categoryId: string) => {
+    try {
+      await categoriesApi.delete(categoryId);
+      setSuccessMessage('Category deleted successfully');
+      fetchCategories();
+    } catch (err) {
+      console.error('Error deleting category:', err);
+      setError('Failed to delete category');
+    }
+  };
+
+  const handleSubmitCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      if (categoryFormData.id) {
+        await categoriesApi.update(categoryFormData.id, categoryFormData);
+        setSuccessMessage('Category updated successfully');
+      } else {
+        await categoriesApi.create(categoryFormData);
+        setSuccessMessage('Category created successfully');
+      }
+      handleCloseCategoryModal();
+      fetchCategories();
+    } catch (err) {
+      console.error('Error saving category:', err);
+      setError('Failed to save category');
+    }
   };
   
   // Open delete confirmation dialog
@@ -552,9 +617,8 @@ const Products: React.FC = () => {
     return items;
   };
 
-  // Function to download Excel template
+  // Update downloadTemplate function
   const downloadTemplate = () => {
-    // Create a template with columns
     const template = [
       {
         name: 'Sample Product',
@@ -562,246 +626,241 @@ const Products: React.FC = () => {
         barcode: '', // Leave empty for auto-generation
         price: 1000,
         costPrice: 800,
-        stockQuantity: 10, // For new products: initial stock. For existing products: quantity to ADD
+        stockQuantity: 10,
         reorderLevel: 5,
-        categoryName: 'Category Name', // Can use either name or ID
-        supplierName: 'Supplier Name', // Can use either name or ID
+        categoryName: categories.length > 0 ? categories[0].name : 'Category Name',
+        supplierName: suppliers.length > 0 ? suppliers[0].name : 'Supplier Name',
       }
     ];
 
-    // Create workbook and worksheet
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(template);
 
-    // Add column widths for better readability
-    const wscols = [
-      { wch: 20 }, // name
-      { wch: 30 }, // description
-      { wch: 15 }, // barcode
-      { wch: 10 }, // price
-      { wch: 10 }, // costPrice
-      { wch: 15 }, // stockQuantity - made wider for the note
-      { wch: 10 }, // reorderLevel
-      { wch: 15 }, // categoryName
-      { wch: 15 }, // supplierName
+    // Add notes about categories
+    const notes = [
+      ['Notes:'],
+      ['1. CategoryName: Use one of the following categories:'],
+      ...categories.map(cat => [`   - ${cat.name}`]),
+      ['2. For new products, stockQuantity is the initial stock'],
+      ['3. For existing products (matching names), stockQuantity will be ADDED to current stock'],
     ];
-    ws['!cols'] = wscols;
+    
+    const notesWs = XLSX.utils.aoa_to_sheet(notes);
 
-
-
-    // Add the worksheet to the workbook
+    // Add both sheets to workbook
     XLSX.utils.book_append_sheet(wb, ws, 'Products Template');
+    XLSX.utils.book_append_sheet(wb, notesWs, 'Instructions');
 
-    // Generate Excel file and download
     XLSX.writeFile(wb, 'product_import_template.xlsx');
   };
 
-  // Function to handle file selection
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (files && files.length > 0) {
-      setImportFile(files[0]);
-      // Reset preview when new file is selected
-      setImportPreview(false);
-      setImportData([]);
-    }
-  };
-
-  // Function to parse Excel file - improved to handle stock quantity addition
-  const parseExcelFile = async () => {
-    if (!importFile) return;
-
-    setImportLoading(true);
-    setError(null);
-    
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      try {
-        const data = e.target?.result;
-        const workbook = XLSX.read(data, { type: 'array' });
-        
-        const worksheetName = workbook.SheetNames[0];
-        const worksheet = workbook.Sheets[worksheetName];
-        
-        const jsonData = XLSX.utils.sheet_to_json(worksheet);
-        
-        if (jsonData.length === 0) {
-          setError('The Excel file is empty or has no valid data');
-          setImportLoading(false);
-          return;
-        }
-        
-        const requiredFields = ['name', 'price', 'stockQuantity'];
-        const firstRow = jsonData[0] as any;
-        
-        const missingFields = requiredFields.filter(field => !(field in firstRow));
-        if (missingFields.length > 0) {
-          setError(`Missing required fields: ${missingFields.join(', ')}`);
-          setImportLoading(false);
-          return;
-        }
-
-        const importProductNames = jsonData.map((product: any) => product.name);
-        
-        if (importProductNames.length === 0) {
-          setError('No valid products found in the import file');
-          setImportLoading(false);
-          return;
-        }
-        
-        try {
-          let existingProducts: any[] = [];
-          
-          try {
-            console.log('Checking existing products via API for:', importProductNames.slice(0, 5), '...');
-            const response = await productsApi.checkExistingProducts(importProductNames);
-            existingProducts = response.data || [];
-            console.log('API returned existing products:', existingProducts.length);
-          } catch (apiError) {
-            console.error('API error when checking existing products:', apiError);
-            
-            const refreshResponse = await productsApi.getAll({limit: 1000});
-            const allProducts = refreshResponse.data?.products || [];
-            
-            const productNameMap = new Map();
-            allProducts.forEach((product: any) => {
-              productNameMap.set(product.name.toLowerCase(), {
-                id: product.id,
-                name: product.name,
-                stockQuantity: product.stockQuantity || 0
-              });
-            });
-            
-            existingProducts = importProductNames
-              .map(name => {
-                const match = productNameMap.get(name.toLowerCase());
-                return match ? { 
-                  id: match.id, 
-                  name, 
-                  stockQuantity: match.stockQuantity 
-                } : null;
-              })
-              .filter(Boolean);
-            
-            console.log('Found existing products from current data:', existingProducts.length);
-          }
-          
-          // Create a mapping for quick lookup with current stock quantities
-          const updateMap: Record<string, { id: number, existing: boolean, currentStock: number }> = {};
-          existingProducts.forEach((product: any) => {
-            if (product && product.name) {
-              updateMap[product.name.toLowerCase()] = {
-                id: product.id,
-                existing: true,
-                currentStock: product.stockQuantity || 0
-              };
-            }
-          });
-          
-          setProductUpdateMap(updateMap);
-          
-          // Enrich import data with update flags and calculate new stock quantities
-          const enrichedData = jsonData.map((product: any) => {
-            const normalizedName = product.name.toLowerCase();
-            const existingProduct = updateMap[normalizedName];
-            const isUpdate = existingProduct !== undefined;
-            
-            // For existing products, calculate the new total stock quantity
-            let finalStockQuantity = parseInt(product.stockQuantity) || 0;
-            let stockChange = 0;
-            
-            if (isUpdate) {
-              const currentStock = existingProduct.currentStock;
-              const importQuantity = parseInt(product.stockQuantity) || 0;
-              finalStockQuantity = currentStock + importQuantity;
-              stockChange = importQuantity;
-            }
-            
-            return {
-              ...product,
-              _action: isUpdate ? 'UPDATE' : 'CREATE',
-              _id: isUpdate ? existingProduct.id : null,
-              _currentStock: isUpdate ? existingProduct.currentStock : 0,
-              _importQuantity: parseInt(product.stockQuantity) || 0,
-              _finalStock: finalStockQuantity,
-              _stockChange: stockChange,
-              stockQuantity: finalStockQuantity // This will be the final quantity sent to server
-            };
-          });
-
-          setImportData(enrichedData);
-          setImportPreview(true);
-        } catch (error) {
-          console.error('Error in product import process:', error);
-          setError('Failed to process import data. Please try again or contact support.');
-        } 
-      } catch (error) {
-        console.error('Error parsing Excel file:', error);
-        setError('Failed to parse Excel file. Please make sure it\'s a valid Excel file.');
-      } finally {
-        setImportLoading(false);
+    // Function to handle file selection
+    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = event.target.files;
+      if (files && files.length > 0) {
+        setImportFile(files[0]);
+        // Reset preview when new file is selected
+        setImportPreview(false);
+        setImportData([]);
       }
     };
-    
-    reader.readAsArrayBuffer(importFile);
-  };
-
-  // Function to submit imported data - improved to better handle updates
-  const submitImportData = async () => {
-    if (importData.length === 0) return;
-    
-    setImportLoading(true);
-    
-    try {
-      let successCount = 0;
-      let updateCount = 0;
-      let failedCount = 0;
+  
+    // Function to parse Excel file - improved to handle stock quantity addition
+    const parseExcelFile = async () => {
+      if (!importFile) return;
+  
+      setImportLoading(true);
+      setError(null);
       
-      // Process each product
-      for (const product of importData) {
+      const reader = new FileReader();
+      reader.onload = async (e) => {
         try {
-          const formDataToSend = new FormData();
+          const data = e.target?.result;
+          const workbook = XLSX.read(data, { type: 'array' });
           
-          // Add all relevant fields to formData
-          Object.keys(product).forEach(key => {
-            // Skip internal fields that start with _
-            if (!key.startsWith('_') && product[key] !== undefined && product[key] !== null && product[key] !== '') {
-              formDataToSend.append(key, product[key].toString());
-            }
-          });
+          const worksheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[worksheetName];
           
-          if (product._action === 'UPDATE' && product._id) {
-            console.log(`Updating existing product: ${product.name} (ID: ${product._id})`);
-            await productsApi.update(product._id, formDataToSend);
-            updateCount++;
-          } else {
-            console.log(`Creating new product: ${product.name}`);
-            await productsApi.create(formDataToSend);
-            successCount++;
+          const jsonData = XLSX.utils.sheet_to_json(worksheet);
+          
+          if (jsonData.length === 0) {
+            setError('The Excel file is empty or has no valid data');
+            setImportLoading(false);
+            return;
           }
-        } catch (err) {
-          console.error(`Error processing product ${product.name}:`, err);
-          failedCount++;
+          
+          const requiredFields = ['name', 'price', 'stockQuantity'];
+          const firstRow = jsonData[0] as any;
+          
+          const missingFields = requiredFields.filter(field => !(field in firstRow));
+          if (missingFields.length > 0) {
+            setError(`Missing required fields: ${missingFields.join(', ')}`);
+            setImportLoading(false);
+            return;
+          }
+  
+          const importProductNames = jsonData.map((product: any) => product.name);
+          
+          if (importProductNames.length === 0) {
+            setError('No valid products found in the import file');
+            setImportLoading(false);
+            return;
+          }
+          
+          try {
+            let existingProducts: any[] = [];
+            
+            try {
+              console.log('Checking existing products via API for:', importProductNames.slice(0, 5), '...');
+              const response = await productsApi.checkExistingProducts(importProductNames);
+              existingProducts = response.data || [];
+              console.log('API returned existing products:', existingProducts.length);
+            } catch (apiError) {
+              console.error('API error when checking existing products:', apiError);
+              
+              const refreshResponse = await productsApi.getAll({limit: 1000});
+              const allProducts = refreshResponse.data?.products || [];
+              
+              const productNameMap = new Map();
+              allProducts.forEach((product: any) => {
+                productNameMap.set(product.name.toLowerCase(), {
+                  id: product.id,
+                  name: product.name,
+                  stockQuantity: product.stockQuantity || 0
+                });
+              });
+              
+              existingProducts = importProductNames
+                .map(name => {
+                  const match = productNameMap.get(name.toLowerCase());
+                  return match ? { 
+                    id: match.id, 
+                    name, 
+                    stockQuantity: match.stockQuantity 
+                  } : null;
+                })
+                .filter(Boolean);
+              
+              console.log('Found existing products from current data:', existingProducts.length);
+            }
+            
+            // Create a mapping for quick lookup with current stock quantities
+            const updateMap: Record<string, { id: number, existing: boolean, currentStock: number }> = {};
+            existingProducts.forEach((product: any) => {
+              if (product && product.name) {
+                updateMap[product.name.toLowerCase()] = {
+                  id: product.id,
+                  existing: true,
+                  currentStock: product.stockQuantity || 0
+                };
+              }
+            });
+            
+            setProductUpdateMap(updateMap);
+            
+            // Enrich import data with update flags and calculate new stock quantities
+            const enrichedData = jsonData.map((product: any) => {
+              const normalizedName = product.name.toLowerCase();
+              const existingProduct = updateMap[normalizedName];
+              const isUpdate = existingProduct !== undefined;
+              
+              // For existing products, calculate the new total stock quantity
+              let finalStockQuantity = parseInt(product.stockQuantity) || 0;
+              let stockChange = 0;
+              
+              if (isUpdate) {
+                const currentStock = existingProduct.currentStock;
+                const importQuantity = parseInt(product.stockQuantity) || 0;
+                finalStockQuantity = currentStock + importQuantity;
+                stockChange = importQuantity;
+              }
+              
+              return {
+                ...product,
+                _action: isUpdate ? 'UPDATE' : 'CREATE',
+                _id: isUpdate ? existingProduct.id : null,
+                _currentStock: isUpdate ? existingProduct.currentStock : 0,
+                _importQuantity: parseInt(product.stockQuantity) || 0,
+                _finalStock: finalStockQuantity,
+                _stockChange: stockChange,
+                stockQuantity: finalStockQuantity // This will be the final quantity sent to server
+              };
+            });
+  
+            setImportData(enrichedData);
+            setImportPreview(true);
+          } catch (error) {
+            console.error('Error in product import process:', error);
+            setError('Failed to process import data. Please try again or contact support.');
+          } 
+        } catch (error) {
+          console.error('Error parsing Excel file:', error);
+          setError('Failed to parse Excel file. Please make sure it\'s a valid Excel file.');
+        } finally {
+          setImportLoading(false);
         }
+      };
+      
+      reader.readAsArrayBuffer(importFile);
+    };
+  
+    // Function to submit imported data - improved to better handle updates
+    const submitImportData = async () => {
+      if (importData.length === 0) return;
+      
+      setImportLoading(true);
+      
+      try {
+        let successCount = 0;
+        let updateCount = 0;
+        let failedCount = 0;
+        
+        // Process each product
+        for (const product of importData) {
+          try {
+            const formDataToSend = new FormData();
+            
+            // Add all relevant fields to formData
+            Object.keys(product).forEach(key => {
+              // Skip internal fields that start with _
+              if (!key.startsWith('_') && product[key] !== undefined && product[key] !== null && product[key] !== '') {
+                formDataToSend.append(key, product[key].toString());
+              }
+            });
+            
+            if (product._action === 'UPDATE' && product._id) {
+              console.log(`Updating existing product: ${product.name} (ID: ${product._id})`);
+              await productsApi.update(product._id, formDataToSend);
+              updateCount++;
+            } else {
+              console.log(`Creating new product: ${product.name}`);
+              await productsApi.create(formDataToSend);
+              successCount++;
+            }
+          } catch (err) {
+            console.error(`Error processing product ${product.name}:`, err);
+            failedCount++;
+          }
+        }
+        
+        // Show result message
+        setSuccessMessage(`Import completed: ${successCount} products added, ${updateCount} updated, ${failedCount} failed`);
+        
+        // Close modal and refresh data
+        setImportModalOpen(false);
+        fetchProducts();
+      } catch (err) {
+        console.error('Import process error:', err);
+        setError('Failed to complete the import process');
+      } finally {
+        setImportLoading(false);
+        setImportFile(null);
+        setImportData([]);
+        setImportPreview(false);
+        setProductUpdateMap({});
       }
-      
-      // Show result message
-      setSuccessMessage(`Import completed: ${successCount} products added, ${updateCount} updated, ${failedCount} failed`);
-      
-      // Close modal and refresh data
-      setImportModalOpen(false);
-      fetchProducts();
-    } catch (err) {
-      console.error('Import process error:', err);
-      setError('Failed to complete the import process');
-    } finally {
-      setImportLoading(false);
-      setImportFile(null);
-      setImportData([]);
-      setImportPreview(false);
-      setProductUpdateMap({});
-    }
-  };
+    };
+  
 
   // Reset import modal state
   const handleCloseImportModal = () => {
@@ -811,6 +870,7 @@ const Products: React.FC = () => {
     setImportPreview(false);
     setProductUpdateMap({});
   };
+
 
   return (
     <Container fluid className="py-4">
@@ -823,6 +883,10 @@ const Products: React.FC = () => {
         <Col xs="auto" className="d-flex gap-2">
           <Button variant="primary" onClick={() => handleOpenProductForm()}>
             <>{FaPlus({ className: "me-1" })}</> Add Product
+          </Button>
+          
+          <Button variant="info" onClick={handleOpenCategoryModal}>
+            <>{FaPlus({ className: "me-1" })}</> Manage Categories
           </Button>
           
           <Button variant="success" onClick={() => setImportModalOpen(true)}>
@@ -883,9 +947,9 @@ const Products: React.FC = () => {
               <thead className="sticky-top bg-white" style={{ zIndex: 10 }}>
                 <tr>
                   <th style={{ width: '80px' }}></th>
-                  <th>Name</th>
-                  <th>Barcode</th>
+                  <th>Name</th>                  
                   <th>Description</th>
+                  <th>Category</th>
                   <th>Price</th>
                   <th>Stock</th>
                   <th>Actions</th>
@@ -926,9 +990,9 @@ const Products: React.FC = () => {
                           </Badge>
                         </td>
                         
-                        <td>{product.name}</td>
-                        <td>{product.barcode}</td>
+                        <td>{product.name}</td>                        
                         <td>{product.description || 'No description'}</td>
+                        <td>{product.category?.name || ''}</td>
                         <td>Rs. {(product.price || 0).toFixed(2)}</td>
                         
                         <td>
@@ -1137,28 +1201,21 @@ const Products: React.FC = () => {
                   </Form.Text>
                 </Form.Group>
                 
-                {/* <Row>
-                  <Col>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Category</Form.Label>
-                      <Form.Control
-                        name="categoryName"
-                        value={formData.categoryName}
-                        onChange={handleInputChange}
-                      />
-                    </Form.Group>
-                  </Col>
-                  <Col>
-                    <Form.Group className="mb-3">
-                      <Form.Label>Supplier</Form.Label>
-                      <Form.Control
-                        name="supplierName"
-                        value={formData.supplierName}
-                        onChange={handleInputChange}
-                      />
-                    </Form.Group>
-                  </Col>
-                </Row> */}
+                <Form.Group className="mb-3">
+                  <Form.Label>Category</Form.Label>
+                  <Form.Select
+                    name="categoryId"
+                    value={formData.categoryId}
+                    onChange={handleSelectChange}
+                  >
+                    <option value="">Select Category</option>
+                    {categories.map((category) => (
+                      <option key={category._id} value={category._id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </Form.Select>
+                </Form.Group>
               </Col>
               
               <Col md={6}>
@@ -1408,7 +1465,79 @@ const Products: React.FC = () => {
         </Modal.Footer>
       </Modal>
       
-      {/* Remove the Print Preview Modal */}
+      {/* Add Category Modal */}
+      <Modal show={categoryModalOpen} onHide={handleCloseCategoryModal}>
+        <Modal.Header closeButton>
+          <Modal.Title>{categoryFormData.id ? 'Edit Category' : 'Add Category'}</Modal.Title>
+        </Modal.Header>
+
+        <Modal.Body>
+          <Form onSubmit={handleSubmitCategory}>
+            <Form.Group className="mb-3">
+              <Form.Label>Category Name</Form.Label>
+              <Form.Control
+                type="text"
+                value={categoryFormData.name}
+                onChange={(e) => setCategoryFormData(prev => ({ ...prev, name: e.target.value }))}
+                required
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-3">
+              <Form.Label>Description</Form.Label>
+              <Form.Control
+                as="textarea"
+                rows={3}
+                value={categoryFormData.description}
+                onChange={(e) => setCategoryFormData(prev => ({ ...prev, description: e.target.value }))}
+              />
+            </Form.Group>
+
+            <Table responsive>
+              <thead>
+                <tr>
+                  <th>Name</th>
+                  <th>Description</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {categories.map((category) => (
+                  <tr key={category._id}>
+                    <td>{category.name}</td>
+                    <td>{category.description}</td>
+                    <td>
+                      <Button
+                        variant="link"
+                        className="p-0 me-2"
+                        onClick={() => handleEditCategory(category)}
+                      >
+                        <>{FaPencilAlt({})}</>
+                      </Button>
+                      <Button
+                        variant="link"
+                        className="p-0 text-danger"
+                        onClick={() => handleDeleteCategory(category._id)}
+                      >
+                        <>{FaTrash({})}</>
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </Table>
+          </Form>
+        </Modal.Body>
+
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleCloseCategoryModal}>
+            Close
+          </Button>
+          <Button variant="primary" onClick={handleSubmitCategory}>
+            {categoryFormData.id ? 'Update' : 'Add'} Category
+          </Button>
+        </Modal.Footer>
+      </Modal>
       
       {/* Toasts for notifications */}
       <ToastContainer position="bottom-center" className="p-3">

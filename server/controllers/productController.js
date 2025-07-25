@@ -176,28 +176,28 @@ const createProduct = async (req, res) => {
       productData.reorderLevel = parseInt(productData.reorderLevel);
     }
     
-    // Handle category - only use existing categories, don't create new ones
-    if (productData.categoryId) {
-      // Use category ID directly
-      const category = await Category.findOne({
-        _id: productData.categoryId,
-        shopId: req.user.shopId // Add shop filter
+    // Handle category
+    if (productData.categoryName) {
+      // First try to find existing category
+      let category = await Category.findOne({ 
+        name: { $regex: new RegExp(`^${productData.categoryName}$`, 'i') },
+        shopId: req.user.shopId
       });
-      if (category) {
-        productData.category = category._id;
-      } else {
-        productData.category = null;
+      
+      // If category doesn't exist, create it
+      if (!category) {
+        try {
+          category = await Category.create({
+            name: productData.categoryName,
+            shopId: req.user.shopId
+          });
+        } catch (err) {
+          console.warn('Failed to create category:', err);
+        }
       }
-    } else if (productData.categoryName) {
-      // Find category by name but don't create a new one
-      const category = await Category.findOne({ 
-        name: productData.categoryName,
-        shopId: req.user.shopId // Add shop filter
-      });
+      
       if (category) {
         productData.category = category._id;
-      } else {
-        productData.category = null;
       }
     } else {
       productData.category = null;

@@ -21,50 +21,142 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
   const lastScannedData = useRef<string>('');
   const SCAN_COOLDOWN_MS = 2000; // 2 seconds cooldown between processing the same scan
   
-  // Add keyboard listener for external scanner input
+  // Enhanced keyboard listener for external scanner input
   useEffect(() => {
     let barcodeBuffer = '';
     let lastKeyTime = 0;
-    const SCANNER_DELAY = 20; // Most barcode scanners send characters very quickly
+    let isScanning = false;
+    const SCANNER_DELAY = 50; // Increased delay for more reliable detection
+    const MIN_BARCODE_LENGTH = 3; // Minimum length for a valid barcode
 
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (document.activeElement && document.activeElement.tagName === 'INPUT') {
+      // Skip if user is typing in an input field
+      const activeElement = document.activeElement;
+      if (activeElement && (
+        activeElement.tagName === 'INPUT' || 
+        activeElement.tagName === 'TEXTAREA' || 
+        activeElement.tagName === 'SELECT' ||
+        activeElement.getAttribute('contenteditable') === 'true'
+      )) {
         return;
       }
 
       const currentTime = new Date().getTime();
       
-      // If there's a delay between keypresses greater than threshold, reset the buffer
-      if (currentTime - lastKeyTime > 100) {
+      // If there's a significant delay between keypresses, reset the buffer
+      if (currentTime - lastKeyTime > 200) {
         barcodeBuffer = '';
+        isScanning = false;
       }
       
-      // Process the key if it's part of a barcode
-      if (currentTime - lastKeyTime <= SCANNER_DELAY || barcodeBuffer.length > 0) {
-        // Enter key usually signifies end of barcode scan
+      // Detect rapid input (characteristic of barcode scanners)
+      if (currentTime - lastKeyTime <= SCANNER_DELAY || isScanning) {
+        // Always prevent default for scanner input
+        event.preventDefault();
+        event.stopPropagation();
+        isScanning = true;
+        
+        // Handle Enter key (end of scan)
         if (event.key === 'Enter') {
-          try {
-            const productData = JSON.parse(barcodeBuffer);
-            onScanSuccess(productData);
-          } catch (error) {
-            const message = "QR code format is invalid";
-            setErrorMessage(message);
-            if (onScanError) {
-              onScanError(message);
+          event.preventDefault();
+          
+          if (barcodeBuffer.length >= MIN_BARCODE_LENGTH) {
+            console.log('External scanner detected barcode:', barcodeBuffer);
+            
+            try {
+              // Try to parse as JSON first
+              let productData;
+              try {
+                productData = JSON.parse(barcodeBuffer);
+                console.log('Parsed JSON from external scanner:', productData);
+              } catch (parseError) {
+                // If not JSON, treat as simple barcode
+                console.log('Treating as simple barcode:', barcodeBuffer);
+                productData = { barcode: barcodeBuffer.trim() };
+              }
+              
+              // Check for cooldown
+              const now = Date.now();
+              if (
+                barcodeBuffer === lastScannedData.current && 
+                now - lastScanTime.current < SCAN_COOLDOWN_MS
+              ) {
+                console.log('Duplicate scan detected within cooldown period, ignoring');
+                barcodeBuffer = '';
+                isScanning = false;
+                return;
+              }
+              
+              lastScanTime.current = now;
+              lastScannedData.current = barcodeBuffer;
+              
+              onScanSuccess(productData);
+              
+            } catch (error) {
+              console.error('Error processing external scanner input:', error);
+              const message = "QR code format is invalid";
+              setErrorMessage(message);
+              if (onScanError) {
+                onScanError(message);
+              }
             }
           }
+          
           barcodeBuffer = '';
-        } else {
-          barcodeBuffer += event.key;
+          isScanning = false;
+        } 
+        // Handle backspace
+        else if (event.key === 'Backspace') {
+          event.preventDefault();
+          barcodeBuffer = barcodeBuffer.slice(0, -1);
         }
+        // Handle normal characters
+        else if (event.key.length === 1) {
+          event.preventDefault();
+          barcodeBuffer += event.key;
+          
+          // Auto-trigger if buffer gets very long (some scanners don't send Enter)
+          if (barcodeBuffer.length > 50) {
+            console.log('Auto-triggering long barcode:', barcodeBuffer);
+            
+            try {
+              let productData;
+              try {
+                productData = JSON.parse(barcodeBuffer);
+              } catch (parseError) {
+                productData = { barcode: barcodeBuffer.trim() };
+              }
+              
+              onScanSuccess(productData);
+            } catch (error) {
+              console.error('Error processing long barcode:', error);
+              const message = "QR code format is invalid";
+              setErrorMessage(message);
+              if (onScanError) {
+                onScanError(message);
+              }
+            }
+            
+            barcodeBuffer = '';
+            isScanning = false;
+          }
+        }
+      }
+      // If this is a potential start of a new scan
+      else if (event.key.length === 1 && /[a-zA-Z0-9{"]/.test(event.key)) {
+        event.preventDefault();
+        barcodeBuffer = event.key;
+        isScanning = true;
       }
       
       lastKeyTime = currentTime;
     };
 
-    document.addEventListener('keydown', handleKeyDown);
+    // Add event listener with high priority
+    document.addEventListener('keydown', handleKeyDown, true);
+    
     return () => {
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDown, true);
     };
   }, [onScanError, onScanSuccess]);
   
@@ -376,6 +468,11 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
              padding: '0 10px'
            }}>
           Camera active. If scanning fails, try adjusting lighting or camera angle.
+          <br />
+          <small className="text-success">
+            <i className="bi bi-keyboard me-1"></i>
+            External scanner ready - scan directly into the page
+          </small>
         </p>
       )}
     </Container>

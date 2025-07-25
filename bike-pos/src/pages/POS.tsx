@@ -200,6 +200,12 @@ const POS: React.FC = () => {
         return;
       }
 
+      // Check if the key event is likely from a barcode scanner
+      const isRapidInput = event.timeStamp - lastKeyTime < 50; // 50ms threshold
+      if (isRapidInput) {
+        return; // Skip auto-search for rapid inputs (likely from scanner)
+      }
+
       switch (event.key) {
         case 'F3':
           event.preventDefault();
@@ -255,8 +261,11 @@ const POS: React.FC = () => {
           }
           break;
       }
+
+      lastKeyTime = event.timeStamp;
     };
 
+    let lastKeyTime = 0;
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {

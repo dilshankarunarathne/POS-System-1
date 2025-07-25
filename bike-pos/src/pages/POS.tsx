@@ -219,30 +219,41 @@ const POS: React.FC = () => {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      if (isTypingInInput || checkoutDialogOpen || showHelpModal || processingSale) {
+      // Skip if QR scanner is handling rapid input
+      if (event.timeStamp - lastKeyTime < 50 && qrScannerActive) {
         return;
       }
 
+      // Check if we're typing in an input or processing a sale
       const target = event.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') {
+      const isInput = target.tagName === 'INPUT' || 
+                     target.tagName === 'TEXTAREA' || 
+                     target.tagName === 'SELECT';
+
+      // Allow input field shortcuts (Ctrl+Enter, etc.) but block regular keys
+      if (isInput && !event.ctrlKey) {
         return;
       }
 
-      const isRapidInput = event.timeStamp - lastKeyTime < 50;
-      if (isRapidInput) {
+      // Block shortcuts during certain states
+      if (checkoutDialogOpen || showHelpModal || processingSale) {
         return;
       }
 
       switch (event.key) {
         case 'F3':
           event.preventDefault();
-          focusSearchInput();
+          if (!isManualMode && !qrScannerActive) {
+            focusSearchInput();
+          }
           break;
 
         case 'f':
           if (event.ctrlKey) {
             event.preventDefault();
-            focusSearchInput();
+            if (!isManualMode && !qrScannerActive) {
+              focusSearchInput();
+            }
           }
           break;
 
@@ -283,7 +294,10 @@ const POS: React.FC = () => {
           break;
 
         default:
-          if (!isManualMode && /^[a-zA-Z0-9]$/.test(event.key)) {
+          // Only trigger search auto-focus for alphanumeric keys
+          // when not in manual mode or QR scanning mode
+          if (!isManualMode && !qrScannerActive && !event.ctrlKey && 
+              /^[a-zA-Z0-9]$/.test(event.key) && !isInput) {
             focusSearchInput();
           }
           break;
@@ -293,12 +307,20 @@ const POS: React.FC = () => {
     };
 
     let lastKeyTime = 0;
-    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keydown', handleKeyDown, true); // Use capture phase
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keydown', handleKeyDown, true);
     };
-  }, [isTypingInInput, checkoutDialogOpen, showHelpModal, processingSale, cartItems.length, isManualMode]);
+  }, [
+    isTypingInInput, 
+    checkoutDialogOpen, 
+    showHelpModal, 
+    processingSale, 
+    cartItems.length, 
+    isManualMode, 
+    qrScannerActive
+  ]);
 
   useEffect(() => {
     const activateCamera = () => {
@@ -377,7 +399,7 @@ const POS: React.FC = () => {
   }, [checkoutDialogOpen, processingSale]);
 
   const focusSearchInput = () => {
-    if (!isManualMode && searchInputRef.current) {
+    if (!isManualMode && !qrScannerActive && searchInputRef.current) { // Add qrScannerActive check
       searchInputRef.current.focus();
       searchInputRef.current.select();
     }

@@ -49,14 +49,16 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
         isScanning = false;
       }
       
-      // Detect rapid input (characteristic of barcode scanners)
-      if (currentTime - lastKeyTime <= SCANNER_DELAY || isScanning) {
-        // Always prevent default for scanner input
+      // Only block events if we detect scanner input pattern
+      const isScannerInput = currentTime - lastKeyTime <= SCANNER_DELAY || isScanning;
+      
+      if (isScannerInput) {
+        // Only prevent default for scanner input
         event.preventDefault();
         event.stopPropagation();
         isScanning = true;
         
-        // Handle Enter key (end of scan)
+        // Handle scanner input...
         if (event.key === 'Enter') {
           event.preventDefault();
           
@@ -112,10 +114,8 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
         }
         // Handle normal characters
         else if (event.key.length === 1) {
-          event.preventDefault();
           barcodeBuffer += event.key;
           
-          // Auto-trigger if buffer gets very long (some scanners don't send Enter)
           if (barcodeBuffer.length > 50) {
             console.log('Auto-triggering long barcode:', barcodeBuffer);
             
@@ -142,9 +142,9 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
           }
         }
       }
-      // If this is a potential start of a new scan
-      else if (event.key.length === 1 && /[a-zA-Z0-9{"]/.test(event.key)) {
-        event.preventDefault();
+      // If not scanner input, but potential start of scan
+      else if (event.key.length === 1 && /[a-zA-Z0-9{"]/.test(event.key) && !event.ctrlKey && !event.altKey && !event.metaKey) {
+        // Don't prevent default here, let the key go through if it's not scanner input
         barcodeBuffer = event.key;
         isScanning = true;
       }

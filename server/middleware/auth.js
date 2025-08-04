@@ -72,7 +72,7 @@ exports.checkShopAccess = async (req, res, next) => {
 
     // Get the shop ID from the request
     const shopId = req.params.shopId || req.body.shopId || req.query.shopId || 
-                  (req.user.shopId && req.user.shopId._id.toString());
+                  (req.user.shopId && req.user.shopId._id ? req.user.shopId._id.toString() : null);
 
     // If no shop ID is provided or user has no assigned shop
     if (!shopId || !req.user.shopId) {

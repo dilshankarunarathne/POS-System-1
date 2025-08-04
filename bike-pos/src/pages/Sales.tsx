@@ -1,24 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Badge,
-  Button,
-  Card,
-  Col,
-  Container,
-  Form,
-  InputGroup,
-  Row,
-  Spinner,
-  Table
+    Badge,
+    Button,
+    Card,
+    Col,
+    Container,
+    Form,
+    InputGroup,
+    Modal,
+    Row,
+    Spinner,
+    Table
 } from 'react-bootstrap';
 import {
-  ArrowRepeat,
-  Bag,
-  Funnel,
-  Printer,
-  Search
+    ArrowRepeat,
+    Bag,
+    Funnel,
+    Printer,
+    Search
 } from 'react-bootstrap-icons';
 import { useAuth } from '../contexts/AuthContext'; // Add this import
+import { useNotification } from '../contexts/NotificationContext';
 import { salesApi } from '../services/api';
 
 // Define Sales types
@@ -92,6 +94,7 @@ interface ReceiptData {
 
 const Sales: React.FC = () => {
   const { user } = useAuth();
+  const { showSuccess, showError } = useNotification();
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -157,7 +160,7 @@ const Sales: React.FC = () => {
 
     } catch (err) {
       console.error('Error fetching sales:', err);
-      setError('Failed to load sales');
+      showError('Failed to load sales');
     } finally {
       setLoading(false);
     }
@@ -233,6 +236,7 @@ const Sales: React.FC = () => {
     try {
       setProcessingReturn(true);
 
+      // Use the updateStatus API with the correct structure
       await salesApi.updateStatus(selectedSale.id, {
         status: 'returned',
         reason: returnReason,
@@ -245,7 +249,7 @@ const Sales: React.FC = () => {
 
     } catch (err) {
       console.error('Error processing return:', err);
-      setError('Failed to process return');
+      setError(err instanceof Error ? err.message : 'Failed to process return');
     } finally {
       setProcessingReturn(false);
     }
@@ -852,6 +856,183 @@ const Sales: React.FC = () => {
           </div>
         </Card.Body>
       </Card>
+
+      {/* Sale Detail Modal */}
+      <Modal show={detailDialogOpen} onHide={handleCloseDetailDialog} size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>Sale Details</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          {selectedSale && (
+            <div>
+              <Row className="mb-3">
+                <Col md={6}>
+                  <strong>Invoice Number:</strong> {selectedSale.invoiceNumber}
+                </Col>
+                <Col md={6}>
+                  <strong>Date:</strong> {formatDate(selectedSale.date)}
+                </Col>
+                <Col md={6}>
+                  <strong>Customer:</strong> {selectedSale.customerName || 'Walk-in Customer'}
+                </Col>
+                <Col md={6}>
+                  <strong>Phone:</strong> {selectedSale.customerPhone || 'N/A'}
+                </Col>
+                <Col md={6}>
+                  <strong>Cashier:</strong> {selectedSale.user?.name || selectedSale.cashier?.username || 'Unknown'}
+                </Col>
+                <Col md={6}>
+                  <strong>Payment Method:</strong> {formatPaymentMethod(selectedSale.paymentMethod)}
+                </Col>
+                <Col md={6}>
+                  <strong>Status:</strong> <Badge bg={getStatusBadgeVariant(selectedSale.status)}>{selectedSale.status}</Badge>
+                </Col>
+              </Row>
+              
+              {selectedSale.notes && (
+                <Row className="mb-3">
+                  <Col>
+                    <strong>Notes:</strong> {selectedSale.notes}
+                  </Col>
+                </Row>
+              )}
+              
+              <h6>Items:</h6>
+              <Table striped bordered hover size="sm">
+                <thead>
+                  <tr>
+                    <th>Product</th>
+                    <th>Quantity</th>
+                    <th>Unit Price</th>
+                    <th>Discount</th>
+                    <th>Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedSale.SaleItems?.map((item, index) => {
+                    const isManualItem = item.isManual || (!item.product && !item.Product);
+                    const productName = isManualItem
+                      ? (item.name || 'Manual Item')
+                      : (item.product?.name || item.Product?.name || 'Unknown Product');
+                    const unitPrice = item.price || item.unitPrice || 0;
+                    const itemDiscount = item.discount || 0;
+                    const subtotal = item.subtotal || (unitPrice * item.quantity);
+                    
+                    return (
+                      <tr key={item.id || item._id || index}>
+                        <td>{productName}</td>
+                        <td>{item.quantity}</td>
+                        <td>Rs. {unitPrice.toFixed(2)}</td>
+                        <td>Rs. {itemDiscount.toFixed(2)}</td>
+                        <td>Rs. {(subtotal - itemDiscount).toFixed(2)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </Table>
+              
+              <Row className="mt-3">
+                <Col md={6} className="ms-auto">
+                  <div className="d-flex justify-content-between">
+                    <strong>Subtotal:</strong>
+                    <span>Rs. {selectedSale.subtotal.toFixed(2)}</span>
+                  </div>
+                  <div className="d-flex justify-content-between">
+                    <strong>Discount:</strong>
+                    <span>Rs. {selectedSale.discount.toFixed(2)}</span>
+                  </div>
+                  <div className="d-flex justify-content-between">
+                    <strong>Tax:</strong>
+                    <span>Rs. {selectedSale.tax.toFixed(2)}</span>
+                  </div>
+                  <hr />
+                  <div className="d-flex justify-content-between">
+                    <strong>Total:</strong>
+                    <strong>Rs. {selectedSale.total.toFixed(2)}</strong>
+                  </div>
+                </Col>
+              </Row>
+            </div>
+          )}
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleCloseDetailDialog}>
+            Close
+          </Button>
+          {selectedSale && selectedSale.status === 'completed' && (
+            <Button variant="warning" onClick={handleOpenReturnDialog}>
+              Process Return
+            </Button>
+          )}
+          {selectedSale && (
+            <Button 
+              variant="primary" 
+              onClick={() => handlePrintReceipt(selectedSale.id)}
+              disabled={printingReceipt}
+            >
+              {printingReceipt ? <Spinner animation="border" size="sm" /> : 'Print Receipt'}
+            </Button>
+          )}
+        </Modal.Footer>
+      </Modal>
+
+      {/* Return Dialog Modal */}
+      <Modal show={returnDialogOpen} onHide={handleCloseReturnDialog}>
+        <Modal.Header closeButton>
+          <Modal.Title>Process Return</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <Form.Group>
+            <Form.Label>Return Reason</Form.Label>
+            <Form.Control
+              as="textarea"
+              rows={3}
+              value={returnReason}
+              onChange={(e) => setReturnReason(e.target.value)}
+              placeholder="Enter reason for return..."
+            />
+          </Form.Group>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleCloseReturnDialog}>
+            Cancel
+          </Button>
+          <Button 
+            variant="danger" 
+            onClick={handleProcessReturn}
+            disabled={processingReturn || !returnReason.trim()}
+          >
+            {processingReturn ? <Spinner animation="border" size="sm" /> : 'Process Return'}
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
+      {/* Error/Success Messages */}
+      {error && (
+        <div className="position-fixed top-0 end-0 p-3" style={{ zIndex: 1050 }}>
+          <div className="alert alert-danger alert-dismissible" role="alert">
+            {error}
+            <button 
+              type="button" 
+              className="btn-close" 
+              onClick={() => setError(null)}
+            ></button>
+          </div>
+        </div>
+      )}
+      
+      {successMessage && (
+        <div className="position-fixed top-0 end-0 p-3" style={{ zIndex: 1050 }}>
+          <div className="alert alert-success alert-dismissible" role="alert">
+            {successMessage}
+            <button 
+              type="button" 
+              className="btn-close" 
+              onClick={() => setSuccessMessage(null)}
+            ></button>
+          </div>
+        </div>
+      )}
     </Container>
   );
 };

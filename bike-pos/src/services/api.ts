@@ -200,16 +200,7 @@ export const salesApi = {
   }) => api.get('/sales', { params }),
   
   getById: (id: string | number) => {
-    // Enhanced validation - check for undefined, null, empty string
-    if (id === undefined || id === null || id === '') {
-      console.error('Invalid sale ID provided to salesApi.getById:', id);
-      return Promise.reject(new Error('Sale ID is required and cannot be empty'));
-    }
-    
-    // Convert numeric IDs to string
-    const saleId = id.toString();
-    
-    return api.get(`/sales/${saleId}`)
+    return api.get(`/sales/${id}`)
       .catch(error => {
         console.error('Error fetching sale details:', error);
         if (error.response && error.response.status === 404) {
@@ -254,8 +245,26 @@ export const salesApi = {
       });
   },
   
-  updateStatus: (id: number | string, statusData: { status: string; reason?: string }) =>
-    api.patch(`/sales/${id}/status`, statusData),
+  updateStatus: (id: number | string, statusData: { status: string; reason?: string }) => {
+    // Enhanced validation and error handling
+    if (!id) {
+      return Promise.reject(new Error('Sale ID is required'));
+    }
+    
+    return api.patch(`/sales/${id}/status`, statusData)
+      .catch(error => {
+        console.error('Error updating sale status:', error);
+        if (error.response) {
+          if (error.response.status === 404) {
+            throw new Error('Sale not found');
+          } else if (error.response.status === 400) {
+            throw new Error('Invalid status update data');
+          }
+          throw new Error(`Server error (${error.response.status}): ${error.response.data?.message || 'Unknown error'}`);
+        }
+        throw new Error(`Failed to update sale status: ${error.message}`);
+      });
+  },
 };
 
 // Reports API

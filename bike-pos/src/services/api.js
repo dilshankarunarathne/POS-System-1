@@ -147,6 +147,11 @@ export const salesApi = {
   // Create new sale
   create: (saleData) => {
     return api.post('/sales', saleData);
+  },
+  
+  // Update sale status (simplified for returns)
+  updateStatus: (id, statusData) => {
+    return api.patch(`/sales/${id}/status`, statusData);
   }
 };
 

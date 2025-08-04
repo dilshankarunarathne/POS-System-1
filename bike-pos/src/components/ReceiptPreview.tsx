@@ -116,4 +116,6 @@ const ReceiptPreview = forwardRef<HTMLDivElement, ReceiptProps>(({ receipt }, re
   );
 });
 
+ReceiptPreview.displayName = 'ReceiptPreview';
+
 export default ReceiptPreview;

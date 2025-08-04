@@ -19,6 +19,7 @@ import {
 import { LinkContainer } from 'react-router-bootstrap';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotification } from '../contexts/NotificationContext';
 
 // Menu items configuration
 const getMenuItems = (role: string) => {
@@ -30,13 +31,13 @@ const getMenuItems = (role: string) => {
           name: 'Dashboard',
           path: '/dashboard', 
           icon: <Speedometer2 size={18} />,
-          roles: ['admin', 'manager', 'cashier']
+          roles: ['admin', 'cashier', 'manager'] // Added manager
         },
         {
           name: 'POS',
           path: '/pos',
           icon: <Cart3 size={18} />,
-          roles: ['admin', 'manager', 'cashier']
+          roles: ['admin', 'cashier', 'manager'] // Added manager
         },
       ]
     },
@@ -47,7 +48,7 @@ const getMenuItems = (role: string) => {
           name: 'Products',
           path: '/products',
           icon: <BoxSeam size={18} />,
-          roles: ['admin', 'manager']
+          roles: ['admin', 'manager'] // Only admin and manager
         },
       ]
     },
@@ -58,13 +59,13 @@ const getMenuItems = (role: string) => {
           name: 'Sales History',
           path: '/sales',
           icon: <Receipt size={18} />,
-          roles: ['admin', 'manager']
+          roles: ['admin', 'cashier', 'manager'] // Added manager
         },
         {
           name: 'Reports',
           path: '/reports',
           icon: <ClipboardData size={18} />,
-          roles: ['admin', 'manager']
+          roles: ['admin', 'manager'] // Only admin and manager
         }
       ]
     }
@@ -102,6 +103,7 @@ const getMenuItems = (role: string) => {
 
 const Layout = () => {
   const { user, logout, getCurrentShop } = useAuth();
+  const { showSuccess } = useNotification();
   const navigate = useNavigate();
   const location = useLocation();
   const [showOffcanvas, setShowOffcanvas] = useState(false);
@@ -122,6 +124,7 @@ const Layout = () => {
   // Handle logout
   const handleLogout = () => {
     logout();
+    showSuccess('Logged out successfully');
     navigate('/login');
   };
 

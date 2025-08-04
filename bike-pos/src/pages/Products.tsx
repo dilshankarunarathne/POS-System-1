@@ -11,8 +11,7 @@ import {
   Pagination,
   Row,
   Spinner,
-  Table,
-  Toast, ToastContainer
+  Table
 } from 'react-bootstrap';
 import { categoriesApi, printApi, productsApi, suppliersApi } from '../services/api';
 // Fix icon imports
@@ -29,55 +28,41 @@ import {
 } from 'react-icons/fa';
 // Import xlsx library for Excel file processing
 import * as XLSX from 'xlsx';
+import { useNotification } from '../contexts/NotificationContext';
 
 const Products: React.FC = () => {
-  // State for products data
+  const { showSuccess, showError } = useNotification();
   const [products, setProducts] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  // Add loading state for print operation
   const [printLoading, setPrintLoading] = useState(false);
-  
-  // New states for bulk import
   const [importModalOpen, setImportModalOpen] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importLoading, setImportLoading] = useState(false);
   const [importData, setImportData] = useState<any[]>([]);
   const [importPreview, setImportPreview] = useState(false);
-  // New states for tracking which products are new vs updates
   const [productUpdateMap, setProductUpdateMap] = useState<Record<string, { id: number, existing: boolean, currentStock: number }>>({});
-
-  // Add new states for category management
   const [categoryModalOpen, setCategoryModalOpen] = useState(false);
   const [categoryFormData, setCategoryFormData] = useState({
     id: '',
     name: '',
     description: ''
   });
-
-  // State for pagination
   const [page, setPage] = useState(0);
   const [rowsPerPage, setRowsPerPage] = useState(10);
   const [totalProducts, setTotalProducts] = useState(0);
-  
-  // State for filters
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('');
   const [supplierFilter, setSupplierFilter] = useState('');
   const [showLowStock, setShowLowStock] = useState(false);
-  
-  // State for dialogs
   const [productFormOpen, setProductFormOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
   const [printQuantity, setPrintQuantity] = useState(1);
-  
-  // Form state
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -93,17 +78,13 @@ const Products: React.FC = () => {
     image: null as File | null,
     imageUrl: '',
   });
-  
-  // State for print preview
   const [printPreviewUrl, setPrintPreviewUrl] = useState<string | null>(null);
   const [showPrintPreview, setShowPrintPreview] = useState(false);
-  
-  // Fetch products on component mount and when filters change
+
   useEffect(() => {
     fetchProducts();
   }, [page, rowsPerPage, searchQuery, categoryFilter, supplierFilter, showLowStock]);
-  
-  // Fetch categories and suppliers on component mount
+
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -111,21 +92,20 @@ const Products: React.FC = () => {
           categoriesApi.getAll(),
           suppliersApi.getAll(),
         ]);
-        
+
         setCategories(categoriesResponse.data || []);
         setSuppliers(suppliersResponse.data || []);
       } catch (err) {
         console.error('Error fetching categories and suppliers:', err);
-        setError('Failed to load categories and suppliers');
+        showError('Failed to load categories and suppliers');
         setCategories([]);
         setSuppliers([]);
       }
     };
-    
+
     fetchData();
   }, []);
-  
-  // Reset form data when selected product changes
+
   useEffect(() => {
     if (selectedProduct) {
       setFormData({
@@ -161,12 +141,11 @@ const Products: React.FC = () => {
       });
     }
   }, [selectedProduct]);
-  
-  // Fetch products with filters and pagination
+
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      
+
       const response = await productsApi.getAll({
         page: page + 1,
         limit: rowsPerPage,
@@ -175,13 +154,13 @@ const Products: React.FC = () => {
         supplier: supplierFilter || undefined,
         lowStock: showLowStock,
       });
-      
+
       setProducts(response.data?.products || []);
       setTotalProducts(response.data?.pagination?.total || 0);
-      
+
     } catch (err) {
       console.error('Error fetching products:', err);
-      setError('Failed to load products');
+      showError('Failed to load products');
       setProducts([]);
       setTotalProducts(0);
     } finally {
@@ -195,34 +174,29 @@ const Products: React.FC = () => {
       setCategories(response.data || []);
     } catch (err) {
       console.error('Error fetching categories:', err);
-      setError('Failed to load categories');
+      showError('Failed to load categories');
     }
   };
-  
-  // Handle page change
+
   const handleChangePage = (pageNumber: number) => {
     setPage(pageNumber);
   };
-  
-  // Handle rows per page change
+
   const handleChangeRowsPerPage = (e: React.ChangeEvent<HTMLSelectElement>) => {
     setRowsPerPage(parseInt(e.target.value, 10));
     setPage(0);
   };
-  
-  // Open product form for adding or editing
+
   const handleOpenProductForm = (product: any = null) => {
     setSelectedProduct(product);
     setProductFormOpen(true);
   };
-  
-  // Close product form
+
   const handleCloseProductForm = () => {
     setProductFormOpen(false);
     setSelectedProduct(null);
   };
 
-  // Add these after the existing handleCloseProductForm function
   const handleOpenCategoryModal = () => {
     setCategoryModalOpen(true);
   };
@@ -243,11 +217,11 @@ const Products: React.FC = () => {
   const handleDeleteCategory = async (categoryId: string) => {
     try {
       await categoriesApi.delete(categoryId);
-      setSuccessMessage('Category deleted successfully');
+      showSuccess('Category deleted successfully');
       fetchCategories();
     } catch (err) {
       console.error('Error deleting category:', err);
-      setError('Failed to delete category');
+      showError('Failed to delete category');
     }
   };
 
@@ -256,48 +230,73 @@ const Products: React.FC = () => {
     try {
       if (categoryFormData.id) {
         await categoriesApi.update(categoryFormData.id, categoryFormData);
-        setSuccessMessage('Category updated successfully');
+        showSuccess('Category updated successfully');
       } else {
         await categoriesApi.create(categoryFormData);
-        setSuccessMessage('Category created successfully');
+        showSuccess('Category created successfully');
       }
       handleCloseCategoryModal();
       fetchCategories();
     } catch (err) {
       console.error('Error saving category:', err);
-      setError('Failed to save category');
+      showError('Failed to save category');
     }
   };
-  
-  // Open delete confirmation dialog
+
   const handleOpenDeleteDialog = (product: any) => {
     setSelectedProduct(product);
     setDeleteDialogOpen(true);
   };
-  
-  // Close delete confirmation dialog
+
+  const handleOpenBulkDeleteDialog = () => {
+    if (selectedProductIds.length === 0) {
+      showError('Please select at least one product');
+      return;
+    }
+    setBulkDeleteDialogOpen(true);
+  };
+
   const handleCloseDeleteDialog = () => {
     setDeleteDialogOpen(false);
     setSelectedProduct(null);
   };
-  
-  // Delete product
+
+  const handleCloseBulkDeleteDialog = () => {
+    setBulkDeleteDialogOpen(false);
+  };
+
   const handleDeleteProduct = async () => {
     if (!selectedProduct) return;
-    
+
     try {
       await productsApi.delete(selectedProduct.id);
-      
-      setSuccessMessage('Product deleted successfully');
+
+      showSuccess('Product deleted successfully');
       handleCloseDeleteDialog();
       fetchProducts();
     } catch (err) {
       console.error('Error deleting product:', err);
-      setError('Failed to delete product');
+      showError('Failed to delete product');
     }
   };
-  
-  // Toggle product selection for printing labels
+
+  const handleBulkDeleteProducts = async () => {
+    if (selectedProductIds.length === 0) return;
+
+    try {
+      const deletePromises = selectedProductIds.map(id => productsApi.delete(id));
+      await Promise.all(deletePromises);
+
+      showSuccess(`${selectedProductIds.length} products deleted successfully`);
+      setSelectedProductIds([]);
+      handleCloseBulkDeleteDialog();
+      fetchProducts();
+    } catch (err) {
+      console.error('Error deleting products:', err);
+      showError('Failed to delete selected products');
+    }
+  };
+
   const toggleProductSelection = (productId: number) => {
     setSelectedProductIds(prev => {
       if (prev.includes(productId)) {
@@ -307,40 +306,50 @@ const Products: React.FC = () => {
       }
     });
   };
-  
-  // Open print labels dialog
+
+  const toggleSelectAll = () => {
+    if (selectedProductIds.length === products.length) {
+      setSelectedProductIds([]);
+    } else {
+      const allIds = products.map(product => product.id);
+      setSelectedProductIds(allIds);
+    }
+  };
+
+  const isAllSelected = products.length > 0 && selectedProductIds.length === products.length;
+  const isIndeterminate = selectedProductIds.length > 0 && selectedProductIds.length < products.length;
+
   const handleOpenPrintDialog = () => {
     if (selectedProductIds.length === 0) {
-      setError('Please select at least one product');
+      showError('Please select at least one product');
       return;
     }
-    
+
     setPrintDialogOpen(true);
   };
-  
-  // Generate preview for printing labels
+
   const handleGeneratePreview = async () => {
     try {
       setPrintLoading(true);
-      
+
       if (selectedProductIds.length === 0) {
-        setError('No products selected for printing labels');
+        showError('No products selected for printing labels');
         return;
       }
-      
+
       console.log('Sending request to preview barcodes for products:', selectedProductIds);
-      
-      const response = await printApi.generateBarcodes(selectedProductIds, printQuantity); // Use the API without a preview parameter
-      
+
+      const response = await printApi.generateBarcodes(selectedProductIds, printQuantity);
+
       const blob = new Blob([response.data], { type: 'application/pdf' });
       const url = window.URL.createObjectURL(blob);
-      
+
       setPrintPreviewUrl(url);
       setShowPrintPreview(true);
-      
+
     } catch (err: any) {
       console.error('Error generating preview:', err);
-      
+
       if (err.response) {
         if (err.response.data instanceof Blob) {
           try {
@@ -352,82 +361,75 @@ const Products: React.FC = () => {
             } catch (e) {
               errorMsg = text || 'Error generating preview';
             }
-            setError(`Failed to generate preview: ${errorMsg}`);
+            showError(`Failed to generate preview: ${errorMsg}`);
           } catch (textErr) {
-            setError(`Failed to generate preview: Server returned an error`);
+            showError(`Failed to generate preview: Server returned an error`);
           }
         } else {
           const errorMessage = err.response.data?.message || `Server error: ${err.response.status}`;
-          setError(`Failed to generate preview: ${errorMessage}`);
+          showError(`Failed to generate preview: ${errorMessage}`);
         }
       } else if (err.request) {
-        setError('Failed to generate preview: No response from server. Please check your network connection.');
+        showError('Failed to generate preview: No response from server. Please check your network connection.');
       } else {
-        setError(`Failed to generate preview: ${err.message || 'Unknown error'}`);
+        showError(`Failed to generate preview: ${err.message || 'Unknown error'}`);
       }
     } finally {
       setPrintLoading(false);
     }
   };
-  
-  // Print product labels - updated to directly show print dialog
+
   const handlePrintLabels = async () => {
     try {
       setPrintLoading(true);
-      
+
       if (selectedProductIds.length === 0) {
-        setError('No products selected for printing labels');
+        showError('No products selected for printing labels');
         return;
       }
-      
+
       console.log('Sending request to generate barcodes for products:', selectedProductIds);
-      
+
       const response = await printApi.generateBarcodes(selectedProductIds, printQuantity);
-      
-      // Ensure we received a PDF blob
+
       if (response.headers['content-type'] === 'application/pdf' || 
          (response.data instanceof Blob && response.data.type === 'application/pdf')) {
-        
+
         const blob = new Blob([response.data], { type: 'application/pdf' });
         const url = window.URL.createObjectURL(blob);
-        
-        // Open in a new window and directly show print dialog
+
         const printWindow = window.open(url, '_blank');
         if (printWindow) {
-          // Wait for the PDF to load then trigger print dialog
           printWindow.onload = () => {
             setTimeout(() => {
               printWindow.print();
             }, 500);
           };
-          
-          setSuccessMessage(`${selectedProductIds.length} product labels sent to printer`);
+
+          showSuccess(`${selectedProductIds.length} product labels sent to printer`);
         } else {
-          // Fallback if popup is blocked
           alert('Please allow pop-ups to print the labels');
-          
-          // Create a download link as fallback
+
           const link = document.createElement('a');
           link.href = url;
           link.download = `product-labels-${Date.now()}.pdf`;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
-          
-          setSuccessMessage(`${selectedProductIds.length} product labels downloaded`);
+
+          showSuccess(`${selectedProductIds.length} product labels downloaded`);
         }
-        
-        // Close the dialog and reset selected items
+
         setPrintDialogOpen(false);
         setSelectedProductIds([]);
         setPrintQuantity(1);
       } else {
         throw new Error('Received invalid response format from server');
       }
-      
+
     } catch (err: any) {
       console.error('Error generating labels:', err);
-      
+
       if (err.response) {
         if (err.response.data instanceof Blob) {
           try {
@@ -439,22 +441,21 @@ const Products: React.FC = () => {
             } catch (e) {
               errorMsg = text || 'Error generating labels';
             }
-            setError(`Failed to generate labels: ${errorMsg}`);
+            showError(`Failed to generate labels: ${errorMsg}`);
           } catch (textErr) {
-            setError(`Failed to generate labels: Server returned an error`);
+            showError(`Failed to generate labels: Server returned an error`);
           }
         } else {
           const errorMessage = err.response.data?.message || `Server error: ${err.response.status}`;
-          setError(`Failed to generate labels: ${errorMessage}`);
+          showError(`Failed to generate labels: ${errorMessage}`);
         }
       } else if (err.request) {
-        setError('Failed to generate labels: No response from server. Please check your network connection.');
+        showError('Failed to generate labels: No response from server. Please check your network connection.');
       } else {
-        setError(`Failed to generate labels: ${err.message || 'Unknown error'}`);
+        showError(`Failed to generate labels: ${err.message || 'Unknown error'}`);
       }
     } finally {
       setPrintLoading(false);
-      // Clean up any URLs if necessary
       if (printPreviewUrl) {
         window.URL.revokeObjectURL(printPreviewUrl);
         setPrintPreviewUrl(null);
@@ -462,11 +463,9 @@ const Products: React.FC = () => {
     }
   };
 
-  // Function to handle printing from preview
   const handlePrintFromPreview = () => {
     if (!printPreviewUrl) return;
-    
-    // Open in a new window for printing
+
     const printWindow = window.open(printPreviewUrl, '_blank');
     if (printWindow) {
       printWindow.onload = () => {
@@ -475,16 +474,13 @@ const Products: React.FC = () => {
         }, 500);
       };
     } else {
-      // Fallback if popup is blocked
       alert('Please allow pop-ups to print the labels');
     }
   };
 
-  // Function to download PDF from preview
   const handleDownloadPdf = () => {
     if (!printPreviewUrl) return;
-    
-    // Create a download link
+
     const link = document.createElement('a');
     link.href = printPreviewUrl;
     link.download = `product-labels-${Date.now()}.pdf`;
@@ -493,7 +489,6 @@ const Products: React.FC = () => {
     document.body.removeChild(link);
   };
 
-  // Function to close the preview and clean up
   const handleClosePreview = () => {
     if (printPreviewUrl) {
       window.URL.revokeObjectURL(printPreviewUrl);
@@ -503,25 +498,21 @@ const Products: React.FC = () => {
     setSelectedProductIds([]);
     setPrintQuantity(1);
   };
-  
-  // Reset dialog when closing
+
   const handleClosePrintDialog = () => {
     setPrintDialogOpen(false);
   };
-  
-  // Handle form input changes
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
-  
-  // Handle select field changes
+
   const handleSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
-  
-  // Handle filter select changes
+
   const handleFilterSelectChange = (e: React.ChangeEvent<HTMLSelectElement>, filterType: 'category' | 'supplier') => {
     const value = e.target.value;
     if (filterType === 'category') {
@@ -530,8 +521,7 @@ const Products: React.FC = () => {
       setSupplierFilter(value);
     }
   };
-  
-  // Handle image upload
+
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
@@ -542,70 +532,68 @@ const Products: React.FC = () => {
       }));
     }
   };
-  
-  // Submit form
+
   const handleSubmitForm = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     try {
       const formDataToSend = new FormData();
-      
+
       formDataToSend.append('name', formData.name);
       formDataToSend.append('description', formData.description);
-      
+
       if (formData.barcode) {
         formDataToSend.append('barcode', formData.barcode);
       }
-      
+
       formDataToSend.append('price', formData.price);
-      
+
       if (formData.costPrice) {
         formDataToSend.append('costPrice', formData.costPrice);
       }
-      
+
       formDataToSend.append('stockQuantity', formData.stockQuantity);
-      
+
       if (formData.reorderLevel) {
         formDataToSend.append('reorderLevel', formData.reorderLevel);
       }
-      
+
       if (formData.categoryName) {
         formDataToSend.append('categoryName', formData.categoryName);
       } else if (formData.categoryId) {
         formDataToSend.append('categoryId', formData.categoryId);
       }
-      
+
       if (formData.supplierName) {
         formDataToSend.append('supplierName', formData.supplierName);
       } else if (formData.supplierId) {
         formDataToSend.append('supplierId', formData.supplierId);
       }
-      
+
       if (formData.image) {
         formDataToSend.append('image', formData.image);
       }
-      
+
       if (selectedProduct) {
         await productsApi.update(selectedProduct.id, formDataToSend);
-        setSuccessMessage('Product updated successfully');
+        showSuccess('Product updated successfully');
       } else {
         await productsApi.create(formDataToSend);
-        setSuccessMessage('Product created successfully');
+        showSuccess('Product created successfully');
       }
-      
+
       handleCloseProductForm();
       fetchProducts();
     } catch (err) {
       console.error('Error submitting product:', err);
-      setError('Failed to save product');
+      showError('Failed to save product');
     }
   };
-  
-  // Calculate pagination items
+
   const paginationItems = () => {
     const totalPages = Math.ceil(totalProducts / rowsPerPage);
     let items = [];
-    
+
     for (let number = 0; number < totalPages; number++) {
       items.push(
         <Pagination.Item key={number} active={number === page} onClick={() => handleChangePage(number)}>
@@ -613,17 +601,16 @@ const Products: React.FC = () => {
         </Pagination.Item>
       );
     }
-    
+
     return items;
   };
 
-  // Update downloadTemplate function
   const downloadTemplate = () => {
     const template = [
       {
         name: 'Sample Product',
         description: 'Product description',
-        barcode: '', // Leave empty for auto-generation
+        barcode: '',
         price: 1000,
         costPrice: 800,
         stockQuantity: 10,
@@ -636,7 +623,6 @@ const Products: React.FC = () => {
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(template);
 
-    // Add notes about categories
     const notes = [
       ['Notes:'],
       ['1. CategoryName: Use one of the following categories:'],
@@ -644,225 +630,209 @@ const Products: React.FC = () => {
       ['2. For new products, stockQuantity is the initial stock'],
       ['3. For existing products (matching names), stockQuantity will be ADDED to current stock'],
     ];
-    
+
     const notesWs = XLSX.utils.aoa_to_sheet(notes);
 
-    // Add both sheets to workbook
     XLSX.utils.book_append_sheet(wb, ws, 'Products Template');
     XLSX.utils.book_append_sheet(wb, notesWs, 'Instructions');
 
     XLSX.writeFile(wb, 'product_import_template.xlsx');
   };
 
-    // Function to handle file selection
-    const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-      const files = event.target.files;
-      if (files && files.length > 0) {
-        setImportFile(files[0]);
-        // Reset preview when new file is selected
-        setImportPreview(false);
-        setImportData([]);
-      }
-    };
-  
-    // Function to parse Excel file - improved to handle stock quantity addition
-    const parseExcelFile = async () => {
-      if (!importFile) return;
-  
-      setImportLoading(true);
-      setError(null);
-      
-      const reader = new FileReader();
-      reader.onload = async (e) => {
-        try {
-          const data = e.target?.result;
-          const workbook = XLSX.read(data, { type: 'array' });
-          
-          const worksheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[worksheetName];
-          
-          const jsonData = XLSX.utils.sheet_to_json(worksheet);
-          
-          if (jsonData.length === 0) {
-            setError('The Excel file is empty or has no valid data');
-            setImportLoading(false);
-            return;
-          }
-          
-          const requiredFields = ['name', 'price', 'stockQuantity'];
-          const firstRow = jsonData[0] as any;
-          
-          const missingFields = requiredFields.filter(field => !(field in firstRow));
-          if (missingFields.length > 0) {
-            setError(`Missing required fields: ${missingFields.join(', ')}`);
-            setImportLoading(false);
-            return;
-          }
-  
-          const importProductNames = jsonData.map((product: any) => product.name);
-          
-          if (importProductNames.length === 0) {
-            setError('No valid products found in the import file');
-            setImportLoading(false);
-            return;
-          }
-          
-          try {
-            let existingProducts: any[] = [];
-            
-            try {
-              console.log('Checking existing products via API for:', importProductNames.slice(0, 5), '...');
-              const response = await productsApi.checkExistingProducts(importProductNames);
-              existingProducts = response.data || [];
-              console.log('API returned existing products:', existingProducts.length);
-            } catch (apiError) {
-              console.error('API error when checking existing products:', apiError);
-              
-              const refreshResponse = await productsApi.getAll({limit: 1000});
-              const allProducts = refreshResponse.data?.products || [];
-              
-              const productNameMap = new Map();
-              allProducts.forEach((product: any) => {
-                productNameMap.set(product.name.toLowerCase(), {
-                  id: product.id,
-                  name: product.name,
-                  stockQuantity: product.stockQuantity || 0
-                });
-              });
-              
-              existingProducts = importProductNames
-                .map(name => {
-                  const match = productNameMap.get(name.toLowerCase());
-                  return match ? { 
-                    id: match.id, 
-                    name, 
-                    stockQuantity: match.stockQuantity 
-                  } : null;
-                })
-                .filter(Boolean);
-              
-              console.log('Found existing products from current data:', existingProducts.length);
-            }
-            
-            // Create a mapping for quick lookup with current stock quantities
-            const updateMap: Record<string, { id: number, existing: boolean, currentStock: number }> = {};
-            existingProducts.forEach((product: any) => {
-              if (product && product.name) {
-                updateMap[product.name.toLowerCase()] = {
-                  id: product.id,
-                  existing: true,
-                  currentStock: product.stockQuantity || 0
-                };
-              }
-            });
-            
-            setProductUpdateMap(updateMap);
-            
-            // Enrich import data with update flags and calculate new stock quantities
-            const enrichedData = jsonData.map((product: any) => {
-              const normalizedName = product.name.toLowerCase();
-              const existingProduct = updateMap[normalizedName];
-              const isUpdate = existingProduct !== undefined;
-              
-              // For existing products, calculate the new total stock quantity
-              let finalStockQuantity = parseInt(product.stockQuantity) || 0;
-              let stockChange = 0;
-              
-              if (isUpdate) {
-                const currentStock = existingProduct.currentStock;
-                const importQuantity = parseInt(product.stockQuantity) || 0;
-                finalStockQuantity = currentStock + importQuantity;
-                stockChange = importQuantity;
-              }
-              
-              return {
-                ...product,
-                _action: isUpdate ? 'UPDATE' : 'CREATE',
-                _id: isUpdate ? existingProduct.id : null,
-                _currentStock: isUpdate ? existingProduct.currentStock : 0,
-                _importQuantity: parseInt(product.stockQuantity) || 0,
-                _finalStock: finalStockQuantity,
-                _stockChange: stockChange,
-                stockQuantity: finalStockQuantity // This will be the final quantity sent to server
-              };
-            });
-  
-            setImportData(enrichedData);
-            setImportPreview(true);
-          } catch (error) {
-            console.error('Error in product import process:', error);
-            setError('Failed to process import data. Please try again or contact support.');
-          } 
-        } catch (error) {
-          console.error('Error parsing Excel file:', error);
-          setError('Failed to parse Excel file. Please make sure it\'s a valid Excel file.');
-        } finally {
-          setImportLoading(false);
-        }
-      };
-      
-      reader.readAsArrayBuffer(importFile);
-    };
-  
-    // Function to submit imported data - improved to better handle updates
-    const submitImportData = async () => {
-      if (importData.length === 0) return;
-      
-      setImportLoading(true);
-      
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (files && files.length > 0) {
+      setImportFile(files[0]);
+      setImportPreview(false);
+      setImportData([]);
+    }
+  };
+
+  const parseExcelFile = async () => {
+    if (!importFile) return;
+
+    setImportLoading(true);
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
       try {
-        let successCount = 0;
-        let updateCount = 0;
-        let failedCount = 0;
-        
-        // Process each product
-        for (const product of importData) {
-          try {
-            const formDataToSend = new FormData();
-            
-            // Add all relevant fields to formData
-            Object.keys(product).forEach(key => {
-              // Skip internal fields that start with _
-              if (!key.startsWith('_') && product[key] !== undefined && product[key] !== null && product[key] !== '') {
-                formDataToSend.append(key, product[key].toString());
-              }
-            });
-            
-            if (product._action === 'UPDATE' && product._id) {
-              console.log(`Updating existing product: ${product.name} (ID: ${product._id})`);
-              await productsApi.update(product._id, formDataToSend);
-              updateCount++;
-            } else {
-              console.log(`Creating new product: ${product.name}`);
-              await productsApi.create(formDataToSend);
-              successCount++;
-            }
-          } catch (err) {
-            console.error(`Error processing product ${product.name}:`, err);
-            failedCount++;
-          }
+        const data = e.target?.result;
+        const workbook = XLSX.read(data, { type: 'array' });
+
+        const worksheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[worksheetName];
+
+        const jsonData = XLSX.utils.sheet_to_json(worksheet);
+
+        if (jsonData.length === 0) {
+          showError('The Excel file is empty or has no valid data');
+          setImportLoading(false);
+          return;
         }
-        
-        // Show result message
-        setSuccessMessage(`Import completed: ${successCount} products added, ${updateCount} updated, ${failedCount} failed`);
-        
-        // Close modal and refresh data
-        setImportModalOpen(false);
-        fetchProducts();
-      } catch (err) {
-        console.error('Import process error:', err);
-        setError('Failed to complete the import process');
+
+        const requiredFields = ['name', 'price', 'stockQuantity'];
+        const firstRow = jsonData[0] as any;
+
+        const missingFields = requiredFields.filter(field => !(field in firstRow));
+        if (missingFields.length > 0) {
+          showError(`Missing required fields: ${missingFields.join(', ')}`);
+          setImportLoading(false);
+          return;
+        }
+
+        const importProductNames = jsonData.map((product: any) => product.name);
+
+        if (importProductNames.length === 0) {
+          showError('No valid products found in the import file');
+          setImportLoading(false);
+          return;
+        }
+
+        try {
+          let existingProducts: any[] = [];
+
+          try {
+            console.log('Checking existing products via API for:', importProductNames.slice(0, 5), '...');
+            const response = await productsApi.checkExistingProducts(importProductNames);
+            existingProducts = response.data || [];
+            console.log('API returned existing products:', existingProducts.length);
+          } catch (apiError) {
+            console.error('API error when checking existing products:', apiError);
+
+            const refreshResponse = await productsApi.getAll({limit: 1000});
+            const allProducts = refreshResponse.data?.products || [];
+
+            const productNameMap = new Map();
+            allProducts.forEach((product: any) => {
+              productNameMap.set(product.name.toLowerCase(), {
+                id: product.id,
+                name: product.name,
+                stockQuantity: product.stockQuantity || 0
+              });
+            });
+
+            existingProducts = importProductNames
+              .map(name => {
+                const match = productNameMap.get(name.toLowerCase());
+                return match ? { 
+                  id: match.id, 
+                  name, 
+                  stockQuantity: match.stockQuantity 
+                } : null;
+              })
+              .filter(Boolean);
+
+            console.log('Found existing products from current data:', existingProducts.length);
+          }
+
+          const updateMap: Record<string, { id: number, existing: boolean, currentStock: number }> = {};
+          existingProducts.forEach((product: any) => {
+            if (product && product.name) {
+              updateMap[product.name.toLowerCase()] = {
+                id: product.id,
+                existing: true,
+                currentStock: product.stockQuantity || 0
+              };
+            }
+          });
+
+          setProductUpdateMap(updateMap);
+
+          const enrichedData = jsonData.map((product: any) => {
+            const normalizedName = product.name.toLowerCase();
+            const existingProduct = updateMap[normalizedName];
+            const isUpdate = existingProduct !== undefined;
+
+            let finalStockQuantity = parseInt(product.stockQuantity) || 0;
+            let stockChange = 0;
+
+            if (isUpdate) {
+              const currentStock = existingProduct.currentStock;
+              const importQuantity = parseInt(product.stockQuantity) || 0;
+              finalStockQuantity = currentStock + importQuantity;
+              stockChange = importQuantity;
+            }
+
+            return {
+              ...product,
+              _action: isUpdate ? 'UPDATE' : 'CREATE',
+              _id: isUpdate ? existingProduct.id : null,
+              _currentStock: isUpdate ? existingProduct.currentStock : 0,
+              _importQuantity: parseInt(product.stockQuantity) || 0,
+              _finalStock: finalStockQuantity,
+              _stockChange: stockChange,
+              stockQuantity: finalStockQuantity
+            };
+          });
+
+          setImportData(enrichedData);
+          setImportPreview(true);
+        } catch (error) {
+          console.error('Error in product import process:', error);
+          showError('Failed to process import data. Please try again or contact support.');
+        } 
+      } catch (error) {
+        console.error('Error parsing Excel file:', error);
+        showError('Failed to parse Excel file. Please make sure it\'s a valid Excel file.');
       } finally {
         setImportLoading(false);
-        setImportFile(null);
-        setImportData([]);
-        setImportPreview(false);
-        setProductUpdateMap({});
       }
     };
-  
 
-  // Reset import modal state
+    reader.readAsArrayBuffer(importFile);
+  };
+
+  const submitImportData = async () => {
+    if (importData.length === 0) return;
+
+    setImportLoading(true);
+
+    try {
+      let successCount = 0;
+      let updateCount = 0;
+      let failedCount = 0;
+
+      for (const product of importData) {
+        try {
+          const formDataToSend = new FormData();
+
+          Object.keys(product).forEach(key => {
+            if (!key.startsWith('_') && product[key] !== undefined && product[key] !== null && product[key] !== '') {
+              formDataToSend.append(key, product[key].toString());
+            }
+          });
+
+          if (product._action === 'UPDATE' && product._id) {
+            console.log(`Updating existing product: ${product.name} (ID: ${product._id})`);
+            await productsApi.update(product._id, formDataToSend);
+            updateCount++;
+          } else {
+            console.log(`Creating new product: ${product.name}`);
+            await productsApi.create(formDataToSend);
+            successCount++;
+          }
+        } catch (err) {
+          console.error(`Error processing product ${product.name}:`, err);
+          failedCount++;
+        }
+      }
+
+      showSuccess(`Import completed: ${successCount} products added, ${updateCount} updated, ${failedCount} failed`);
+
+      setImportModalOpen(false);
+      fetchProducts();
+    } catch (err) {
+      console.error('Import process error:', err);
+      showError('Failed to complete the import process');
+    } finally {
+      setImportLoading(false);
+      setImportFile(null);
+      setImportData([]);
+      setImportPreview(false);
+      setProductUpdateMap({});
+    }
+  };
+
   const handleCloseImportModal = () => {
     setImportModalOpen(false);
     setImportFile(null);
@@ -871,10 +841,8 @@ const Products: React.FC = () => {
     setProductUpdateMap({});
   };
 
-
   return (
     <Container fluid className="py-4">
-      {/* Header */}
       <Row className="mb-4 align-items-center">
         <Col>
           <h4>Products</h4>
@@ -894,14 +862,19 @@ const Products: React.FC = () => {
           </Button>
           
           {selectedProductIds.length > 0 && (
-            <Button variant="outline-primary" onClick={handleOpenPrintDialog}>
-              <>{FaPrint({ className: "me-1" })}</> Print Labels ({selectedProductIds.length})
-            </Button>
+            <>
+              <Button variant="outline-primary" onClick={handleOpenPrintDialog}>
+                <>{FaPrint({ className: "me-1" })}</> Print Labels ({selectedProductIds.length})
+              </Button>
+              
+              <Button variant="outline-danger" onClick={handleOpenBulkDeleteDialog}>
+                <>{FaTrash({ className: "me-1" })}</> Delete Selected ({selectedProductIds.length})
+              </Button>
+            </>
           )}
         </Col>
       </Row>
       
-      {/* Filters */}
       <Card className="mb-4">
         <Card.Header className="d-flex justify-content-between align-items-center">
           <h6 className="mb-0">Filters</h6>
@@ -939,14 +912,22 @@ const Products: React.FC = () => {
         </Card.Body>
       </Card>
       
-      {/* Products Table */}
       <Card>
         <Card.Body className="p-0">
           <div className="table-responsive" style={{ maxHeight: '70vh', overflowY: 'auto' }}>
             <Table hover className="mb-0">
               <thead className="sticky-top bg-white" style={{ zIndex: 10 }}>
                 <tr>
-                  <th style={{ width: '80px' }}></th>
+                  <th style={{ width: '50px' }}>
+                    <Form.Check
+                      type="checkbox"
+                      checked={isAllSelected}
+                      ref={(input: HTMLInputElement | null) => {
+                        if (input) input.indeterminate = isIndeterminate;
+                      }}
+                      onChange={toggleSelectAll}
+                    />
+                  </th>
                   <th>Name</th>                  
                   <th>Description</th>
                   <th>Category</th>
@@ -977,17 +958,14 @@ const Products: React.FC = () => {
                     return (
                       <tr 
                         key={product.id}
-                        onClick={() => toggleProductSelection(product.id)}
                         className={isSelected ? "table-primary" : ""}
-                        style={{ cursor: 'pointer' }}
                       >
                         <td>
-                          <Badge 
-                            bg={isSelected ? "primary" : "light"} 
-                            text={isSelected ? "white" : "dark"}
-                          >
-                            {isSelected ? "Selected" : "Select"}
-                          </Badge>
+                          <Form.Check
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleProductSelection(product.id)}
+                          />
                         </td>
                         
                         <td>{product.name}</td>                        
@@ -1007,10 +985,7 @@ const Products: React.FC = () => {
                           <Button 
                             variant="link" 
                             className="p-1 me-1"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenProductForm(product);
-                            }}
+                            onClick={() => handleOpenProductForm(product)}
                           >
                             <>{FaPencilAlt({})}</>
                           </Button>
@@ -1018,10 +993,7 @@ const Products: React.FC = () => {
                           <Button 
                             variant="link" 
                             className="p-1 text-danger"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenDeleteDialog(product);
-                            }}
+                            onClick={() => handleOpenDeleteDialog(product)}
                           >
                             <>{FaTrash({})}</>
                           </Button>
@@ -1068,7 +1040,6 @@ const Products: React.FC = () => {
         </Card.Body>
       </Card>
       
-      {/* Print Labels Modal - Simplified */}
       <Modal 
         show={printDialogOpen} 
         onHide={handleClosePrintDialog}
@@ -1129,7 +1100,28 @@ const Products: React.FC = () => {
         </Modal.Footer>
       </Modal>
       
-      {/* Delete Confirmation Modal */}
+      <Modal show={bulkDeleteDialogOpen} onHide={handleCloseBulkDeleteDialog}>
+        <Modal.Header closeButton>
+          <Modal.Title>Delete Selected Products</Modal.Title>
+        </Modal.Header>
+        
+        <Modal.Body>
+          <p>
+            Are you sure you want to delete <strong>{selectedProductIds.length}</strong> selected products?
+          </p>
+          <p className="text-danger">This action cannot be undone.</p>
+        </Modal.Body>
+        
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleCloseBulkDeleteDialog}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={handleBulkDeleteProducts}>
+            Delete {selectedProductIds.length} Products
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
       <Modal show={deleteDialogOpen} onHide={handleCloseDeleteDialog}>
         <Modal.Header closeButton>
           <Modal.Title>Delete Product</Modal.Title>
@@ -1152,7 +1144,6 @@ const Products: React.FC = () => {
         </Modal.Footer>
       </Modal>
       
-      {/* Product Form Modal */}
       <Modal 
         show={productFormOpen} 
         onHide={handleCloseProductForm}
@@ -1297,7 +1288,6 @@ const Products: React.FC = () => {
         </form>
       </Modal>
       
-      {/* Import Products Modal */}
       <Modal 
         show={importModalOpen} 
         onHide={handleCloseImportModal}
@@ -1364,7 +1354,6 @@ const Products: React.FC = () => {
                 </Button>
               </div>
               
-              {/* Show summary of what will happen */}
               <div className="mb-3 p-3 bg-light rounded">
                 <div className="mb-2">Import summary:</div>
                 <Badge bg="success" className="me-2">
@@ -1465,7 +1454,6 @@ const Products: React.FC = () => {
         </Modal.Footer>
       </Modal>
       
-      {/* Add Category Modal */}
       <Modal show={categoryModalOpen} onHide={handleCloseCategoryModal}>
         <Modal.Header closeButton>
           <Modal.Title>{categoryFormData.id ? 'Edit Category' : 'Add Category'}</Modal.Title>
@@ -1538,41 +1526,6 @@ const Products: React.FC = () => {
           </Button>
         </Modal.Footer>
       </Modal>
-      
-      {/* Toasts for notifications */}
-      <ToastContainer position="bottom-center" className="p-3">
-        {error && (
-          <Toast 
-            onClose={() => setError(null)} 
-            show={!!error} 
-            delay={6000} 
-            autohide 
-            bg="danger"
-            className="text-white"
-          >
-            <Toast.Header>
-              <strong className="me-auto">Error</strong>
-            </Toast.Header>
-            <Toast.Body>{error}</Toast.Body>
-          </Toast>
-        )}
-        
-        {successMessage && (
-          <Toast 
-            onClose={() => setSuccessMessage(null)} 
-            show={!!successMessage} 
-            delay={6000} 
-            autohide 
-            bg="success"
-            className="text-white"
-          >
-            <Toast.Header>
-              <strong className="me-auto">Success</strong>
-            </Toast.Header>
-            <Toast.Body>{successMessage}</Toast.Body>
-          </Toast>
-        )}
-      </ToastContainer>
     </Container>
   );
 };

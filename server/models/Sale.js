@@ -34,6 +34,10 @@ const SaleSchema = new mongoose.Schema({
     name: {
       type: String,
       required: function() { return this.isManual; }
+    },
+    returnedQuantity: {
+      type: Number,
+      default: 0
     }
   }],
   subtotal: {
@@ -68,7 +72,7 @@ const SaleSchema = new mongoose.Schema({
   },
   status: {
     type: String,
-    enum: ['completed', 'returned', 'cancelled'],
+    enum: ['completed', 'returned', 'cancelled', 'partially_returned'],
     default: 'completed'
   },
   statusHistory: [{
@@ -94,6 +98,10 @@ const SaleSchema = new mongoose.Schema({
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Shop',
     required: true
+  },
+  returnedAmount: {
+    type: Number,
+    default: 0
   }
 });
 
@@ -137,6 +145,23 @@ SaleSchema.methods.getReceiptData = function() {
     shopId: this.shopId,
     notes: this.notes
   };
+};
+
+// Add method to calculate return status
+SaleSchema.methods.calculateReturnStatus = function() {
+  const totalReturnable = this.items.reduce((sum, item) => {
+    return sum + (item.quantity * item.price) - (item.discount || 0);
+  }, 0);
+  
+  const totalReturned = this.returnedAmount || 0;
+  
+  if (totalReturned === 0) {
+    return 'completed';
+  } else if (totalReturned >= totalReturnable) {
+    return 'returned';
+  } else {
+    return 'partially_returned';
+  }
 };
 
 // Calculate totals before saving

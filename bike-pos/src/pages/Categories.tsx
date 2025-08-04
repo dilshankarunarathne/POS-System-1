@@ -8,15 +8,14 @@ import {
   Modal,
   Row,
   Spinner,
-  Table,
-  Toast,
-  ToastContainer
+  Table
 } from 'react-bootstrap';
 import {
   PlusLg as AddIcon,
   Trash as DeleteIcon,
   PencilSquare as EditIcon
 } from 'react-bootstrap-icons';
+import { useNotification } from '../contexts/NotificationContext';
 import { categoriesApi } from '../services/api';
 
 interface Category {
@@ -29,8 +28,7 @@ interface Category {
 const Categories: React.FC = () => {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const { showSuccess, showError } = useNotification();
   
   // Dialog states
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -52,7 +50,7 @@ const Categories: React.FC = () => {
       setLoading(false);
     } catch (err) {
       console.error('Error fetching categories:', err);
-      setError('Failed to load categories');
+      showError('Failed to load categories');
       setLoading(false);
     }
   };
@@ -89,25 +87,25 @@ const Categories: React.FC = () => {
   const handleSaveCategory = async () => {
     try {
       if (!categoryForm.name.trim()) {
-        setError('Category name is required');
+        showError('Category name is required');
         return;
       }
       
       if (selectedCategory) {
         // Update existing category
         await categoriesApi.update(selectedCategory.id, categoryForm);
-        setSuccessMessage('Category updated successfully');
+        showSuccess('Category updated successfully');
       } else {
         // Create new category
         await categoriesApi.create(categoryForm);
-        setSuccessMessage('Category created successfully');
+        showSuccess('Category created successfully');
       }
       
       handleCloseDialog();
       fetchCategories();
     } catch (err) {
       console.error('Error saving category:', err);
-      setError('Failed to save category');
+      showError('Failed to save category');
     }
   };
   
@@ -129,12 +127,12 @@ const Categories: React.FC = () => {
     
     try {
       await categoriesApi.delete(selectedCategory.id);
-      setSuccessMessage('Category deleted successfully');
+      showSuccess('Category deleted successfully');
       handleCloseDeleteDialog();
       fetchCategories();
     } catch (err) {
       console.error('Error deleting category:', err);
-      setError('Failed to delete category');
+      showError('Failed to delete category');
     }
   };
   
@@ -270,41 +268,6 @@ const Categories: React.FC = () => {
           </Button>
         </Modal.Footer>
       </Modal>
-      
-      {/* Toast notifications */}
-      <ToastContainer position="bottom-end" className="p-3">
-        {error && (
-          <Toast 
-            onClose={() => setError(null)} 
-            show={!!error} 
-            delay={6000} 
-            autohide 
-            bg="danger"
-            className="text-white"
-          >
-            <Toast.Header>
-              <strong className="me-auto">Error</strong>
-            </Toast.Header>
-            <Toast.Body>{error}</Toast.Body>
-          </Toast>
-        )}
-        
-        {successMessage && (
-          <Toast 
-            onClose={() => setSuccessMessage(null)} 
-            show={!!successMessage} 
-            delay={3000} 
-            autohide
-            bg="success"
-            className="text-white"
-          >
-            <Toast.Header>
-              <strong className="me-auto">Success</strong>
-            </Toast.Header>
-            <Toast.Body>{successMessage}</Toast.Body>
-          </Toast>
-        )}
-      </ToastContainer>
     </Container>
   );
 };

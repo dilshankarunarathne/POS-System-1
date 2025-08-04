@@ -12,6 +12,7 @@ import {
 } from 'react-bootstrap';
 import { PencilSquare, Plus, Trash } from 'react-bootstrap-icons';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotification } from '../contexts/NotificationContext';
 import api from '../services/api';
 
 interface Shop {
@@ -41,6 +42,7 @@ const DeveloperUsers: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
+  const { showSuccess, showError } = useNotification();
 
   // Modal states
   const [showShopModal, setShowShopModal] = useState(false);
@@ -76,7 +78,7 @@ const DeveloperUsers: React.FC = () => {
       setUsers(usersRes.data);
       setError(null);
     } catch (err: any) {
-      setError(err.response?.data?.message || 'Error fetching data');
+      showError(err.response?.data?.message || 'Error fetching data');
     } finally {
       setLoading(false);
     }

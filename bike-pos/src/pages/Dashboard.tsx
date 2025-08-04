@@ -12,7 +12,6 @@ import {
 } from 'chart.js';
 import React, { useEffect, useState } from 'react';
 import {
-  Alert,
   Badge,
   Button,
   Card,
@@ -31,6 +30,7 @@ import {
 import { Line } from 'react-chartjs-2';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotification } from '../contexts/NotificationContext';
 import { productsApi, reportsApi } from '../services/api';
 
 // Register ChartJS components
@@ -49,8 +49,8 @@ ChartJS.register(
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const { user, getCurrentShop } = useAuth();
+  const { showError } = useNotification();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [salesData, setSalesData] = useState<any>({ 
     summary: [], 
     totals: {
@@ -76,11 +76,10 @@ const Dashboard: React.FC = () => {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
-        setError(null);
         
         const currentShop = getCurrentShop();
         if (!currentShop) {
-          setError('No shop assigned to your account');
+          showError('No shop assigned to your account');
           return;
         }
         
@@ -208,7 +207,7 @@ const Dashboard: React.FC = () => {
         }
       } catch (err: any) {
         console.error('Failed to fetch dashboard data:', err);
-        setError('Failed to load dashboard data. ' + (err.message || 'Please try again later.'));
+        showError('Failed to load dashboard data. ' + (err.message || 'Please try again later.'));
         // Set empty default values to prevent map errors
         setSalesData({ summary: [], totals: {
           total: 0,
@@ -227,7 +226,7 @@ const Dashboard: React.FC = () => {
     };
     
     fetchDashboardData();
-  }, [getCurrentShop, user?.role]);
+  }, [getCurrentShop, user?.role, showError]);
   
   // Prepare data for sales chart
   const salesChartData = {
@@ -350,11 +349,6 @@ const Dashboard: React.FC = () => {
           <Spinner animation="border" variant="primary" />
           <p className="mt-3 text-muted">Loading dashboard data...</p>
         </div>
-      ) : error ? (
-        <Alert variant="danger" className="mb-4 shadow-sm">
-          <Alert.Heading>Error Loading Data</Alert.Heading>
-          <p className="mb-0">{error}</p>
-        </Alert>
       ) : (
         <>
           {/* Quick Stats */}

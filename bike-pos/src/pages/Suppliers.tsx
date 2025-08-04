@@ -1,27 +1,28 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Badge,
-  Button,
-  Card,
-  Col,
-  Container,
-  Form,
-  InputGroup,
-  Modal,
-  Row,
-  Spinner,
-  Table,
-  Toast,
-  ToastContainer
+    Badge,
+    Button,
+    Card,
+    Col,
+    Container,
+    Form,
+    InputGroup,
+    Modal,
+    Row,
+    Spinner,
+    Table,
+    Toast,
+    ToastContainer
 } from 'react-bootstrap';
 import {
-  Envelope,
-  Pencil,
-  PlusLg,
-  Search,
-  Telephone,
-  Trash
+    Envelope,
+    Pencil,
+    PlusLg,
+    Search,
+    Telephone,
+    Trash
 } from 'react-bootstrap-icons';
+import { useNotification } from '../contexts/NotificationContext';
 import { suppliersApi } from '../services/api';
 
 // Update the Supplier interface to match MongoDB model
@@ -46,6 +47,7 @@ interface SupplierFormData {
 }
 
 const Suppliers: React.FC = () => {
+  const { showSuccess, showError } = useNotification();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -147,25 +149,24 @@ const Suppliers: React.FC = () => {
   const handleSaveSupplier = async () => {
     try {
       if (!supplierForm.name.trim()) {
-        setError('Supplier name is required');
+        showError('Supplier name is required');
         return;
       }
       
       if (selectedSupplier) {
         // Update existing supplier
         await suppliersApi.update(selectedSupplier._id, supplierForm);
-        setSuccessMessage('Supplier updated successfully');
+        showSuccess('Supplier updated successfully');
       } else {
         // Create new supplier
         await suppliersApi.create(supplierForm);
-        setSuccessMessage('Supplier created successfully');
+        showSuccess('Supplier created successfully');
       }
       
       handleCloseDialog();
       fetchSuppliers();
     } catch (err: any) {
-      console.error('Error saving supplier:', err);
-      setError(err.response?.data?.message || 'Failed to save supplier');
+      showError(err.response?.data?.message || 'Failed to save supplier');
     }
   };
   

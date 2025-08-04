@@ -19,6 +19,7 @@ import {
 import { LinkContainer } from 'react-router-bootstrap';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotification } from '../contexts/NotificationContext';
 
 // Menu items configuration
 const getMenuItems = (role: string) => {
@@ -102,6 +103,7 @@ const getMenuItems = (role: string) => {
 
 const Layout = () => {
   const { user, logout, getCurrentShop } = useAuth();
+  const { showSuccess } = useNotification();
   const navigate = useNavigate();
   const location = useLocation();
   const [showOffcanvas, setShowOffcanvas] = useState(false);
@@ -122,6 +124,7 @@ const Layout = () => {
   // Handle logout
   const handleLogout = () => {
     logout();
+    showSuccess('Logged out successfully');
     navigate('/login');
   };
 

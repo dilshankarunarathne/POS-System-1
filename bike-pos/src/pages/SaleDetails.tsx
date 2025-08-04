@@ -1,9 +1,11 @@
 import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
+import { useNotification } from '../contexts/NotificationContext';
 import { salesApi } from '../services/api';
 
 const SaleDetails = () => {
   const { id } = useParams<{ id: string }>();
+  const { showError } = useNotification();
   const [loading, setLoading] = useState(true);
   const [sale, setSale] = useState<any>(null);
   const [error, setError] = useState<string | null>(null);
@@ -15,7 +17,9 @@ const SaleDetails = () => {
         setError(null);
 
         if (!id) {
-          setError("Sale ID is missing. Please check the URL.");
+          const errorMsg = "Sale ID is missing. Please check the URL.";
+          setError(errorMsg);
+          showError(errorMsg);
           setLoading(false);
           return;
         }
@@ -24,14 +28,16 @@ const SaleDetails = () => {
         setSale(response.data);
       } catch (err: any) {
         console.error("Error fetching sale details:", err);
-        setError(err.message || "Failed to load sale details");
+        const errorMsg = err.message || "Failed to load sale details";
+        setError(errorMsg);
+        showError(errorMsg);
       } finally {
         setLoading(false);
       }
     };
 
     fetchSaleDetails();
-  }, [id]);
+  }, [id, showError]);
 
   if (loading) {
     return <div>Loading sale details...</div>;

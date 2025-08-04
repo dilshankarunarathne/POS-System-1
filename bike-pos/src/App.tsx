@@ -3,7 +3,9 @@ import React from 'react';
 import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import './App.css';
 import Layout from './components/Layout';
+import NotificationContainer from './components/NotificationContainer';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { NotificationProvider } from './contexts/NotificationContext';
 import Categories from './pages/Categories';
 import Dashboard from './pages/Dashboard';
 import DeveloperDashboard from './pages/DeveloperDashboard';
@@ -47,73 +49,76 @@ const ProtectedRoute = ({ children, role }: { children: React.ReactElement, role
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          
-          <Route path="/" element={
-            <ProtectedRoute>
-              <Layout />
-            </ProtectedRoute>
-          }>
-            {/* Default redirect */}
-            <Route index element={<Navigate to="/dashboard" replace />} />
+      <NotificationProvider>
+        <Router>
+          <Routes>
+            <Route path="/login" element={<Login />} />
             
-            {/* Developer routes */}
-            <Route path="developer">
+            <Route path="/" element={
+              <ProtectedRoute>
+                <Layout />
+              </ProtectedRoute>
+            }>
+              {/* Default redirect */}
+              <Route index element={<Navigate to="/dashboard" replace />} />
+              
+              {/* Developer routes */}
+              <Route path="developer">
+                <Route path="dashboard" element={
+                  <ProtectedRoute role="developer">
+                    <DeveloperDashboard />
+                  </ProtectedRoute>
+                } />
+                <Route path="users" element={
+                  <ProtectedRoute role="developer">
+                    <DeveloperUsers />
+                  </ProtectedRoute>
+                } />
+              </Route>
+              
+              {/* Regular user routes */}
               <Route path="dashboard" element={
-                <ProtectedRoute role="developer">
-                  <DeveloperDashboard />
+                <ProtectedRoute>
+                  <Dashboard />
                 </ProtectedRoute>
               } />
-              <Route path="users" element={
-                <ProtectedRoute role="developer">
-                  <DeveloperUsers />
+              <Route path="pos" element={
+                <ProtectedRoute>
+                  <POS />
+                </ProtectedRoute>
+              } />
+              <Route path="products" element={
+                <ProtectedRoute>
+                  <Products />
+                </ProtectedRoute>
+              } />
+              <Route path="categories" element={
+                <ProtectedRoute>
+                  <Categories />
+                </ProtectedRoute>
+              } />
+              <Route path="suppliers" element={
+                <ProtectedRoute>
+                  <Suppliers />
+                </ProtectedRoute>
+              } />
+              <Route path="sales" element={
+                <ProtectedRoute>
+                  <Sales />
+                </ProtectedRoute>
+              } />
+              <Route path="reports" element={
+                <ProtectedRoute>
+                  <Reports />
                 </ProtectedRoute>
               } />
             </Route>
             
-            {/* Regular user routes */}
-            <Route path="dashboard" element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            } />
-            <Route path="pos" element={
-              <ProtectedRoute>
-                <POS />
-              </ProtectedRoute>
-            } />
-            <Route path="products" element={
-              <ProtectedRoute>
-                <Products />
-              </ProtectedRoute>
-            } />
-            <Route path="categories" element={
-              <ProtectedRoute>
-                <Categories />
-              </ProtectedRoute>
-            } />
-            <Route path="suppliers" element={
-              <ProtectedRoute>
-                <Suppliers />
-              </ProtectedRoute>
-            } />
-            <Route path="sales" element={
-              <ProtectedRoute>
-                <Sales />
-              </ProtectedRoute>
-            } />
-            <Route path="reports" element={
-              <ProtectedRoute>
-                <Reports />
-              </ProtectedRoute>
-            } />
-          </Route>
-          
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Router>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+          <NotificationContainer />
+        </Router>
+      </NotificationProvider>
     </AuthProvider>
   );
 }

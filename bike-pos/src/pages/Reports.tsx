@@ -1,39 +1,39 @@
 import 'bootstrap/dist/css/bootstrap.min.css';
 import {
-  ArcElement,
-  BarElement,
-  CategoryScale,
-  Chart as ChartJS,
-  Tooltip as ChartTooltip,
-  Legend,
-  LinearScale,
-  LineElement,
-  PointElement,
-  Title,
+    ArcElement,
+    BarElement,
+    CategoryScale,
+    Chart as ChartJS,
+    Tooltip as ChartTooltip,
+    Legend,
+    LinearScale,
+    LineElement,
+    PointElement,
+    Title,
 } from 'chart.js';
 import { useEffect, useState } from 'react';
 import {
-  Button,
-  Card,
-  Col,
-  Container,
-  Form,
-  Nav,
-  Row,
-  Spinner,
-  Table,
-  Toast, ToastContainer
+    Button,
+    Card,
+    Col,
+    Container,
+    Form,
+    Nav,
+    Row,
+    Spinner,
+    Table,
 } from 'react-bootstrap';
 import {
-  BarChart,
-  Download,
-  FileEarmarkText,
-  Printer
+    BarChart,
+    BoxSeam,
+    Download,
+    FileEarmarkText
 } from 'react-bootstrap-icons';
-import { Bar, Line, Pie } from 'react-chartjs-2';
+import { Bar, Line } from 'react-chartjs-2';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { useAuth } from '../contexts/AuthContext';
+import { useNotification } from '../contexts/NotificationContext';
 import { categoriesApi, reportsApi } from '../services/api';
 
 // Register ChartJS components
@@ -51,10 +51,9 @@ ChartJS.register(
 
 const Reports = () => {
   const { user, getCurrentShop } = useAuth();
+  const { showSuccess, showError } = useNotification();
   const [activeTab, setActiveTab] = useState('sales');
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   
   // Dates for filtering
   const [startDate, setStartDate] = useState<Date>(() => {
@@ -106,7 +105,7 @@ const Reports = () => {
       try {
         const currentShop = getCurrentShop();
         if (!currentShop) {
-          setError('No shop selected');
+          showError('No shop selected');
           return;
         }
         
@@ -130,12 +129,11 @@ const Reports = () => {
   const fetchSalesSummary = async () => {
     try {
       setLoading(true);
-      setError(null);
       
       const currentShop = getCurrentShop();
       if (!currentShop) {
         if (user?.role !== 'developer') {
-          setError('No shop selected. Please contact your administrator.');
+          showError('No shop selected. Please contact your administrator.');
         }
         setLoading(false);
         return;
@@ -155,7 +153,7 @@ const Reports = () => {
       
     } catch (err) {
       console.error('Error fetching sales summary:', err);
-      setError('Failed to load sales summary data');
+      showError('Failed to load sales summary data');
     } finally {
       setLoading(false);
     }
@@ -165,12 +163,11 @@ const Reports = () => {
   const fetchProfitDistribution = async () => {
     try {
       setLoading(true);
-      setError(null);
       
       const currentShop = getCurrentShop();
       if (!currentShop) {
         if (user?.role !== 'developer') {
-          setError('No shop selected. Please contact your administrator.');
+          showError('No shop selected. Please contact your administrator.');
         }
         setLoading(false);
         return;
@@ -189,7 +186,7 @@ const Reports = () => {
       
     } catch (err) {
       console.error('Error fetching profit distribution:', err);
-      setError('Failed to load profit distribution data');
+      showError('Failed to load profit distribution data');
     } finally {
       setLoading(false);
     }
@@ -199,12 +196,11 @@ const Reports = () => {
   const fetchProductSales = async () => {
     try {
       setLoading(true);
-      setError(null);
       
       const currentShop = getCurrentShop();
       if (!currentShop) {
         if (user?.role !== 'developer') {
-          setError('No shop selected. Please contact your administrator.');
+          showError('No shop selected. Please contact your administrator.');
         }
         setLoading(false);
         return;
@@ -224,12 +220,12 @@ const Reports = () => {
       } else {
         console.error('Expected array for product sales data but got:', response.data);
         setProductSales([]);
-        setError('Invalid data format received for product sales');
+        showError('Invalid data format received for product sales');
       }
       
     } catch (err) {
       console.error('Error fetching product sales:', err);
-      setError('Failed to load product sales data');
+      showError('Failed to load product sales data');
       setProductSales([]); // Reset to empty array on error
     } finally {
       setLoading(false);
@@ -240,12 +236,11 @@ const Reports = () => {
   const fetchInventoryData = async () => {
     try {
       setLoading(true);
-      setError(null);
       
       const currentShop = getCurrentShop();
       if (!currentShop) {
         if (user?.role !== 'developer') {
-          setError('No shop selected. Please contact your administrator.');
+          showError('No shop selected. Please contact your administrator.');
         }
         setLoading(false);
         return;
@@ -267,7 +262,7 @@ const Reports = () => {
       
       // Improved handling of response data format
       if (!response.data) {
-        setError('No data received from server');
+        showError('No data received from server');
         setInventoryData({ inventory: [], summary: {} });
       } 
       // Handle both possible response formats (array or object with inventory property)
@@ -288,13 +283,13 @@ const Reports = () => {
         setInventoryData(response.data);
       }
       else {
-        setError('Invalid inventory data format received from server');
+        showError('Invalid inventory data format received from server');
         setInventoryData({ inventory: [], summary: {} });
       }
       
     } catch (err: any) {
       console.error('Error fetching inventory data:', err);
-      setError(`Failed to load inventory data: ${err.message || 'Unknown error'}`);
+      showError(`Failed to load inventory data: ${err.message || 'Unknown error'}`);
       setInventoryData({ inventory: [], summary: {} });
     } finally {
       setLoading(false);
@@ -451,12 +446,12 @@ const Reports = () => {
             </Nav.Item>
             <Nav.Item>
               <Nav.Link eventKey="profit" className="d-flex align-items-center px-3 me-2">
-                <Download className="me-2" /> Profit Distribution
+                <BarChart className="me-2" /> Profit Distribution
               </Nav.Link>
             </Nav.Item>
             <Nav.Item>
               <Nav.Link eventKey="inventory" className="d-flex align-items-center px-3">
-                <Download className="me-2" /> Inventory Status
+                <BoxSeam className="me-2" /> Inventory Status
               </Nav.Link>
             </Nav.Item>
           </Nav>
@@ -1124,41 +1119,6 @@ const Reports = () => {
         </Card.Body>
       </Card>
       
-      {/* Error and Success Messages */}
-      <ToastContainer position="bottom-end" className="p-3">
-        {error && (
-          <Toast 
-            onClose={() => setError(null)} 
-            show={!!error} 
-            delay={6000} 
-            autohide 
-            bg="danger"
-            className="shadow"
-          >
-            <Toast.Header closeButton>
-              <strong className="me-auto">Error</strong>
-            </Toast.Header>
-            <Toast.Body className="text-white">{error}</Toast.Body>
-          </Toast>
-        )}
-        
-        {successMessage && (
-          <Toast 
-            onClose={() => setSuccessMessage(null)} 
-            show={!!successMessage} 
-            delay={6000} 
-            autohide 
-            bg="success"
-            className="shadow"
-          >
-            <Toast.Header closeButton>
-              <strong className="me-auto">Success</strong>
-            </Toast.Header>
-            <Toast.Body className="text-white">{successMessage}</Toast.Body>
-          </Toast>
-        )}
-      </ToastContainer>
-
       {/* Add CSS for custom scrollbar */}
       <style>{`
         .custom-scrollbar::-webkit-scrollbar {

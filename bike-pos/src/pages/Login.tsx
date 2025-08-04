@@ -1,17 +1,18 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Alert,
-  Button,
-  Card,
-  Col,
-  Container,
-  Form,
-  Row,
-  Spinner
+    Alert,
+    Button,
+    Card,
+    Col,
+    Container,
+    Form,
+    Row,
+    Spinner
 } from 'react-bootstrap';
 import { CashStack } from 'react-bootstrap-icons';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotification } from '../contexts/NotificationContext';
 import '../styles/Login.css'; // We'll create this CSS file for additional styling
 
 const Login: React.FC = () => {
@@ -21,6 +22,7 @@ const Login: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   
   const { login, user, error } = useAuth();
+  const { showError } = useNotification();
   const navigate = useNavigate();
   
   // Redirect if already logged in
@@ -38,15 +40,15 @@ const Login: React.FC = () => {
   // Set error message from auth context
   useEffect(() => {
     if (error) {
-      setErrorMessage(error);
+      showError(error);
     }
-  }, [error]);
+  }, [error, showError]);
   
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!username.trim() || !password.trim()) {
-      setErrorMessage('Please enter both username and password');
+      showError('Please enter both username and password');
       return;
     }
     

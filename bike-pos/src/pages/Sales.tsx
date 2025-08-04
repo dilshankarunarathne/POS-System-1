@@ -1,25 +1,26 @@
 import React, { useEffect, useState } from 'react';
 import {
-  Badge,
-  Button,
-  Card,
-  Col,
-  Container,
-  Form,
-  InputGroup,
-  Modal,
-  Row,
-  Spinner,
-  Table
+    Badge,
+    Button,
+    Card,
+    Col,
+    Container,
+    Form,
+    InputGroup,
+    Modal,
+    Row,
+    Spinner,
+    Table
 } from 'react-bootstrap';
 import {
-  ArrowRepeat,
-  Bag,
-  Funnel,
-  Printer,
-  Search
+    ArrowRepeat,
+    Bag,
+    Funnel,
+    Printer,
+    Search
 } from 'react-bootstrap-icons';
 import { useAuth } from '../contexts/AuthContext'; // Add this import
+import { useNotification } from '../contexts/NotificationContext';
 import { salesApi } from '../services/api';
 
 // Define Sales types
@@ -93,6 +94,7 @@ interface ReceiptData {
 
 const Sales: React.FC = () => {
   const { user } = useAuth();
+  const { showSuccess, showError } = useNotification();
   const [sales, setSales] = useState<Sale[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -158,7 +160,7 @@ const Sales: React.FC = () => {
 
     } catch (err) {
       console.error('Error fetching sales:', err);
-      setError('Failed to load sales');
+      showError('Failed to load sales');
     } finally {
       setLoading(false);
     }

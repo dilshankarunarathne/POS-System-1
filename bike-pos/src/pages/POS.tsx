@@ -1,39 +1,40 @@
 import 'bootstrap/dist/css/bootstrap.min.css';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Badge,
-  Button,
-  Card,
-  Col,
-  Container,
-  Form,
-  InputGroup,
-  ListGroup,
-  Modal,
-  OverlayTrigger,
-  Pagination,
-  Row,
-  Spinner,
-  Tooltip
+    Badge,
+    Button,
+    Card,
+    Col,
+    Container,
+    Form,
+    InputGroup,
+    ListGroup,
+    Modal,
+    OverlayTrigger,
+    Pagination,
+    Row,
+    Spinner,
+    Tooltip
 } from 'react-bootstrap';
 import {
-  BsDash,
-  BsPlus,
-  BsSearch,
-  BsTrash,
-  BsX
+    BsDash,
+    BsPlus,
+    BsSearch,
+    BsTrash,
+    BsX
 } from 'react-icons/bs';
 import {
-  Column,
-  HeaderGroup,
-  TableInstance,
-  usePagination,
-  UsePaginationInstanceProps,
-  UsePaginationState,
-  useTable
+    Column,
+    HeaderGroup,
+    TableInstance,
+    usePagination,
+    UsePaginationInstanceProps,
+    UsePaginationState,
+    useTable
 } from 'react-table';
 import QRScanner from '../components/QRScanner';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotification } from '../contexts/NotificationContext';
 import { categoriesApi, productsApi, salesApi } from '../services/api'; // Add categoriesApi
 
 interface Product {
@@ -110,6 +111,7 @@ interface Category {
 
 const POS: React.FC = () => {
   const { user } = useAuth();
+  const { showSuccess, showError } = useNotification();
   const [products, setProducts] = useState<Product[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Product[]>([]);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -117,8 +119,6 @@ const POS: React.FC = () => {
   const [barcodeInput, setBarcodeInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [manualDiscount, setManualDiscount] = useState<number>(0);
 
   const [checkoutDialogOpen, setCheckoutDialogOpen] = useState(false);
@@ -160,6 +160,24 @@ const POS: React.FC = () => {
   // Add categories state
   const [categories, setCategories] = useState<Category[]>([]);
 
+  // Add refresh function
+  const refreshProducts = async () => {
+    try {
+      setLoadingProducts(true);
+      const response = await productsApi.getAll({
+        category: selectedCategory || undefined
+      });
+      const productsData = response.data?.products || [];
+      setProducts(productsData);
+      setFilteredProducts(productsData);
+    } catch (err) {
+      console.error('Error refreshing products:', err);
+      showError('Failed to refresh products');
+    } finally {
+      setLoadingProducts(false);
+    }
+  };
+
   useEffect(() => {
     const fetchProducts = async () => {
       try {
@@ -172,7 +190,7 @@ const POS: React.FC = () => {
         setFilteredProducts(productsData);
       } catch (err) {
         console.error('Error fetching products:', err);
-        setError('Failed to load products. Please try again.');
+        showError('Failed to load products. Please try again.');
         setProducts([]);
         setFilteredProducts([]);
       } finally {
@@ -190,7 +208,7 @@ const POS: React.FC = () => {
         setCategories(response.data || []);
       } catch (err) {
         console.error('Error fetching categories:', err);
-        setError('Failed to load categories');
+        showError('Failed to load categories');
       }
     };
 
@@ -426,18 +444,17 @@ const POS: React.FC = () => {
 
     try {
       setLoading(true);
-      setError(null);
 
       const response = await productsApi.getByBarcode(barcodeInput);
       const product = response.data;
 
       if (!product) {
-        setError('Product not found. Please try again.');
+        showError('Product not found. Please try again.');
         return;
       }
 
       if (product.stockQuantity <= 0) {
-        setError('Product is out of stock.');
+        showError('Product is out of stock.');
         return;
       }
 
@@ -446,7 +463,7 @@ const POS: React.FC = () => {
 
     } catch (err) {
       console.error('Error fetching product by barcode:', err);
-      setError('Product not found or an error occurred.');
+      showError('Product not found or an error occurred.');
     } finally {
       setLoading(false);
       if (barcodeInputRef.current) {
@@ -551,7 +568,7 @@ const POS: React.FC = () => {
         const currentItem = prevItems[existingItemIndex];
 
         if (currentItem.product && currentItem.quantity >= currentItem.product.stockQuantity) {
-          setError('Cannot add more of this product. Stock limit reached.');
+          showError('Cannot add more of this product. Stock limit reached.');
           return prevItems;
         }
 
@@ -589,7 +606,7 @@ const POS: React.FC = () => {
       }
 
       if (item.product && newQuantity > item.product.stockQuantity) {
-        setError('Cannot add more of this product. Stock limit reached.');
+        showError('Cannot add more of this product. Stock limit reached.');
         return prevItems;
       }
 
@@ -628,7 +645,7 @@ const POS: React.FC = () => {
 
   const handleCheckout = async () => {
     if (cartItems.length === 0) {
-      setError('Cart is empty. Please add items before checkout.');
+      showError('Cart is empty. Please add items before checkout.');
       return;
     }
 
@@ -871,7 +888,6 @@ const POS: React.FC = () => {
   const processSale = async () => {
     try {
       setProcessingSale(true);
-      setError(null);
 
       const saleItems = cartItems.map(item => {
         if (item.product) {
@@ -933,13 +949,16 @@ const POS: React.FC = () => {
         setCustomerPhone('');
         setPaymentMethod('cash');
 
-        setSuccessMessage('Sale completed successfully!');
+        showSuccess('Sale completed successfully!');
+
+        // Refresh products to update stock quantities
+        await refreshProducts();
 
         directPrintReceipt(receiptDataForPrint);
       }
     } catch (err: any) {
       console.error('Error processing sale:', err);
-      setError(`Failed to process sale: ${err?.response?.data?.message || err?.message || 'Unknown error'}`);
+      showError(`Failed to process sale: ${err?.response?.data?.message || err?.message || 'Unknown error'}`);
     } finally {
       setProcessingSale(false);
     }
@@ -949,19 +968,19 @@ const POS: React.FC = () => {
     e.preventDefault();
 
     if (!manualItemName.trim()) {
-      setError('Item name is required');
+      showError('Item name is required');
       return;
     }
 
     const price = parseFloat(manualItemPrice);
     if (isNaN(price) || price <= 0) {
-      setError('Please enter a valid price');
+      showError('Please enter a valid price');
       return;
     }
 
     const quantity = parseInt(manualItemQuantity, 10);
     if (isNaN(quantity) || quantity <= 0) {
-      setError('Please enter a valid quantity');
+      showError('Please enter a valid quantity');
       return;
     }
 
@@ -979,36 +998,12 @@ const POS: React.FC = () => {
     setManualItemName('');
     setManualItemPrice('');
     setManualItemQuantity('1');
-    setSuccessMessage('Manual item added to cart');
+    showSuccess('Manual item added to cart');
   };
 
   const handleCategoryChange = (categoryId: string) => {
     setSelectedCategory(categoryId);
     setSearchQuery('');
-  };
-
-  const ErrorAlert = () => {
-    return error ? (
-      <div className="alert alert-danger alert-dismissible fade show mt-2 shadow-sm" role="alert">
-        <div className="d-flex align-items-center">
-          <i className="bi bi-exclamation-triangle-fill me-2"></i>
-          <div>{error}</div>
-        </div>
-        <button type="button" className="btn-close" onClick={() => setError(null)}></button>
-      </div>
-    ) : null;
-  };
-
-  const SuccessAlert = () => {
-    return successMessage ? (
-      <div className="alert alert-success alert-dismissible fade show mt-2 shadow-sm" role="alert">
-        <div className="d-flex align-items-center">
-          <i className="bi bi-check-circle-fill me-2"></i>
-          <div>{successMessage}</div>
-        </div>
-        <button type="button" className="btn-close" onClick={() => setSuccessMessage(null)}></button>
-      </div>
-    ) : null;
   };
 
   const columns = useMemo<Column<Product>[]>(
@@ -1229,9 +1224,6 @@ const POS: React.FC = () => {
                           </OverlayTrigger>
                         </Col>
                       </Row>
-                      
-                      <ErrorAlert />
-                      <SuccessAlert />
                     </Card.Body>
                   </Card>
                   
@@ -1284,7 +1276,7 @@ const POS: React.FC = () => {
                                         if (product.stockQuantity > 0) {
                                           addToCart(product);
                                         } else {
-                                          setError('Product is out of stock.');
+                                          showError('Product is out of stock.');
                                         }
                                       }}
                                       style={{ cursor: product.stockQuantity > 0 ? 'pointer' : 'not-allowed' }}
@@ -1756,12 +1748,6 @@ const POS: React.FC = () => {
               <h5 className="mb-0">Rs. {cartTotal.toFixed(2)}</h5>
             </div>
           </div>
-          
-          {error && (
-            <div className="alert alert-danger mt-3">
-              {error}
-            </div>
-          )}
         </Modal.Body>
         <Modal.Footer>
           <Button 

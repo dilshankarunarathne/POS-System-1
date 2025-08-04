@@ -55,7 +55,8 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
       if (isScannerInput) {
         // Only prevent default for scanner input - be more selective
         if (event.key !== 'F3' && event.key !== 'f' && 
-            !(event.ctrlKey && event.key === 'f')) {
+            !(event.ctrlKey && event.key === 'f') &&
+            !(event.ctrlKey && event.key === 'F')) {
           event.preventDefault();
           event.stopPropagation();
         }

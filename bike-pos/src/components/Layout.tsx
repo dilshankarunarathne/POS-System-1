@@ -30,13 +30,13 @@ const getMenuItems = (role: string) => {
           name: 'Dashboard',
           path: '/dashboard', 
           icon: <Speedometer2 size={18} />,
-          roles: ['admin', 'manager', 'cashier']
+          roles: ['admin', 'cashier', 'manager'] // Added manager
         },
         {
           name: 'POS',
           path: '/pos',
           icon: <Cart3 size={18} />,
-          roles: ['admin', 'manager', 'cashier']
+          roles: ['admin', 'cashier', 'manager'] // Added manager
         },
       ]
     },
@@ -47,7 +47,7 @@ const getMenuItems = (role: string) => {
           name: 'Products',
           path: '/products',
           icon: <BoxSeam size={18} />,
-          roles: ['admin', 'manager']
+          roles: ['admin', 'manager'] // Only admin and manager
         },
       ]
     },
@@ -58,13 +58,13 @@ const getMenuItems = (role: string) => {
           name: 'Sales History',
           path: '/sales',
           icon: <Receipt size={18} />,
-          roles: ['admin', 'manager']
+          roles: ['admin', 'cashier', 'manager'] // Added manager
         },
         {
           name: 'Reports',
           path: '/reports',
           icon: <ClipboardData size={18} />,
-          roles: ['admin', 'manager']
+          roles: ['admin', 'manager'] // Only admin and manager
         }
       ]
     }

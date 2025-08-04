@@ -4,7 +4,14 @@ const Supplier = require('../models/Supplier');
 // Get all suppliers
 const getAllSuppliers = async (req, res) => {
   try {
-    const suppliers = await Supplier.find();
+    const filter = {};
+    
+    // Add shop filter for non-developers
+    if (req.user.role !== 'developer') {
+      filter.shopId = req.user.shopId;
+    }
+    
+    const suppliers = await Supplier.find(filter);
     res.status(200).json(suppliers);
   } catch (error) {
     console.error('Error fetching suppliers:', error);
@@ -15,7 +22,14 @@ const getAllSuppliers = async (req, res) => {
 // Get supplier by ID
 const getSupplierById = async (req, res) => {
   try {
-    const supplier = await Supplier.findById(req.params.id);
+    const filter = { _id: req.params.id };
+    
+    // Add shop filter for non-developers
+    if (req.user.role !== 'developer') {
+      filter.shopId = req.user.shopId;
+    }
+    
+    const supplier = await Supplier.findOne(filter);
     if (!supplier) {
       return res.status(404).json({ message: 'Supplier not found' });
     }
@@ -29,7 +43,12 @@ const getSupplierById = async (req, res) => {
 // Create supplier
 const createSupplier = async (req, res) => {
   try {
-    const supplier = await Supplier.create(req.body);
+    const supplierData = {
+      ...req.body,
+      shopId: req.user.shopId // Add shop ID to new suppliers
+    };
+    
+    const supplier = await Supplier.create(supplierData);
     res.status(201).json(supplier);
   } catch (error) {
     console.error('Error creating supplier:', error);
@@ -45,8 +64,15 @@ const updateSupplier = async (req, res) => {
       return res.status(400).json({ message: 'Invalid supplier ID format' });
     }
 
-    const supplier = await Supplier.findByIdAndUpdate(
-      req.params.id,
+    const filter = { _id: req.params.id };
+    
+    // Add shop filter for non-developers
+    if (req.user.role !== 'developer') {
+      filter.shopId = req.user.shopId;
+    }
+
+    const supplier = await Supplier.findOneAndUpdate(
+      filter,
       req.body,
       { new: true, runValidators: true }
     );
@@ -74,14 +100,21 @@ const deleteSupplier = async (req, res) => {
       return res.status(400).json({ message: 'Invalid supplier ID format' });
     }
 
-    const supplier = await Supplier.findById(req.params.id);
+    const filter = { _id: req.params.id };
+    
+    // Add shop filter for non-developers
+    if (req.user.role !== 'developer') {
+      filter.shopId = req.user.shopId;
+    }
+
+    const supplier = await Supplier.findOne(filter);
     
     if (!supplier) {
       return res.status(404).json({ message: 'Supplier not found' });
     }
     
     // Delete the supplier
-    await Supplier.findByIdAndDelete(req.params.id);
+    await Supplier.findOneAndDelete(filter);
     
     res.status(200).json({ message: 'Supplier deleted successfully', id: req.params.id });
   } catch (error) {

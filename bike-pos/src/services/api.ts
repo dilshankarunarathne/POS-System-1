@@ -254,8 +254,26 @@ export const salesApi = {
       });
   },
   
-  updateStatus: (id: number | string, statusData: { status: string; reason?: string }) =>
-    api.patch(`/sales/${id}/status`, statusData),
+  updateStatus: (id: number | string, statusData: { status: string; reason?: string }) => {
+    // Enhanced validation and error handling
+    if (!id) {
+      return Promise.reject(new Error('Sale ID is required'));
+    }
+    
+    return api.patch(`/sales/${id}/status`, statusData)
+      .catch(error => {
+        console.error('Error updating sale status:', error);
+        if (error.response) {
+          if (error.response.status === 404) {
+            throw new Error('Sale not found');
+          } else if (error.response.status === 400) {
+            throw new Error('Invalid status update data');
+          }
+          throw new Error(`Server error (${error.response.status}): ${error.response.data?.message || 'Unknown error'}`);
+        }
+        throw new Error(`Failed to update sale status: ${error.message}`);
+      });
+  },
 };
 
 // Reports API

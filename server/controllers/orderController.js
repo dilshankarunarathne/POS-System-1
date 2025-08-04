@@ -4,7 +4,14 @@ const Product = require('../models/Product');
 // Get all orders
 const getAllOrders = async (req, res) => {
   try {
-    const orders = await Order.find()
+    const filter = {};
+    
+    // Add shop filter for non-developers
+    if (req.user.role !== 'developer') {
+      filter.shopId = req.user.shopId;
+    }
+    
+    const orders = await Order.find(filter)
       .populate('supplier', 'name')
       .populate('items.product', 'name sku')
       .populate('user', 'name')
@@ -20,7 +27,14 @@ const getAllOrders = async (req, res) => {
 // Get order by ID
 const getOrderById = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id)
+    const filter = { _id: req.params.id };
+    
+    // Add shop filter for non-developers
+    if (req.user.role !== 'developer') {
+      filter.shopId = req.user.shopId;
+    }
+    
+    const order = await Order.findOne(filter)
       .populate('supplier', 'name email phone address')
       .populate('items.product', 'name sku price')
       .populate('user', 'name');
@@ -61,7 +75,8 @@ const createOrder = async (req, res) => {
       status: status || 'pending',
       notes,
       expectedDeliveryDate,
-      user: req.user._id
+      user: req.user._id,
+      shopId: req.user.shopId // Add shop ID
     });
     
     // Return created order

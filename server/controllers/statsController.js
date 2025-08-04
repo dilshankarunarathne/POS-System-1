@@ -26,10 +26,10 @@ exports.getDeveloperStats = async (req, res) => {
       cashier: await User.countDocuments({ role: 'cashier' })
     };
 
-    // Get total sales for basic stats
-    const totalSales = await Sale.countDocuments();
+    // Get total sales for basic stats - only completed sales for revenue
+    const totalSales = await Sale.countDocuments({ status: 'completed' });
     const totalRevenue = await Sale.aggregate([
-      { $match: { status: { $ne: 'cancelled' } } },
+      { $match: { status: 'completed' } }, // Only completed sales for revenue calculation
       { $group: { _id: null, total: { $sum: "$total" } } }
     ]);
 

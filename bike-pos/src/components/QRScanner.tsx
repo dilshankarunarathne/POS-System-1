@@ -53,15 +53,16 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
       const isScannerInput = currentTime - lastKeyTime <= SCANNER_DELAY || isScanning;
       
       if (isScannerInput) {
-        // Only prevent default for scanner input
-        event.preventDefault();
-        event.stopPropagation();
+        // Only prevent default for scanner input - be more selective
+        if (event.key !== 'F3' && event.key !== 'f' && 
+            !(event.ctrlKey && event.key === 'f')) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
         isScanning = true;
         
         // Handle scanner input...
         if (event.key === 'Enter') {
-          event.preventDefault();
-          
           if (barcodeBuffer.length >= MIN_BARCODE_LENGTH) {
             console.log('External scanner detected barcode:', barcodeBuffer);
             
@@ -109,11 +110,12 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
         } 
         // Handle backspace
         else if (event.key === 'Backspace') {
-          event.preventDefault();
           barcodeBuffer = barcodeBuffer.slice(0, -1);
         }
-        // Handle normal characters
-        else if (event.key.length === 1) {
+        // Handle normal characters - but don't block F3 and Ctrl+F
+        else if (event.key.length === 1 && 
+                 event.key !== 'f' && 
+                 !event.ctrlKey) {
           barcodeBuffer += event.key;
           
           if (barcodeBuffer.length > 50) {
@@ -143,7 +145,9 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
         }
       }
       // If not scanner input, but potential start of scan
-      else if (event.key.length === 1 && /[a-zA-Z0-9{"]/.test(event.key) && !event.ctrlKey && !event.altKey && !event.metaKey) {
+      else if (event.key.length === 1 && /[a-zA-Z0-9{"]/.test(event.key) && 
+               !event.ctrlKey && !event.altKey && !event.metaKey &&
+               event.key !== 'f') {
         // Don't prevent default here, let the key go through if it's not scanner input
         barcodeBuffer = event.key;
         isScanning = true;
@@ -152,11 +156,11 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
       lastKeyTime = currentTime;
     };
 
-    // Add event listener with high priority
-    document.addEventListener('keydown', handleKeyDown, true);
+    // Add event listener with lower priority to not interfere with shortcuts
+    document.addEventListener('keydown', handleKeyDown, false);
     
     return () => {
-      document.removeEventListener('keydown', handleKeyDown, true);
+      document.removeEventListener('keydown', handleKeyDown, false);
     };
   }, [onScanError, onScanSuccess]);
   
@@ -409,13 +413,13 @@ const QRScanner: React.FC<QRScannerProps> = ({ onScanSuccess, onScanError, autoS
     }
   };
   
-  // Start scanning with a key to force recreation during remounts
+  // Always start scanning when component mounts
   useEffect(() => {
     isMounted.current = true;
     
     // Ensure all camera resources are cleaned up first
     cleanupAllCameras().then(() => {
-      if (autoStart && isMounted.current) {
+      if (isMounted.current) {
         // Add a delay before starting to ensure DOM and resources are ready
         setTimeout(() => {
           if (isMounted.current) {

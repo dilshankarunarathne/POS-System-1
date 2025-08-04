@@ -219,11 +219,6 @@ const POS: React.FC = () => {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
-      // Skip if QR scanner is handling rapid input
-      if (event.timeStamp - lastKeyTime < 50 && qrScannerActive) {
-        return;
-      }
-
       // Check if we're typing in an input or processing a sale
       const target = event.target as HTMLElement;
       const isInput = target.tagName === 'INPUT' || 
@@ -240,10 +235,21 @@ const POS: React.FC = () => {
         return;
       }
 
+      // Don't interfere with rapid scanner input - detect if this might be scanner input
+      const now = event.timeStamp;
+      const timeSinceLastKey = now - lastKeyTime;
+      const isRapidInput = timeSinceLastKey < 50; // Less than 50ms between keys suggests scanner
+      
+      // If it's rapid input and alphanumeric, let the QR scanner handle it
+      if (isRapidInput && /^[a-zA-Z0-9{"}]/.test(event.key)) {
+        lastKeyTime = now;
+        return; // Don't handle this key, let QR scanner process it
+      }
+
       switch (event.key) {
         case 'F3':
           event.preventDefault();
-          if (!isManualMode && !qrScannerActive) {
+          if (!isManualMode) {
             focusSearchInput();
           }
           break;
@@ -251,7 +257,7 @@ const POS: React.FC = () => {
         case 'f':
           if (event.ctrlKey) {
             event.preventDefault();
-            if (!isManualMode && !qrScannerActive) {
+            if (!isManualMode) {
               focusSearchInput();
             }
           }
@@ -283,34 +289,35 @@ const POS: React.FC = () => {
           setIsManualMode(prev => !prev);
           break;
 
-        case 'F4':
-          event.preventDefault();
-          setQrScannerActive(prev => !prev);
-          break;
-
         case 'F1':
           event.preventDefault();
           setShowHelpModal(true);
           break;
 
         default:
-          // Only trigger search auto-focus for alphanumeric keys
-          // when not in manual mode or QR scanning mode
-          if (!isManualMode && !qrScannerActive && !event.ctrlKey && 
-              /^[a-zA-Z0-9]$/.test(event.key) && !isInput) {
-            focusSearchInput();
+          // Only trigger search auto-focus for single character keys
+          // when not in manual mode and it's NOT rapid scanner input
+          if (!isManualMode && !event.ctrlKey && 
+              /^[a-zA-Z0-9]$/.test(event.key) && !isInput && !isRapidInput) {
+            // Add a small delay to ensure this isn't part of a scanner sequence
+            setTimeout(() => {
+              const timeSinceThisKey = Date.now() - now;
+              if (timeSinceThisKey < 100) { // If less than 100ms has passed, likely single keypress
+                focusSearchInput();
+              }
+            }, 100);
           }
           break;
       }
 
-      lastKeyTime = event.timeStamp;
+      lastKeyTime = now;
     };
 
     let lastKeyTime = 0;
-    window.addEventListener('keydown', handleKeyDown, true); // Use capture phase
+    window.addEventListener('keydown', handleKeyDown, false); // Use bubbling phase instead of capture
 
     return () => {
-      window.removeEventListener('keydown', handleKeyDown, true);
+      window.removeEventListener('keydown', handleKeyDown, false);
     };
   }, [
     isTypingInInput, 
@@ -318,8 +325,7 @@ const POS: React.FC = () => {
     showHelpModal, 
     processingSale, 
     cartItems.length, 
-    isManualMode, 
-    qrScannerActive
+    isManualMode
   ]);
 
   useEffect(() => {
@@ -399,7 +405,7 @@ const POS: React.FC = () => {
   }, [checkoutDialogOpen, processingSale]);
 
   const focusSearchInput = () => {
-    if (!isManualMode && !qrScannerActive && searchInputRef.current) { // Add qrScannerActive check
+    if (!isManualMode && searchInputRef.current) {
       searchInputRef.current.focus();
       searchInputRef.current.select();
     }
@@ -520,6 +526,12 @@ const POS: React.FC = () => {
       setScanningProduct(product);
       addToCart(product);
       setScanningMessage(`Added ${product.name} to cart!`);
+
+      // Clear any success message after 3 seconds
+      setTimeout(() => {
+        setScanningMessage(null);
+        setScanningProduct(null);
+      }, 3000);
 
     } catch (err) {
       console.error('Error processing QR code:', err);
@@ -1094,43 +1106,20 @@ const POS: React.FC = () => {
               <h4 className="fw-bold mb-0">Point of sale</h4>
               <div className="d-none d-lg-block">
                 <small className="text-muted">
-                  <kbd>F1</kbd> Help • <kbd>Ctrl+F</kbd> Search • <kbd>F9</kbd> Checkout • <kbd>F2</kbd> Manual Mode • <kbd>Ctrl+Delete</kbd> Clear Cart  • <kbd>F4</kbd> QR Scanner
+                  <kbd>F1</kbd> Help • <kbd>Ctrl+F</kbd> Search • <kbd>F9</kbd> Checkout • <kbd>F2</kbd> Manual Mode • <kbd>Ctrl+Delete</kbd> Clear Cart
                 </small>
               </div>
             </div>
             <div className="d-flex align-items-center gap-2">
-              <OverlayTrigger
-                placement="bottom"
-                overlay={<Tooltip>Press F4 to toggle scanner</Tooltip>}
+              <Badge
+                bg="success"
+                className="d-flex align-items-center gap-1"
+                style={{ fontSize: '0.8rem', padding: '0.5rem 0.75rem' }}
               >
-                <Badge
-                  bg={qrScannerActive ? "success" : "secondary"}
-                  className="d-flex align-items-center gap-1"
-                  style={{ fontSize: '0.8rem', padding: '0.5rem 0.75rem' }}
-                >
-                  <i className={`bi ${qrScannerActive ? "bi-qr-code-scan" : "bi-qr-code"}`}></i>
-                  <span className="d-none d-sm-inline">QR Scanner</span>
-                  <span className="d-sm-none">QR</span>
-                  <span className="d-none d-md-inline">{qrScannerActive ? "ON" : "OFF"}</span>
-                </Badge>
-              </OverlayTrigger>
-
-              <OverlayTrigger
-                placement="bottom"
-                overlay={<Tooltip>Toggle QR Scanner (F4)</Tooltip>}
-              >
-                <Button
-                  variant={qrScannerActive ? "outline-danger" : "outline-success"}
-                  size="sm"
-                  onClick={() => setQrScannerActive(prev => !prev)}
-                  className="rounded-pill"
-                >
-                  <i className={`bi ${qrScannerActive ? "bi-stop-fill" : "bi-play-fill"}`}></i>
-                  <span className="d-none d-sm-inline ms-1">
-                    {qrScannerActive ? "Stop" : "Start"}
-                  </span>
-                </Button>
-              </OverlayTrigger>
+                <i className="bi bi-qr-code-scan"></i>
+                <span className="d-none d-sm-inline">QR Scanner Active</span>
+                <span className="d-sm-none">QR ON</span>
+              </Badge>
             </div>
           </div>
         </Col>
@@ -1139,16 +1128,14 @@ const POS: React.FC = () => {
       <Row className="flex-grow-1 g-0">
         <Col xs={12} className="d-flex flex-column bg-body-tertiary">
           <div style={{ display: 'none' }}>
-            {qrScannerActive && (
-              <QRScanner
-                onScanSuccess={handleQRScanSuccess}
-                onScanError={(error) => {
-                  console.warn('QR Scanner error:', error);
-                  setScanningMessage(`Scanner error: ${error}`);
-                }}
-                autoStart={true}
-              />
-            )}
+            <QRScanner
+              onScanSuccess={handleQRScanSuccess}
+              onScanError={(error) => {
+                console.warn('QR Scanner error:', error);
+                setScanningMessage(`Scanner error: ${error}`);
+              }}
+              autoStart={true}
+            />
           </div>
           
           {scanningMessage && (
@@ -1862,8 +1849,8 @@ const POS: React.FC = () => {
               </h6>
               <div className="mb-3">
                 <div className="d-flex justify-content-between align-items-center mb-2">
-                  <span>Toggle QR Scanner</span>
-                  <kbd>F4</kbd>
+                  <span>QR Scanner</span>
+                  <span className="badge bg-success">Always Active</span>
                 </div>
                 <div className="d-flex justify-content-between align-items-center">
                   <span>Show Help</span>
@@ -1880,7 +1867,7 @@ const POS: React.FC = () => {
                   <li className="mb-1">• Shortcuts are disabled when typing in fields</li>
                   <li className="mb-1">• Shortcuts are disabled during checkout</li>
                   <li className="mb-1">• Auto-search only works in Products mode</li>
-                  <li>• Press Esc to cancel most actions</li>
+                  <li>• QR scanner works automatically in background</li>
                 </ul>
               </div>
             </div>

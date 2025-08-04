@@ -80,7 +80,7 @@ const Dashboard: React.FC = () => {
         
         const currentShop = getCurrentShop();
         if (!currentShop) {
-          setError('No shop selected');
+          setError('No shop assigned to your account');
           return;
         }
         
@@ -97,19 +97,24 @@ const Dashboard: React.FC = () => {
         const startDateStr = startDate.toISOString().split('T')[0];
         const endDateStr = endDate.toISOString().split('T')[0];
         
-        // Fetch sales summary data
-        const salesResponse = await reportsApi.getSalesSummary({
+        // Prepare API parameters
+        const apiParams = {
           startDate: startDateStr,
           endDate: endDateStr,
-          shopId: currentShop._id
-        });
+          ...(user?.role === 'developer' && { shopId: currentShop._id })
+        };
+        
+        const todayParams = {
+          startDate: todayStr,
+          endDate: todayStr,
+          ...(user?.role === 'developer' && { shopId: currentShop._id })
+        };
+        
+        // Fetch sales summary data
+        const salesResponse = await reportsApi.getSalesSummary(apiParams);
         
         // Fetch daily sales data
-        const dailyResponse = await reportsApi.getDailySales({
-          startDate: startDateStr,
-          endDate: endDateStr,
-          shopId: currentShop._id
-        });
+        const dailyResponse = await reportsApi.getDailySales(apiParams);
         
         if (Array.isArray(dailyResponse.data)) {
           setDailySales(dailyResponse.data);
@@ -119,13 +124,9 @@ const Dashboard: React.FC = () => {
         }
         
         // Fetch today's sales data
-        const todayResponse = await reportsApi.getDailySales({
-          startDate: todayStr,
-          endDate: todayStr,
-          shopId: currentShop._id
-        });
+        const todayResponse = await reportsApi.getDailySales(todayParams);
         
-        // Process today's sales data
+        // Process today's sales data - only completed sales count toward revenue
         if (Array.isArray(todayResponse.data) && todayResponse.data.length > 0) {
           const todayData = todayResponse.data[0];
           setTodaySales({
@@ -157,10 +158,12 @@ const Dashboard: React.FC = () => {
         });
         
         // Fetch low stock products
-        const lowStockResponse = await productsApi.getAll({ 
+        const lowStockParams = { 
           limit: 100,
-          shopId: currentShop._id
-        });
+          ...(user?.role === 'developer' && { shopId: currentShop._id })
+        };
+        
+        const lowStockResponse = await productsApi.getAll(lowStockParams);
         
         // Filter products with low stock
         const lowStockData = lowStockResponse.data?.products?.filter(
@@ -186,9 +189,8 @@ const Dashboard: React.FC = () => {
         
         // Fetch top selling products
         const topProductsResponse = await reportsApi.getProductSalesReport({
-          startDate: startDateStr,
-          endDate: endDateStr,
-          shopId: currentShop._id
+          ...apiParams,
+          limit: 5
         });
         
         const topProductsData = topProductsResponse.data?.products || [];
@@ -225,7 +227,7 @@ const Dashboard: React.FC = () => {
     };
     
     fetchDashboardData();
-  }, [getCurrentShop]);
+  }, [getCurrentShop, user?.role]);
   
   // Prepare data for sales chart
   const salesChartData = {

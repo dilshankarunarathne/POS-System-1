@@ -72,6 +72,7 @@ const Products: React.FC = () => {
   // State for dialogs
   const [productFormOpen, setProductFormOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(null);
   const [printDialogOpen, setPrintDialogOpen] = useState(false);
   const [selectedProductIds, setSelectedProductIds] = useState<number[]>([]);
@@ -274,13 +275,27 @@ const Products: React.FC = () => {
     setSelectedProduct(product);
     setDeleteDialogOpen(true);
   };
-  
+
+  // Open bulk delete confirmation dialog
+  const handleOpenBulkDeleteDialog = () => {
+    if (selectedProductIds.length === 0) {
+      setError('Please select at least one product');
+      return;
+    }
+    setBulkDeleteDialogOpen(true);
+  };
+
   // Close delete confirmation dialog
   const handleCloseDeleteDialog = () => {
     setDeleteDialogOpen(false);
     setSelectedProduct(null);
   };
-  
+
+  // Close bulk delete confirmation dialog
+  const handleCloseBulkDeleteDialog = () => {
+    setBulkDeleteDialogOpen(false);
+  };
+
   // Delete product
   const handleDeleteProduct = async () => {
     if (!selectedProduct) return;
@@ -296,7 +311,26 @@ const Products: React.FC = () => {
       setError('Failed to delete product');
     }
   };
-  
+
+  // Bulk delete products
+  const handleBulkDeleteProducts = async () => {
+    if (selectedProductIds.length === 0) return;
+    
+    try {
+      // Delete products one by one
+      const deletePromises = selectedProductIds.map(id => productsApi.delete(id));
+      await Promise.all(deletePromises);
+      
+      setSuccessMessage(`${selectedProductIds.length} products deleted successfully`);
+      setSelectedProductIds([]);
+      handleCloseBulkDeleteDialog();
+      fetchProducts();
+    } catch (err) {
+      console.error('Error deleting products:', err);
+      setError('Failed to delete selected products');
+    }
+  };
+
   // Toggle product selection for printing labels
   const toggleProductSelection = (productId: number) => {
     setSelectedProductIds(prev => {
@@ -307,7 +341,23 @@ const Products: React.FC = () => {
       }
     });
   };
-  
+
+  // Select all products on current page
+  const toggleSelectAll = () => {
+    if (selectedProductIds.length === products.length) {
+      // If all are selected, deselect all
+      setSelectedProductIds([]);
+    } else {
+      // Select all products on current page
+      const allIds = products.map(product => product.id);
+      setSelectedProductIds(allIds);
+    }
+  };
+
+  // Check if all products are selected
+  const isAllSelected = products.length > 0 && selectedProductIds.length === products.length;
+  const isIndeterminate = selectedProductIds.length > 0 && selectedProductIds.length < products.length;
+
   // Open print labels dialog
   const handleOpenPrintDialog = () => {
     if (selectedProductIds.length === 0) {
@@ -894,9 +944,15 @@ const Products: React.FC = () => {
           </Button>
           
           {selectedProductIds.length > 0 && (
-            <Button variant="outline-primary" onClick={handleOpenPrintDialog}>
-              <>{FaPrint({ className: "me-1" })}</> Print Labels ({selectedProductIds.length})
-            </Button>
+            <>
+              <Button variant="outline-primary" onClick={handleOpenPrintDialog}>
+                <>{FaPrint({ className: "me-1" })}</> Print Labels ({selectedProductIds.length})
+              </Button>
+              
+              <Button variant="outline-danger" onClick={handleOpenBulkDeleteDialog}>
+                <>{FaTrash({ className: "me-1" })}</> Delete Selected ({selectedProductIds.length})
+              </Button>
+            </>
           )}
         </Col>
       </Row>
@@ -946,7 +1002,16 @@ const Products: React.FC = () => {
             <Table hover className="mb-0">
               <thead className="sticky-top bg-white" style={{ zIndex: 10 }}>
                 <tr>
-                  <th style={{ width: '80px' }}></th>
+                  <th style={{ width: '50px' }}>
+                    <Form.Check
+                      type="checkbox"
+                      checked={isAllSelected}
+                      ref={(input: HTMLInputElement | null) => {
+                        if (input) input.indeterminate = isIndeterminate;
+                      }}
+                      onChange={toggleSelectAll}
+                    />
+                  </th>
                   <th>Name</th>                  
                   <th>Description</th>
                   <th>Category</th>
@@ -977,17 +1042,14 @@ const Products: React.FC = () => {
                     return (
                       <tr 
                         key={product.id}
-                        onClick={() => toggleProductSelection(product.id)}
                         className={isSelected ? "table-primary" : ""}
-                        style={{ cursor: 'pointer' }}
                       >
                         <td>
-                          <Badge 
-                            bg={isSelected ? "primary" : "light"} 
-                            text={isSelected ? "white" : "dark"}
-                          >
-                            {isSelected ? "Selected" : "Select"}
-                          </Badge>
+                          <Form.Check
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleProductSelection(product.id)}
+                          />
                         </td>
                         
                         <td>{product.name}</td>                        
@@ -1007,10 +1069,7 @@ const Products: React.FC = () => {
                           <Button 
                             variant="link" 
                             className="p-1 me-1"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenProductForm(product);
-                            }}
+                            onClick={() => handleOpenProductForm(product)}
                           >
                             <>{FaPencilAlt({})}</>
                           </Button>
@@ -1018,10 +1077,7 @@ const Products: React.FC = () => {
                           <Button 
                             variant="link" 
                             className="p-1 text-danger"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleOpenDeleteDialog(product);
-                            }}
+                            onClick={() => handleOpenDeleteDialog(product)}
                           >
                             <>{FaTrash({})}</>
                           </Button>
@@ -1129,6 +1185,29 @@ const Products: React.FC = () => {
         </Modal.Footer>
       </Modal>
       
+      {/* Bulk Delete Confirmation Modal */}
+      <Modal show={bulkDeleteDialogOpen} onHide={handleCloseBulkDeleteDialog}>
+        <Modal.Header closeButton>
+          <Modal.Title>Delete Selected Products</Modal.Title>
+        </Modal.Header>
+        
+        <Modal.Body>
+          <p>
+            Are you sure you want to delete <strong>{selectedProductIds.length}</strong> selected products?
+          </p>
+          <p className="text-danger">This action cannot be undone.</p>
+        </Modal.Body>
+        
+        <Modal.Footer>
+          <Button variant="secondary" onClick={handleCloseBulkDeleteDialog}>
+            Cancel
+          </Button>
+          <Button variant="danger" onClick={handleBulkDeleteProducts}>
+            Delete {selectedProductIds.length} Products
+          </Button>
+        </Modal.Footer>
+      </Modal>
+
       {/* Delete Confirmation Modal */}
       <Modal show={deleteDialogOpen} onHide={handleCloseDeleteDialog}>
         <Modal.Header closeButton>

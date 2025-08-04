@@ -308,21 +308,21 @@ const getSaleById = async (req, res) => {
   try {
     const saleId = req.params.id;
     
-    // Check if ID exists
-    if (!saleId) {
-      return res.status(400).json({ message: 'Sale ID is required' });
-    }
-    
-    // Check if ID is valid
-    if (!mongoose.Types.ObjectId.isValid(saleId)) {
+    if (!saleId || !mongoose.Types.ObjectId.isValid(saleId)) {
       return res.status(400).json({ message: 'Invalid sale ID format' });
     }
     
-    // Use a better populate method to get all product fields we need
-    const sale = await Sale.findById(saleId)
+    const filter = { _id: saleId };
+    
+    // Add shop filter for non-developers
+    if (req.user.role !== 'developer') {
+      filter.shopId = req.user.shopId;
+    }
+    
+    const sale = await Sale.findOne(filter)
       .populate({
         path: 'items.product',
-        select: 'name price sku barcode _id'  // Explicitly include _id field
+        select: 'name price sku barcode _id'
       })
       .populate('customer')
       .populate('user', 'name username');
@@ -422,7 +422,7 @@ const getSaleById = async (req, res) => {
   }
 };
 
-// Update sale status (for returns or cancellations)
+// Update sale status (simplified return handling)
 const updateSaleStatus = async (req, res) => {
   const session = await mongoose.startSession();
   session.startTransaction();
@@ -437,7 +437,14 @@ const updateSaleStatus = async (req, res) => {
       return res.status(400).json({ message: 'Status is required' });
     }
     
-    const sale = await Sale.findById(id).session(session);
+    const filter = { _id: id };
+    
+    // Add shop filter for non-developers
+    if (req.user.role !== 'developer') {
+      filter.shopId = req.user.shopId;
+    }
+    
+    const sale = await Sale.findOne(filter).populate('items.product').session(session);
     
     if (!sale) {
       await session.abortTransaction();
@@ -447,7 +454,22 @@ const updateSaleStatus = async (req, res) => {
     
     const oldStatus = sale.status || 'completed';
     
-    // Update sale with new status
+    // Handle full return
+    if (status === 'returned' && oldStatus !== 'returned') {
+      // Restore inventory for all items
+      for (const item of sale.items) {
+        if (!item.isManual && item.product) {
+          const product = await Product.findById(item.product._id || item.product).session(session);
+          if (product) {
+            product.quantity += item.quantity;
+            await product.save({ session });
+          }
+        }
+      }
+      sale.returnedAmount = sale.total;
+    }
+    
+    // Update sale status
     sale.status = status;
     
     // Add status history
@@ -463,18 +485,6 @@ const updateSaleStatus = async (req, res) => {
     });
     
     await sale.save({ session });
-    
-    // If returning items, adjust product inventory
-    if ((oldStatus !== 'returned' && status === 'returned')) {
-      for (const item of sale.items) {
-        const product = await Product.findById(item.product).session(session);
-        if (product) {
-          // Add the returned quantity back to inventory
-          product.quantity += item.quantity;
-          await product.save({ session });
-        }
-      }
-    }
     
     await session.commitTransaction();
     session.endSession();
@@ -506,6 +516,9 @@ const getSalesReport = async (req, res) => {
         $lte: new Date(endDate)
       };
     }
+    
+    // Only include completed sales for revenue calculation
+    query.status = 'completed';
     
     const sales = await Sale.find(query)
       .populate('customer', 'name')

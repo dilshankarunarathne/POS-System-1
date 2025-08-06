@@ -931,7 +931,8 @@ const Products: React.FC = () => {
                   <th>Name</th>                  
                   <th>Description</th>
                   <th>Category</th>
-                  <th>Price</th>
+                  <th>Sale price</th>
+                  <th>Cost price</th>
                   <th>Stock</th>
                   <th>Actions</th>
                 </tr>
@@ -972,7 +973,8 @@ const Products: React.FC = () => {
                         <td>{product.description || 'No description'}</td>
                         <td>{product.category?.name || ''}</td>
                         <td>Rs. {(product.price || 0).toFixed(2)}</td>
-                        
+                        <td>Rs. {(product.costPrice || 0).toFixed(2)}</td>
+
                         <td>
                           <Badge 
                             bg={isLowStock ? "danger" : "success"}

@@ -2,11 +2,11 @@ const Sale = require('../models/Sale');
 const Product = require('../models/Product');
 const PDFDocument = require('pdfkit');
 const QRCode = require('qrcode');
+const User = require('../models/User');
 // Remove the escpos requirement since it's not installed
 // const escpos = require('escpos');
 
 // Generate product labels with proper QR code implementation
-
 
 const generateProductLabels = async (req, res) => {
   try {
@@ -15,6 +15,14 @@ const generateProductLabels = async (req, res) => {
     if (!productIds || !Array.isArray(productIds) || productIds.length === 0) {
       return res.status(400).json({ message: 'Product IDs are required' });
     }
+    
+    // Get user's shop information
+    const user = await User.findById(req.user.id).populate('shopId');
+    const shop = user.shopId;
+    
+    // Use shop data or fallback to default values
+    const shopName = shop?.name || "POS System Shop";
+    const phoneNumber = shop?.phone || "123-456-7890";
     
     // Find products by IDs
     const products = await Product.find({ _id: { $in: productIds } })
@@ -91,6 +99,37 @@ const generateProductLabels = async (req, res) => {
           });
         }
         
+        // Add shop name to the right of QR code (yellow rectangle area)
+        const shopNameX = qrX + qrSize + 7; // Position to the right of QR code
+        const shopNameY = qrY; // Align with QR code top
+        const shopNameWidth = labelWidthPt - shopNameX - 2; // Available width to right edge
+        
+        // Save the current state for rotation
+        doc.save();
+        
+        // Move to the center of the shop name area and rotate
+        doc.translate(shopNameX + shopNameWidth/2, qrY + qrSize/2);
+        doc.rotate(-90); // Rotate 90 degrees counter-clockwise
+        
+        // Add shop name
+        doc.fontSize(5)
+           .font('Helvetica')
+           .text(shopName, -qrSize/2, -6, { 
+             width: qrSize, 
+             align: 'center' 
+           });
+        
+        // Add phone number below shop name
+        doc.fontSize(4)
+           .font('Helvetica')
+           .text(phoneNumber, -qrSize/2, 2, { 
+             width: qrSize, 
+             align: 'center' 
+           });
+        
+        // Restore the state
+        doc.restore();
+        
         // Left side - Rotated text details
         const textStartX = 2;
         const textCenterY = labelHeightPt / 2;
@@ -104,7 +143,7 @@ const generateProductLabels = async (req, res) => {
         
         // Calculate available space for all elements
         const totalAvailableHeight = 70; // Height for all elements in rotated space
-        const minSpaceForOtherElements = 25; // Minimum space needed for price, barcode, category
+        const minSpaceForOtherElements = 25; // Reduced back since shop name is not in rotated area
         
         // Calculate maximum space that can be allocated to product name
         const maxNameSpace = totalAvailableHeight - minSpaceForOtherElements;
@@ -156,12 +195,12 @@ const generateProductLabels = async (req, res) => {
         });
         
         // Position barcode (if available) after price
+        let nextY = priceY + priceHeight + 2;
         if (product.barcode) {
           const barcodeFontSize = 5;
-          const barcodeY = priceY + priceHeight + 2;
           
           doc.fontSize(barcodeFontSize)
-             .text(`${product.barcode}`, -35, barcodeY, { 
+             .text(`${product.barcode}`, -35, nextY, { 
                width: 70, 
                align: 'center',
                lineGap: 0
@@ -173,32 +212,7 @@ const generateProductLabels = async (req, res) => {
             fontSize: barcodeFontSize
           });
           
-          // Position category (if available) after barcode
-          if (product.category?.name) {
-            const categoryFontSize = 4;
-            const categoryY = barcodeY + barcodeHeight + 1;
-            
-            // Only add category if there's enough space left
-            if (categoryY + categoryFontSize < 35) {
-              doc.fontSize(categoryFontSize)
-                 .text(product.category.name, -35, categoryY, { 
-                   width: 70, 
-                   align: 'center',
-                   lineGap: 0
-                 });
-            }
-          }
-        } else if (product.category?.name) {
-          // If no barcode, position category directly after price
-          const categoryFontSize = 4;
-          const categoryY = priceY + priceHeight + 2;
-          
-          doc.fontSize(categoryFontSize)
-             .text(product.category.name, -35, categoryY, { 
-               width: 70, 
-               align: 'center',
-               lineGap: 0
-             });
+          nextY = nextY + barcodeHeight + 2;
         }
         
         // Restore the previous state (removes rotation and translation)

@@ -2,7 +2,7 @@ import React, { createContext, ReactNode, useContext, useState } from 'react';
 
 export interface Notification {
   id: string;
-  type: 'success' | 'error';
+  type: 'success' | 'error' | 'info';
   message: string;
   duration?: number;
 }
@@ -11,6 +11,7 @@ interface NotificationContextType {
   notifications: Notification[];
   showSuccess: (message: string, duration?: number) => void;
   showError: (message: string, duration?: number) => void;
+  showInfo: (message: string, duration?: number) => void;
   removeNotification: (id: string) => void;
 }
 
@@ -33,7 +34,7 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
 
   const generateId = () => Math.random().toString(36).substr(2, 9);
 
-  const addNotification = (type: 'success' | 'error', message: string, duration = 2000) => {
+  const addNotification = (type: 'success' | 'error' | 'info', message: string, duration = 2000) => {
     const id = generateId();
     const notification: Notification = { id, type, message, duration };
     
@@ -53,6 +54,10 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     addNotification('error', message, duration);
   };
 
+  const showInfo = (message: string, duration?: number) => {
+    addNotification('info', message, duration);
+  };
+
   const removeNotification = (id: string) => {
     setNotifications(prev => prev.filter(notification => notification.id !== id));
   };
@@ -61,7 +66,8 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
     <NotificationContext.Provider value={{
       notifications,
       showSuccess,
-      showError,  
+      showError,
+      showInfo,
       removeNotification
     }}>
       {children}

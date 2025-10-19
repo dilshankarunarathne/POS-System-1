@@ -124,6 +124,16 @@ const Reports = () => {
     if (!date) return '';
     return date.toISOString().split('T')[0];
   };
+
+  // Format date for display
+  const formatDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', { 
+      year: 'numeric', 
+      month: 'short', 
+      day: 'numeric' 
+    });
+  };
   
   // Fetch sales summary data
   const fetchSalesSummary = async () => {
@@ -147,7 +157,6 @@ const Reports = () => {
       });
       
       // Log the data for debugging
-      console.log('Sales summary data:', response.data);
       
       setSalesSummary(response.data);
       
@@ -180,7 +189,6 @@ const Reports = () => {
         shopId: currentShop._id
       });
       
-      console.log('Profit distribution data:', response.data);
       
       setProfitDistribution(response.data);
       
@@ -246,11 +254,7 @@ const Reports = () => {
         return;
       }
 
-      console.log('Fetching inventory data with params:', {
-        lowStock: showLowStock,
-        categoryId: categoryFilter, // Add categoryId to the params
-        shopId: currentShop._id
-      });
+    
       
       const response = await reportsApi.getInventoryStatusReport({
         lowStock: showLowStock,
@@ -258,7 +262,6 @@ const Reports = () => {
         shopId: currentShop._id
       });
       
-      console.log('Inventory data received:', response.data);
       
       // Improved handling of response data format
       if (!response.data) {
@@ -310,11 +313,6 @@ const Reports = () => {
   }, [activeTab, startDate, endDate, groupBy, profitGroupBy, showLowStock]);
   
   // Format date for display
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString();
-  };
-  
   // Prepare data for sales chart
   const salesChartData = {
     labels: salesSummary.summary.map((item: any) => {
@@ -329,14 +327,14 @@ const Reports = () => {
     datasets: [
       {
         label: 'Sales',
-        data: salesSummary.summary.map((item) => parseFloat(item.total)),
+        data: salesSummary.summary.map((item) => parseFloat(item.totalRevenue || item.productRevenue || item.total || 0)),
         borderColor: 'rgba(75, 192, 192, 1)',
         backgroundColor: 'rgba(75, 192, 192, 0.2)',
         tension: 0.4,
       },
     ],
   };
-  
+
   // Prepare data for product sales chart
   const productSalesChartData = {
     labels: Array.isArray(productSales) ? productSales.map(item => item.name) : [],
@@ -679,6 +677,24 @@ const Reports = () => {
                               </td>
                             </tr>
                             <tr>
+                              <td className="fw-semibold">Total Services</td>
+                              <td className="text-end">
+                                {salesSummary.totals?.totalServices || 0}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="fw-semibold">Product Revenue</td>
+                              <td className="text-end">
+                                Rs. {parseFloat(salesSummary.totals?.productRevenue || 0).toFixed(2)}
+                              </td>
+                            </tr>
+                            <tr>
+                              <td className="fw-semibold">Service Revenue</td>
+                              <td className="text-end">
+                                Rs. {parseFloat(salesSummary.totals?.serviceRevenue || 0).toFixed(2)}
+                              </td>
+                            </tr>
+                            <tr>
                               <td className="fw-semibold">Subtotal</td>
                               <td className="text-end">
                                 Rs. {parseFloat(salesSummary.totals?.subtotal || 0).toFixed(2)}
@@ -699,7 +715,7 @@ const Reports = () => {
                             <tr className="bg-light rounded">
                               <td className="fw-bold px-2 py-2">Total Revenue</td>
                               <td className="text-end fw-bold px-2 py-2 text-success">
-                                Rs. {parseFloat(salesSummary.totals?.total || 0).toFixed(2)}
+                                Rs. {parseFloat(salesSummary.totals?.totalRevenue || salesSummary.totals?.total || 0).toFixed(2)}
                               </td>
                             </tr>
                           </tbody>
@@ -719,8 +735,10 @@ const Reports = () => {
                             <thead className="sticky-top bg-white text-primary">
                               <tr>
                                 <th>Date</th>
-                                <th className="text-end">Sales</th>
-                                <th className="text-end">Amount</th>
+                                <th className="text-end">Transactions</th>
+                                <th className="text-end">Product Revenue</th>
+                                <th className="text-end">Service Revenue</th>
+                                <th className="text-end">Total Revenue</th>
                               </tr>
                             </thead>
                             <tbody>
@@ -734,13 +752,15 @@ const Reports = () => {
                                         ? `Week of ${formatDate(item.date)}`
                                         : new Date(item.date).toLocaleString('default', { month: 'long', year: 'numeric' })}
                                     </td>
-                                    <td className="text-end">{item.salesCount || 0}</td>
-                                    <td className="text-end fw-semibold">Rs. {parseFloat(item.total).toFixed(2)}</td>
+                                    <td className="text-end">{(item.salesCount || 0) + (item.servicesCount || 0)}</td>
+                                    <td className="text-end fw-semibold">Rs. {parseFloat(item.productRevenue || item.total || 0).toFixed(2)}</td>
+                                    <td className="text-end fw-semibold">Rs. {parseFloat(item.serviceRevenue || 0).toFixed(2)}</td>
+                                    <td className="text-end fw-semibold">Rs. {parseFloat(item.totalRevenue || item.total || 0).toFixed(2)}</td>
                                   </tr>
                                 ))
                               ) : (
                                 <tr>
-                                  <td colSpan={3} className="text-center py-3">
+                                  <td colSpan={5} className="text-center py-3">
                                     <p className="text-muted mb-0">No data available</p>
                                   </td>
                                 </tr>
